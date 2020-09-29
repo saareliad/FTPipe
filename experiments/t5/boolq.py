@@ -1,5 +1,6 @@
 import ast
 import os
+import warnings
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -35,9 +36,39 @@ def extract_values(d, subkey=None, verbose=False):
 
 
 def plot_epochs_vs_accuracy(gpipe_fn, stale_fn, acc_without_ft=None, title="super_glue_boolq_accuracy",
-                            ylabel=f"Accuracy"):
+                            ylabel=f"Accuracy", checkpoint_every_x_epochs=1, epochs_in_last_checkpoint=None):
     gpipe_dict = extract_values(parse_all_eval_results_dict(gpipe_fn))
     stale_dict = extract_values(parse_all_eval_results_dict(stale_fn))
+
+    # change dict keys according to checkpoint_every_x_epochs
+    if checkpoint_every_x_epochs > 1:
+
+        gpipe_dict_ = {k * checkpoint_every_x_epochs: v for k, v in list(gpipe_dict.items())[:-1]}
+        stale_dict_ = {k * checkpoint_every_x_epochs: v for k, v in list(stale_dict.items())[:-1]}
+
+        if epochs_in_last_checkpoint is None:
+            warnings.warn(
+                "plot_epochs_vs_accuracy inaccurate point for last epoch, ommiting it. epochs_in_last_checkpoint is not given")
+        else:
+
+            k, v = list(gpipe_dict.items())[-1]
+            if epochs_in_last_checkpoint == 0:
+                gpipe_dict_[k * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+
+            else:
+                gpipe_dict_[(k - 1) * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+
+            k, v = list(stale_dict.items())[-1]
+            if epochs_in_last_checkpoint == 0:
+                stale_dict_[k * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+            else:
+                stale_dict[(k - 1) * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+
+        # TODO...
+
+        gpipe_dict = gpipe_dict_
+        stale_dict = stale_dict_
+
     fix, ax = plt.subplots()
 
     if acc_without_ft is None:
@@ -67,12 +98,55 @@ def extract_times(loaded, time_units="seconds"):
 
 
 def plot_time_vs_accuracy(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn, time_units="hours", acc_without_ft=None,
-                          title="super_glue_boolq_accuracy", ylabel=f"Accuracy"):
+                          title="super_glue_boolq_accuracy", ylabel=f"Accuracy", checkpoint_every_x_epochs=1,
+                          epochs_in_last_checkpoint=None):
     times_gpipe = extract_times(load_experiment(exp_gpipe_fn), time_units=time_units)
     times_stale = extract_times(load_experiment(exp_stale_fn), time_units=time_units)
 
     gpipe_dict = extract_values(parse_all_eval_results_dict(gpipe_fn))
     stale_dict = extract_values(parse_all_eval_results_dict(stale_fn))
+
+    # change dict keys according to checkpoint_every_x_epochs
+    if checkpoint_every_x_epochs > 1:
+        # epochs_in_last
+        # gpipe_dict = {k*checkpoint_every_x_epochs: v for k,v in gpipe_dict.items()}
+        # stale_dict = {k*checkpoint_every_x_epochs: v for k,v in stale_dict.items()}
+
+        gpipe_dict_ = {k * checkpoint_every_x_epochs: v for k, v in list(gpipe_dict.items())[:-1]}
+        stale_dict_ = {k * checkpoint_every_x_epochs: v for k, v in list(stale_dict.items())[:-1]}
+
+        if epochs_in_last_checkpoint is None:
+            epochs_in_last_checkpoint = len(times_gpipe) % checkpoint_every_x_epochs
+            warnings.warn(
+                f"plot_epochs_vs_accuracy may be inaccurate point for last epoch, infering it: epochs_in_last_checkpoint={epochs_in_last_checkpoint}")
+
+        print(f"epochs_in_last_checkpoint={epochs_in_last_checkpoint}")
+        k, v = list(gpipe_dict.items())[-1]
+        if epochs_in_last_checkpoint == 0:
+            gpipe_dict_[k * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+        else:
+            gpipe_dict_[(k - 1) * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+
+        k, v = list(stale_dict.items())[-1]
+        if epochs_in_last_checkpoint == 0:
+            stale_dict_[k * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+        else:
+            stale_dict_[(k - 1) * checkpoint_every_x_epochs + epochs_in_last_checkpoint] = v
+
+        times_gpipe_ = [times_gpipe[i] for i in range(0, len(times_gpipe), checkpoint_every_x_epochs)]
+        if len(times_gpipe) % checkpoint_every_x_epochs > 0:
+            times_gpipe_.append(times_gpipe[-1])
+
+        times_stale_ = [times_stale[i] for i in range(0, len(times_stale), checkpoint_every_x_epochs)]
+        if len(times_stale) % checkpoint_every_x_epochs > 0:
+            times_stale_.append(times_stale[-1])
+
+        times_gpipe = times_gpipe_
+        times_stale = times_stale_
+
+        stale_dict = stale_dict_
+        gpipe_dict = gpipe_dict_
+
     fix, ax = plt.subplots()
 
     if acc_without_ft is None:
@@ -248,7 +322,7 @@ if __name__ == '__main__':
         ]}
 
         mean_epoch_time = np.mean(d["train_epochs_times"])
-        best_result_epochs = 51   # taken from another exp
+        best_result_epochs = 51  # taken from another exp
         time_to_result = best_result_epochs * mean_epoch_time
         time_to_best_gpipe = time_to_result
         records.append({"alg": "seq_gpipe",
@@ -295,11 +369,14 @@ if __name__ == '__main__':
         gpipe_fn = "results/FOR_PAPER/T5/wic/wic_virtual/all_results_test_vs_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_128_se_8_seed_42.txt"
         stale_fn = "results/FOR_PAPER/T5/wic/wic_virtual/all_results_wic_stale_test_vs_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_128_se_2_seed_42.txt"
         acc_without_ft = 72.10031347962382
+        checkpoint_every_x_epochs = 500 // (5427 // 128)
         plot_epochs_vs_accuracy(gpipe_fn, stale_fn, acc_without_ft=acc_without_ft, ylabel="Accuracy",
-                                title="super_glue_wic_accuracy (virtual stages)")
+                                title="super_glue_wic_accuracy (virtual stages)",
+                                checkpoint_every_x_epochs=checkpoint_every_x_epochs)
         plot_time_vs_accuracy(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn, time_units="Hours",
                               acc_without_ft=acc_without_ft, ylabel="Accuracy",
-                              title="super_glue_wic_accuracy (virtual stages)")
+                              title="super_glue_wic_accuracy (virtual stages)",
+                              checkpoint_every_x_epochs=checkpoint_every_x_epochs)
         print("epoch_speedup", epoch_speedup(exp_gpipe_fn, exp_stale_fn))
         time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn)
 
