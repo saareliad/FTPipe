@@ -18,9 +18,9 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 4,
+    "bs_train": 8,
     "bs_test": 8,
-    "step_every": 10,
+    "step_every": 5,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adafactor",
