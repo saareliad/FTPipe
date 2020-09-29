@@ -3,7 +3,7 @@
     "data_dir": "/home_local/saareliad/data",
     "out_dir": "results/t5/glue/rte",
     "auto_file_name": true,
-    "out_filename": "glue_rte",
+    "out_filename": "glue_rte_12_epochs",
     "distributed_backend": "mpi",
     "model": "t5_3b_tied_lmheads_320_8_8p_bw12_squad1",
     "dataset": "t5_tfds",
@@ -62,5 +62,6 @@
     "precomputed_masks": true,
     "save_checkpoints":  true,
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/rte/"
+    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/rte/seq/",
+    "load_model_one_by_one": false
 }

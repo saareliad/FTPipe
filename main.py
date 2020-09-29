@@ -218,6 +218,7 @@ def parse_cli():
         help="config pathes to override. Must follow the same relativity rule")
     # TODO: option for weight stashing just statistics.
 
+    parser.add_argument("--explicit_eval_cp", required=False, type=str, help="explicit name for eval cp")
     args = parser.parse_args()
 
     if args.base_config_path:

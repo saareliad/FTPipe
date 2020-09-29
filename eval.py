@@ -79,7 +79,13 @@ def get_all_eval_results(args):
     all_results = {}
     # TODO: currently its semi hardcoded...
     # all_cps = list(range(0, 102 + 1))  # + ["c4"]
-    all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
+    explicit_eval_cp = getattr(args, "explicit_eval_cp", None)
+    if explicit_eval_cp is not None:
+        all_cps = [explicit_eval_cp]
+        print(f"Got explicit_eval_cp={explicit_eval_cp}. changing out_file_name")
+        args.out_filename = explicit_eval_cp + "_" + args.out_filename
+    else:
+        all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
     print(f"-I- evaluating {len(all_cps)}: {all_cps}")
     if args.dataset == "t5_tfds":
         from data.t5 import t5_tfds

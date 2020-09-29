@@ -1,3 +1,5 @@
+# TODO: I never ran this script as is, I just copy, paste ran functions from it manually...
+
 # Make sure you have prerequisites, e,g:
 #
 # apt-get install -y --no-install-recommends \
@@ -20,6 +22,9 @@ conda_stuff() {
 
 new_env() {
   # conda create -y -n pt python=3.8 numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses cython
+  # conda activate pt
+  # conda install -y -c pytorch magma-cuda102
+
     conda create -y -n py38 python=3.8
     conda activate py38
     conda install -y numpy
@@ -90,6 +95,22 @@ pytorch_install() {
     export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
     python setup.py install
 }
+
+# Clone install pytorch
+#    git clone --recursive https://github.com/pytorch/pytorch
+#    cd pytorch || exit 1
+#    # Added required version (not checked the line below)
+#
+#    git checkout --recurse-submodules v1.6.0
+#
+#    # if you are updating an existing checkout
+#    git submodule sync
+#    git submodule update --init --recursive
+#    export TORCH_CUDA_ARCH_LIST="7.5+PTX"
+#    export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
+#    export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
+#    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
+#    python setup.py install
 
 conda_stuff
 new_env
