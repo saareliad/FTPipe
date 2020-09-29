@@ -9,6 +9,8 @@ import pandas as pd
 from experiments.experiments import load_experiment
 
 
+# TODO: scatter plot to mark epochs.
+
 def parse_all_eval_results_dict(fn):
     with open(fn, "r") as f:
         d = ast.literal_eval(f.read())
@@ -100,12 +102,38 @@ def extract_times(loaded, time_units="seconds"):
 def plot_time_vs_accuracy(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn, time_units="hours", acc_without_ft=None,
                           title="super_glue_boolq_accuracy", ylabel=f"Accuracy", checkpoint_every_x_epochs=1,
                           epochs_in_last_checkpoint=None):
+    gpipe_dict, stale_dict, times_gpipe, times_stale = get_fixed_dict_and_times(
+        checkpoint_every_x_epochs=checkpoint_every_x_epochs,
+        epochs_in_last_checkpoint=epochs_in_last_checkpoint,
+        exp_gpipe_fn=exp_gpipe_fn,
+        exp_stale_fn=exp_stale_fn,
+        gpipe_fn=gpipe_fn, stale_fn=stale_fn,
+        time_units=time_units)
+
+    fix, ax = plt.subplots()
+
+    if acc_without_ft is None:
+        ax.plot(times_gpipe, list(gpipe_dict.values()), label="gpipe")
+        ax.plot(times_stale, list(stale_dict.values()), label="ours")
+    else:
+        ax.plot([0] + list(times_gpipe), [acc_without_ft] + list(gpipe_dict.values()), label="gpipe")
+        ax.plot([0] + list(times_stale), [acc_without_ft] + list(stale_dict.values()), label="ours")
+
+    ax.legend()
+    ax.set_title(title)
+
+    ax.set_xlabel(f"Time [{time_units}]")
+    ax.set_ylabel(ylabel)
+
+    plt.show()
+
+
+def get_fixed_dict_and_times(exp_gpipe_fn, exp_stale_fn, gpipe_fn,
+                             stale_fn, checkpoint_every_x_epochs=1, epochs_in_last_checkpoint=None, time_units="hours"):
     times_gpipe = extract_times(load_experiment(exp_gpipe_fn), time_units=time_units)
     times_stale = extract_times(load_experiment(exp_stale_fn), time_units=time_units)
-
     gpipe_dict = extract_values(parse_all_eval_results_dict(gpipe_fn))
     stale_dict = extract_values(parse_all_eval_results_dict(stale_fn))
-
     # change dict keys according to checkpoint_every_x_epochs
     if checkpoint_every_x_epochs > 1:
         # epochs_in_last
@@ -146,23 +174,7 @@ def plot_time_vs_accuracy(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn, time_u
 
         stale_dict = stale_dict_
         gpipe_dict = gpipe_dict_
-
-    fix, ax = plt.subplots()
-
-    if acc_without_ft is None:
-        ax.plot(times_gpipe, list(gpipe_dict.values()), label="gpipe")
-        ax.plot(times_stale, list(stale_dict.values()), label="ours")
-    else:
-        ax.plot([0] + list(times_gpipe), [acc_without_ft] + list(gpipe_dict.values()), label="gpipe")
-        ax.plot([0] + list(times_stale), [acc_without_ft] + list(stale_dict.values()), label="ours")
-
-    ax.legend()
-    ax.set_title(title)
-
-    ax.set_xlabel(f"Time [{time_units}]")
-    ax.set_ylabel(ylabel)
-
-    plt.show()
+    return gpipe_dict, stale_dict, times_gpipe, times_stale
 
 
 def epoch_speedup_dict(exp_gpipe_fn, exp_stale_fn):
@@ -195,13 +207,7 @@ def dump_all_raw_data(exp_stale_fn, exp_gpipe_fn, gpipe_fn, stale_fn, acc_withou
         print("result_without_fine_tuning:", acc_without_ft)
 
 
-def time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn, time_units="hours"):
-    times_gpipe = extract_times(load_experiment(exp_gpipe_fn), time_units=time_units)
-    times_stale = extract_times(load_experiment(exp_stale_fn), time_units=time_units)
-
-    gpipe_dict = extract_values(parse_all_eval_results_dict(gpipe_fn))
-    stale_dict = extract_values(parse_all_eval_results_dict(stale_fn))
-
+def time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale):
     values_gpipe = list(gpipe_dict.values())
     values_stale = list(stale_dict.values())
 
@@ -254,7 +260,10 @@ if __name__ == '__main__':
                               acc_without_ft=acc_without_ft,
                               ylabel="Accuracy", title="super_glue_boolq_accuracy (virtual stages)")
         print("epoch_speedup", epoch_speedup(exp_gpipe_fn, exp_stale_fn))  # 2.518
-        time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn)
+
+        gpipe_dict, stale_dict, times_gpipe, times_stale = get_fixed_dict_and_times(exp_gpipe_fn, exp_stale_fn,
+                                                                                    gpipe_fn, stale_fn)
+        time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
 
     def rte_virtual():
@@ -272,7 +281,9 @@ if __name__ == '__main__':
                               acc_without_ft=acc_without_ft, ylabel="Accuracy",
                               title="glue_rte_accuracy (virtual stages)")
         print("epoch_speedup", epoch_speedup(exp_gpipe_fn, exp_stale_fn))
-        time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn)
+        gpipe_dict, stale_dict, times_gpipe, times_stale = get_fixed_dict_and_times(exp_gpipe_fn, exp_stale_fn,
+                                                                                    gpipe_fn, stale_fn)
+        time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
 
     def rte_seq_hack():
@@ -290,7 +301,7 @@ if __name__ == '__main__':
             315.9019775390625,
             315.962073802948
         ], }
-        mean_epoch_time = np.mean(d["train_epochs_times"])
+        mean_epoch_time = np.mean(d["train_epochs_times"]) / 3600  # hours
         # starting from 0
         # 59: {'eval/glue_rte_v002/accuracy': 90.97472924187726},
 
@@ -321,14 +332,14 @@ if __name__ == '__main__':
             486.35694670677185
         ]}
 
-        mean_epoch_time = np.mean(d["train_epochs_times"])
+        mean_epoch_time = np.mean(d["train_epochs_times"]) / 3600  # hours
         best_result_epochs = 51  # taken from another exp
         time_to_result = best_result_epochs * mean_epoch_time
         time_to_best_gpipe = time_to_result
         records.append({"alg": "seq_gpipe",
                         "best_result": 90.97472924187726,
                         "best_result_epoch": 51,
-                        "time": time_to_best_stale})
+                        "time": time_to_best_gpipe})
 
         df = pd.DataFrame.from_records(records)
         print(df)
@@ -358,7 +369,10 @@ if __name__ == '__main__':
 
             pass
         # print("epoch_speedup", epoch_speedup(exp_gpipe_fn, exp_stale_fn))
-        time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn)
+
+        gpipe_dict, stale_dict, times_gpipe, times_stale = get_fixed_dict_and_times(exp_gpipe_fn, exp_stale_fn,
+                                                                                    gpipe_fn, stale_fn)
+        time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
 
     def wic_virtual():
@@ -378,7 +392,15 @@ if __name__ == '__main__':
                               title="super_glue_wic_accuracy (virtual stages)",
                               checkpoint_every_x_epochs=checkpoint_every_x_epochs)
         print("epoch_speedup", epoch_speedup(exp_gpipe_fn, exp_stale_fn))
-        time_to_best_result(exp_gpipe_fn, exp_stale_fn, gpipe_fn, stale_fn)
+
+        gpipe_dict, stale_dict, times_gpipe, times_stale = get_fixed_dict_and_times(exp_gpipe_fn, exp_stale_fn,
+                                                                                    gpipe_fn,
+                                                                                    stale_fn,
+                                                                                    checkpoint_every_x_epochs=checkpoint_every_x_epochs,
+                                                                                    epochs_in_last_checkpoint=None,
+                                                                                    time_units="hours")
+
+        time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
 
     exps = {
