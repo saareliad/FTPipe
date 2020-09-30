@@ -226,7 +226,7 @@ class GPT2Partitioner(Partitioner):
                         sampler=sampler,
                         batch_size=batch_size)
 
-        batch = next(dl)
+        batch = next(iter(dl))
         if args.lmhead:
             sample = {"input_ids": batch, "labels": batch}
         else:
