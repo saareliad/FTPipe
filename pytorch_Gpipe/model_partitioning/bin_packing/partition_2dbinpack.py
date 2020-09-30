@@ -74,8 +74,22 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
     # Change data type: Pandas object. (id->Index)
     clusters = [list(clusters.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
 
-    if len(clusters) > 2:
-        raise NotImplementedError()
+    def to_set(v,s):
+        if not isinstance(v, list):
+            s.add(v)
+            return
+        for x in v:
+            if isinstance(x, list):
+                for xx in x:
+                    to_set(xx, s)
+            else:
+                to_set(x, s)
+
+
+    A,B = set(), set()
+    to_set(clusters, A)
+    # if len(clusters) > 2:
+    #     raise NotImplementedError()
 
     # clusters: List[List[Any]]
     clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
@@ -86,39 +100,64 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
     for c_i, cluster in enumerate(clusters):
         to_unify_for_cluster = to_unify[c_i]
         cluster_D = {i.Index: i for i in cluster}
-        for l in to_unify_for_cluster:
-            # make a list
-            # before:   d: id->item
-            # after:    d: id->[item, item]
-            z = l[0]
-            x = l[1]
-            if isinstance(cluster_D[x], list):
-                # already was listed
-                v = cluster_D[x]
-                zz = cluster_D[z]
-                if isinstance(zz, list):
-                    v.extend(zz)
-                else:
-                    v.append(zz)
-                v.sort(key=lambda y: y.Index)
-            else:
-                # Make a list and put it
-                v = [cluster_D[x]]
-                zz = cluster_D[z]
-                if isinstance(zz, list):
-                    v.extend(zz)
-                else:
-                    v.append(zz)
-                v.sort(key=lambda y: y.Index)
-                cluster_D[x] = v
+        deleted_from_cluster = {} # dict: deleted->new_dest
+        next_gen = []
+        first_time = True
+        while first_time or next_gen:
+            first_time = False
+            if next_gen:
+                to_unify_for_cluster = next_gen
+                next_gen = []
 
-            # delete what we unified.
-            del cluster_D[z]
+            for l in to_unify_for_cluster:
+                # make a list
+                # before:   d: id->item
+                # after:    d: id->[item, item]
+                z = l[0]
+                x = l[1]
+                if isinstance(cluster_D[x], list):
+                    # already was listed
+                    v = cluster_D[x]
+                    zz = cluster_D[z]
+                    if isinstance(zz, list):
+                        v.extend(zz)
+                    else:
+                        v.append(zz)
+                    v.sort(key=lambda y: y.Index)
+                else:
+                    # Make a list and put it
+                    v = [cluster_D[x]]
+                    try:
+                        zz = cluster_D[z]
+                    except KeyError as e:
+                        if not z in deleted_from_cluster:
+                            raise e
+                        else:
+                            warnings.warn(f"found a double: {l}, I already deleted {z} and unified it with {deleted_from_cluster[z]}, will unify now to {x}")
+                            next_gen.append(sorted([x, deleted_from_cluster[z]]))
+                            continue
+
+                    if isinstance(zz, list):
+                        v.extend(zz)
+                    else:
+                        v.append(zz)
+                    v.sort(key=lambda y: y.Index)
+                    cluster_D[x] = v
+
+                # delete what we unified.
+                deleted_from_cluster[z] = x
+                del cluster_D[z]
 
         cluster = []
         for i in sorted(cluster_D.keys()):
             cluster.append(cluster_D[i])
+
         new_clusters.append(cluster)
+
+
+    to_set(new_clusters, B)
+    assert A == B, (A,B)
+
     clusters = new_clusters
 
     clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
@@ -127,17 +166,23 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
     for c_i, cluster in enumerate(clusters):
         n_i = len(cluster)
         reminder = n_i % K
-
+        only_reminder = False
         if n_i < K:
-            raise NotImplementedError(f"insufficient number of items in cluster {c_i}, {n_i}, {K}")
+            only_reminder = True
+            warnings.warn(f"small number of items in cluster {c_i}: {n_i} need at least {K}. will treat as reminder with policy {reminder_policy}")
+            # raise NotImplementedError(f"insufficient number of items in cluster {c_i}: {n_i} need at least {K}")
         if reminder > 0:
             pass
 
         N = n_i // K
 
         cluster_for_split = cluster if not reminder else cluster[:-reminder]
-
-        split = list(maketree(n=N, iterable=cluster_for_split))
+        if not only_reminder:
+            split = list(maketree(n=N, iterable=cluster_for_split))
+        else:
+            # split = [[] for _ in range(K)]
+            split = [[x] for x in cluster_for_split]
+            reminder = 0
 
         if reminder > 0:
             if reminder_policy == ReminderPolicy.ToLast:
@@ -336,6 +381,9 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
         # larger clusters will be first
         if len(split) > K and cluster_idx == 0:
             raise NotImplementedError()
+
+        if len(split) < K and cluster_idx == 0:
+            warnings.warn(f"got only reminder in 1st and largest cluster: {split}")
 
         if cluster_idx > 0 and second_and_on_cluster_policy == SecondAndOnClusterPolicy.BestFitBinPacking:
             # sort subsplits by size
