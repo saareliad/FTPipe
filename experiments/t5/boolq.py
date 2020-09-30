@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from experiments.analysis.plot import plot_loss
 from experiments.experiments import load_experiment
 
 
@@ -225,11 +226,11 @@ def time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale):
     records = []
     records.append({"alg": "gpipe",
                     "best_result": max_gpipe,
-                    "best_result_epoch": argmax_gpipe,
+                    "best_result_epoch": list(gpipe_dict.keys())[argmax_gpipe],
                     "time": time_to_best_gpipe})
     records.append({"alg": "stale",
                     "best_result": max_stale,
-                    "best_result_epoch": argmax_stale,
+                    "best_result_epoch": list(stale_dict.keys())[argmax_stale],
                     "time": time_to_best_stale})
 
     df = pd.DataFrame.from_records(records)
@@ -247,7 +248,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
 
-    def boolq():
+    def boolq_virtual():
         exp_stale_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_20_se_5_seed_42.json"
         exp_gpipe_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_20_se_5_seed_42.json"
 
@@ -403,15 +404,131 @@ if __name__ == '__main__':
         time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
 
+    def wic_seq():
+        #results / t5 / super_glue / wic / no_virtual_stages_benchmark_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_acyclic_t5_tfds_stale_bs_128_se_4_seed_42.json
+        #results/t5/super_glue/wic/no_virtual_stages_benchmark_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_acyclic_t5_tfds_gpipe_bs_128_se_8_seed_42.json
+
+        records = []
+
+        ####
+        ### For Gpipe: accuracy does not change.
+        # Only epoch time changes.
+
+        d = {
+            "train_epochs_times": [
+                198.61418557167053,
+                199.19361209869385,
+                199.2489116191864,
+                197.86673521995544,
+                199.3534836769104,
+                199.9895725250244,
+                200.86272764205933,
+                200.04046940803528,
+                199.35887932777405,
+                199.98969101905823,
+                198.66443347930908,
+                200.1890172958374
+            ],
+        }
+
+
+
+        mean_epoch_time = np.mean(d["train_epochs_times"]) / 3600  # hours
+        best_result_epochs = 110  # taken from another exp
+        time_to_result = best_result_epochs * mean_epoch_time
+        time_to_best_gpipe = time_to_result
+        records.append({"alg": "seq_gpipe",
+                        "best_result": 74.92163,
+                        "best_result_epoch": best_result_epochs,
+                        "time": time_to_best_gpipe})
+
+        df = pd.DataFrame.from_records(records)
+        print(df)
+
+        # TODO: seq
+        # speedup_to_best = time_to_best_gpipe / time_to_best_stale
+        # print("speedup_to_best_result:", speedup_to_best)
+
+    def boolq_seq():
+        records = []
+        d = {"train_epochs_times": [
+            3151.963354110718,
+            3157.5056524276733
+        ],}
+
+        mean_epoch_time = np.mean(d["train_epochs_times"]) / 3600  # hours
+        best_result_epochs = 4  # taken from another exp
+        time_to_result = best_result_epochs * mean_epoch_time
+        time_to_best_gpipe = time_to_result
+        records.append({"alg": "seq_gpipe",
+                        "best_result": 89.051988,
+                        "best_result_epoch": best_result_epochs,
+                        "time": time_to_best_gpipe})
+
+        df = pd.DataFrame.from_records(records)
+        print(df)
+
+    def one_loss_plot(fn, legend, fig, step_every):
+        config, fit_res = load_experiment(fn)
+        loss_per_batch = "loss_per_batch" in config['statistics']
+        fig, ax = plot_loss(fit_res, fig=fig, log_loss=False,
+                            legend=legend, loss_per_batch=loss_per_batch, step_every=step_every)
+
+        return fig, ax
+
+    def boolq_loss_plots():
+        # boolq
+        exp_stale_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_20_se_5_seed_42.json"
+        exp_gpipe_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_20_se_5_seed_42.json"
+
+        fig, ax = one_loss_plot(fn=exp_stale_fn, legend="stale", fig=None, step_every=10*10)
+        fig, ax = one_loss_plot(fn=exp_gpipe_fn, legend="gpipe", fig=fig, step_every=10*10)
+
+        plt.show()
+
+    def wic_loss_plots():
+        # wic
+        exp_gpipe_fn = "results/t5/super_glue/wic/test_vs_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_128_se_8_seed_42.json"
+        exp_stale_fn = "results/t5/super_glue/wic/test_vs_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_128_se_2_seed_42.json"
+
+        fig, ax = one_loss_plot(fn=exp_stale_fn, legend="stale", fig=None, step_every=2*10)
+        fig, ax = one_loss_plot(fn=exp_gpipe_fn, legend="gpipe", fig=fig, step_every=8*10)
+
+        plt.show()
+
+    def rte_loss_plots():
+
+        exp_results_dir = "results/t5/glue/rte/"
+        exp_stale_fn = os.path.join(exp_results_dir,
+                                    "rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_40_se_5_seed_42.json")
+        exp_gpipe_fn = os.path.join(exp_results_dir,
+                                    "rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_40_se_10_seed_42.json")
+
+        fig, ax = one_loss_plot(fn=exp_stale_fn, legend="stale", fig=None, step_every=5*10)
+        fig, ax = one_loss_plot(fn=exp_gpipe_fn, legend="gpipe", fig=fig, step_every=10*10)
+
+        plt.show()
+
+
     exps = {
-        "boolq": boolq,
+        "boolq_virtual": boolq_virtual,
+        "boolq_seq": boolq_seq,
         "rte_virtual": rte_virtual,
         "rte_seq": rte_seq_hack,
-        "wic_virtual": wic_virtual
+        "wic_virtual": wic_virtual,
+        "wic_seq": wic_seq
     }
 
+    allplots = {
+        "boolq_loss": boolq_loss_plots,
+        "wic_loss": wic_loss_plots,
+        "rte_loss": rte_loss_plots
+
+    }
     if args.exp in exps:
         exps[args.exp]()
+    elif args.exp in allplots:
+        allplots[args.exp]()
     else:
         raise NotImplementedError(f"exp: {args.exp}, available: {list(exps.keys())}")
     # rte_virtual()

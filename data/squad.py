@@ -399,7 +399,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 input0=all_input_ids,
                 input1=all_attention_masks,
                 input2=all_token_type_ids,
-                # NOTE: intentionaly deleted
+                # NOTE: intentionally deleted
                 # all_start_positions,
                 # all_end_positions,
                 input3=all_cls_index,

@@ -1,7 +1,51 @@
-import matplotlib.pyplot as plt
 import itertools
-import numpy as np
 from typing import NamedTuple, Union
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+def plot_loss(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=None, loss_per_batch=False,
+              step_every=1):
+    if fig is None:
+        fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 10), )
+        axes = axes.reshape(-1)
+    else:
+        axes = fig.axes
+
+    for ax in axes:
+        for line in ax.lines:
+            if line.get_label() == legend:
+                line.remove()
+
+    p = itertools.product(['train', 'test'], ['loss'])
+    for idx, (traintest, lossacc) in enumerate(p):
+        ax = axes[idx]
+        attr = f'{traintest}_{lossacc}'
+        if isinstance(fit_res, NamedTuple):
+            data = getattr(fit_res, attr)
+        else:
+            data = fit_res[attr]
+
+        if loss_per_batch:
+            data = np.asarray(data)
+            data = np.mean(data[:(len(data) // step_every) * step_every].reshape(-1, step_every), axis=1)
+
+        h = ax.plot(np.arange(1, len(data) + 1), data, label=legend)
+        title = attr.replace("test", "valid")
+        ax.set_title(title)
+        loss_name = "Iteration" if loss_per_batch else "Epoch"
+        if lossacc == 'loss':
+            ax.set_xlabel(f'{loss_name} #')
+            ax.set_ylabel('Loss')
+            if log_loss:
+                ax.set_yscale('log')
+                ax.set_ylabel('Loss (log)')
+
+        if legend:
+            ax.legend()
+
+    return fig, axes
 
 
 def plot_fit(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=None, loss_per_batch=False):
@@ -55,10 +99,10 @@ def plot_fit(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=
 
 def plot_grad_norm(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
     total_norms = sum("grad_norm" in key for key in fit_res.keys())
-    assert(total_norms % 2 == 0)  # TODO support for un-even...
+    assert (total_norms % 2 == 0)  # TODO support for un-even...
     # total_norms / 2
     if fig is None:
-        fig, axes = plt.subplots(nrows=1+ total_norms//2, ncols=2, figsize=(16, 10),
+        fig, axes = plt.subplots(nrows=1 + total_norms // 2, ncols=2, figsize=(16, 10),
                                  sharex='col', sharey=False)
         axes = axes.reshape(-1)
     else:
@@ -90,13 +134,12 @@ def plot_grad_norm(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw
     return fig, axes
 
 
-
 def plot_gap(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
     total = sum("gap" in key for key in fit_res.keys())
-    assert(total % 2 == 0)  # TODO support for un-even...
+    assert (total % 2 == 0)  # TODO support for un-even...
     # total_norms / 2
     if fig is None:
-        fig, axes = plt.subplots(nrows=1+ total//2, ncols=2, figsize=(16, 10),
+        fig, axes = plt.subplots(nrows=1 + total // 2, ncols=2, figsize=(16, 10),
                                  sharex='col', sharey=False)
         axes = axes.reshape(-1)
     else:
@@ -106,7 +149,7 @@ def plot_gap(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
     max_len = max(len(key) for key in all_)
     for key in all_:
         if len(key) == 0:
-            key += [0]*max_len
+            key += [0] * max_len
 
     p = all_ + ["train_acc", "test_acc"]
     for idx, attr in enumerate(p):
@@ -132,13 +175,11 @@ def plot_gap(fit_res: Union[NamedTuple, dict], fig=None, legend=None, **kw):
 
     return fig, axes
 
+
 def plot_tta(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=None, loss_per_batch=False):
-
-
     time_units = "hours"
     time_div_factor = {"seconds": 1, "minutes": 60, "hours": 3600}
     time_div_factor = time_div_factor.get(time_units)
-
 
     if loss_per_batch:
         raise NotImplementedError()
@@ -175,7 +216,7 @@ def plot_tta(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=
         # sh = ax.scatter(time[::10], data[::10])
         h = ax.plot(time, data, label=legend)
         ax.set_title(attr)
-        
+
         if lossacc == 'loss':
             ax.set_xlabel(f'Time ({time_units})')
             ax.set_ylabel('Loss')

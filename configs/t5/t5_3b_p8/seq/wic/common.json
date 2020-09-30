@@ -68,5 +68,5 @@
     "checkpoints_save_name_prefix": "stale_adafactor",
     "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/3b/wic/stale/",
     "load_model_one_by_one": false,
-    "save_checkpoint_every_x_steps": 500
+    "save_checkpoint_every_x_steps": 100
 }
