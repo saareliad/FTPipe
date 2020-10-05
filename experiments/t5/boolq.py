@@ -5,9 +5,11 @@ import warnings
 
 # import matplotlib as mpl
 # mpl.use("pdf")
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 from experiments.analysis.plot import plot_loss
 from experiments.experiments import load_experiment
@@ -16,7 +18,6 @@ from experiments.experiments import load_experiment
 # plt.rc('font', family='serif')
 # plt.rc('xtick', labelsize='small')
 # plt.rc('ytick', labelsize='small')
-
 # plt.rc('font', family='serif', serif='Times')
 # plt.rc('text', usetex=False)
 # plt.rc('xtick', labelsize=8)
@@ -27,8 +28,6 @@ from experiments.experiments import load_experiment
 #     # plt.style.use(['seaborn-white', 'seaborn-paper'])
 #     # matplotlib.rc("font", family="Times New Roman")
 #     # plt.rc('font', family='serif', serif='Times')
-
-import seaborn as sns
 def set_style():
     # This sets reasonable defaults for font size for
     # a figure that will go in a paper
@@ -151,9 +150,10 @@ def plot_time_vs_accuracy(*, gpipe_dict=None, stale_dict=None, times_gpipe=None,
 
 
 def get_fixed_dict_and_times_single(exp_fn, checkpoints_eval_fn,
-                                    checkpoint_every_x_epochs=1, epochs_in_last_checkpoint=None, time_units="hours"):
+                                    checkpoint_every_x_epochs=1, epochs_in_last_checkpoint=None, time_units="hours",
+                                    subkey=None):
     times_list = extract_cumsum_train_times(load_experiment(exp_fn), time_units=time_units)
-    checkpoints_dict = extract_values(parse_all_eval_results_dict(checkpoints_eval_fn))
+    checkpoints_dict = extract_values(parse_all_eval_results_dict(checkpoints_eval_fn), subkey=subkey)
     # change dict keys according to checkpoint_every_x_epochs
     if checkpoint_every_x_epochs > 1:
         # epochs_in_last
@@ -179,6 +179,52 @@ def get_fixed_dict_and_times_single(exp_fn, checkpoints_eval_fn,
 
         checkpoints_dict = gpipe_dict_
     return checkpoints_dict, times_list
+
+
+def analyze_datars(times1,times2, values1, values2):
+    from adjustText import adjust_text
+
+    all_ts = []
+
+    all_times = [*times1, *times2]
+    all_vals = [*values1, *values2]
+
+    colors=['red', 'navy']
+    for times,values, color in zip([times1, times2], [values1,values2], colors):
+        max = np.max(values)
+        min = values[0]
+        percs = [0.75, 1]
+        values = np.asarray(values)
+        times = np.asarray(times)
+        ids = [np.argmax(values >= (x* (max-min) + min)) for x in percs]
+
+        percs_nice = ["75%", "100%"]
+
+        points = [(times[i], values[i], pn) for i, pn in zip(ids, percs_nice)]
+        ts = [plt.text(*a, color=color) for a in points]
+        all_ts.extend(ts)
+
+        ax = plt.gca()
+        annotations = [child for child in ax.get_children() if isinstance(child, matplotlib.text.Annotation)]
+
+        adjust_text(ts, x=all_times, y=all_vals, add_objects=annotations, arrowprops= dict(arrowstyle="->", fill=True, color=color,))
+
+
+    # arrow_props = dict(arrowstyle="-|>", color='black')
+    arrow_props={}
+    # adjust_text(all_ts, x=all_times, y=all_vals, arrowprops=None)
+    # adjust_text(all_ts, x=all_times, y=all_vals, arrowprops=arrow_props, force_text=0.0006,lim=277,force_points=0.05, force_objects=0.05)
+
+    # text_location = (2, 15)
+    # target_point = (xy[8], xy[8])
+
+
+    # for target_point in points:
+    #
+    #     plt.annotate("Jane", target_point, text_location, 'data', \
+    #                  arrowprops=dict(arrowstyle="-|>", \
+    #                                  connectionstyle="angle3", lw=1), \
+    #                  size=16, ha="center")
 
 
 def epoch_speedup_dict(exp_gpipe_fn, exp_stale_fn):
@@ -373,7 +419,7 @@ if __name__ == '__main__':
         m1 = np.mean(d['train_epochs_times'])
         m2 = np.mean(extract_train_epoch_times(load_experiment(virtual_exp_stale_fn))[:len(d['train_epochs_times'])])
 
-        print("epoch_speedup", m1/m2)
+        print("epoch_speedup", m1 / m2)
         # return
         #
         #
@@ -383,6 +429,14 @@ if __name__ == '__main__':
         # print(seq_gpipe_times)
         # print(virtual_times_stale)
         # print("epoch_speedup", epoch_speedup_from_cumsum_times(seq_gpipe_times, virtual_times_stale))
+
+
+    def wic_stale_mixed_vs_gpipe_mixed_epoch_speedup():
+        gpipe_dict, stale_dict, times_gpipe, times_stale = get_wic_mixed_gpipe_and_stale_stats()
+
+        m1 = np.mean(times_gpipe)
+        m2 = np.mean(times_stale)
+        print("epoch_speedup", m1 / m2)
 
 
     def boolq_stale_mixed_vs_gpipe_seq_epoch_speedup():
@@ -398,7 +452,17 @@ if __name__ == '__main__':
 
         m2 = np.mean(extract_train_epoch_times(load_experiment(virtual_exp_stale_fn))[:len(d['train_epochs_times'])])
 
-        print("epoch_speedup", m1/m2)
+        print("epoch_speedup", m1 / m2)
+
+
+    def boolq_stale_mixed_vs_gpipe_mixed_epoch_speedup():
+        virtual_exp_stale_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_20_se_5_seed_42.json"
+        virtual_exp_gpipe_fn = "results/t5/super_glue/boolq/test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_20_se_10_seed_42.json"
+
+        l = len(extract_train_epoch_times(load_experiment(virtual_exp_gpipe_fn)))
+        m2 = np.mean(extract_train_epoch_times(load_experiment(virtual_exp_stale_fn))[:l])
+        m1 = np.mean(extract_train_epoch_times(load_experiment(virtual_exp_gpipe_fn))[:l])
+        print("epoch_speedup", m1 / m2)
 
 
     def compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
@@ -708,7 +772,8 @@ if __name__ == '__main__':
 
 
     def extrapolate_gpipe_times_and_acc_seq(d, exp_gpipe_fn, gpipe_fn, checkpoint_every_x_epochs=1,
-                                            epochs_in_last_checkpoint=None):
+                                            epochs_in_last_checkpoint=None,
+                                            subkey=None):
         gpipe_virtual_train_epoch_times = extract_train_epoch_times(load_experiment(exp_gpipe_fn))
         # stale_fn = "results/FOR_PAPER/T5/rte/rte_virtual/all_results_rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_40_se_5_seed_42.txt"
         acc_without_ft = 87.72563176895306
@@ -716,6 +781,7 @@ if __name__ == '__main__':
                                                                   checkpoint_every_x_epochs=checkpoint_every_x_epochs,
                                                                   epochs_in_last_checkpoint=epochs_in_last_checkpoint,
                                                                   # time_units=time_units
+                                                                  subkey=subkey
                                                                   )
 
         times_gpipe_ = d["train_epochs_times"]  # [x*factor for x in times_gpipe]
@@ -756,7 +822,7 @@ if __name__ == '__main__':
         # take it only for its length
         stale_fn_to_ignore = "results/FOR_PAPER/T5/rte/rte_virtual/all_results_rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_40_se_5_seed_42.txt"
 
-        real_dict = extract_values(parse_all_eval_results_dict(stale_fn))
+        real_dict = extract_values(parse_all_eval_results_dict(stale_fn), subkey=None)
         # take_until = 67
         times_stale_no_cumsum = extract_train_epoch_times(load_experiment(exp_stale_fn))
         factor = mean_epoch_time / np.mean(times_stale_no_cumsum[:len(d["train_epochs_times"])])
@@ -881,6 +947,7 @@ if __name__ == '__main__':
 
 
     def winning_RTE_seq_gpipe_vs_MIXED_stale():
+        set_style()
         gpipe_dict, times_gpipe = get_rte_seq_hack_gpipe_times_and_dict()
 
         #### GET Virtual
@@ -907,7 +974,9 @@ if __name__ == '__main__':
                 label="GPipe", color="navy")
         ax.plot([0] + list(stale_dict.keys()), [acc_without_ft] + list(stale_dict.values()), marker="o",
                 label="FTPipe", color="red")
-        ax.legend(frameon=False)
+
+
+
         # ax.set_title("")
         ax.set_ylim(86, 92)
         ax.set_xlabel(f"Epochs")
@@ -915,6 +984,14 @@ if __name__ == '__main__':
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         # fig.set_size_inches(width, height)
+
+        analyze_datars([0] + list(stale_dict.keys()),
+                       [0] + list(gpipe_dict.keys()),
+                       [acc_without_ft] + list(stale_dict.values()),
+                       [acc_without_ft] + list(gpipe_dict.values())
+                       )
+        ax.legend(frameon=False, loc="best", borderaxespad=0)
+
         os.makedirs("results/paper_plots/", exist_ok=True)
         # bbox_inches = 'tight'
         plt.savefig('results/paper_plots/Final_Plot_winning_RTE_seq_gpipe_vs_MIXED_stale_EPOCHS.pdf', transparent=False)
@@ -925,12 +1002,21 @@ if __name__ == '__main__':
                 label="GPipe", color="navy")
         ax.plot([0] + list(times_stale), [acc_without_ft] + list(stale_dict.values()), marker="o",
                 label="FTPipe", color="red")
+
+
         ax.set_ylim(86, 92)
         ax.set_xlabel(f"Time (Hours)")
         ax.set_ylabel(f"Accuracy")
-        ax.legend(frameon=False)
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
+
+        analyze_datars([0] + list(times_stale),
+                       [0] + list(times_gpipe),
+                       [acc_without_ft] + list(stale_dict.values()),
+                       [acc_without_ft] + list(gpipe_dict.values())
+                       )
+        ax.legend(frameon=False, loc="best", borderaxespad=0)
+
         # fig.set_size_inches(width, height)
         os.makedirs("results/paper_plots/", exist_ok=True)
         plt.savefig('results/paper_plots/Final_Plot_winning_RTE_seq_gpipe_vs_MIXED_stale_TTA.pdf', transparent=False, )
@@ -974,6 +1060,43 @@ if __name__ == '__main__':
         plt.show()
 
 
+    def all_speedups_multirc():
+        stale_virt_chkpts = "results/all_results_test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_8_se_2_seed_42_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_8_se_2_seed_42.txt"
+        gpipe_virt_chkpts = "results/all_results_test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_8_se_8_seed_42_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_8_se_8_seed_42.txt"
+        stale_seq_chkpts = "results/all_results_no_virtual_stages_benchmark_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic_t5_tfds_stale_bs_8_se_4_seed_42_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic_t5_tfds_stale_bs_8_se_4_seed_42.txt"
+
+        exp_base = "results/t5/super_glue/multirc"
+        fns = [
+            "no_virtual_stages_benchmark_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic_t5_tfds_gpipe_bs_8_se_8_seed_42.json",
+            "no_virtual_stages_benchmark_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic_t5_tfds_stale_bs_8_se_4_seed_42.json",
+            "test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_8_se_8_seed_42.json",
+            "test_vs_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_8_se_2_seed_42.json", ]
+        names = ["gpipe_seq", "stale_seq", "gpipe_mixed", "stale_mixed"]
+
+        files = {
+            name: os.path.join(exp_base, fn) for name, fn in zip(names, fns)
+        }
+        for key in {'eval/super_glue_multirc_v102/exact_match', 'eval/super_glue_multirc_v102/f1'}:
+            loaded = load_experiment(files['gpipe_seq'])
+            d = {"train_epochs_times": extract_train_epoch_times(loaded)}
+
+            print("For Key:", key)
+            seq_gpipe_dict, seq_gpipe_times = extrapolate_gpipe_times_and_acc_seq(d, files['gpipe_mixed'],
+                                                                                  gpipe_virt_chkpts, subkey=key)
+
+            virtual_stale_dict, virtual_times_stale = get_fixed_dict_and_times_single(files['stale_mixed'],
+                                                                                      stale_virt_chkpts, subkey=key)
+
+            virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(files['gpipe_mixed'],
+                                                                                      gpipe_virt_chkpts, subkey=key)
+
+            seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(files['stale_seq'], stale_seq_chkpts,
+                                                                              subkey=key)
+
+            compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
+                                 virtual_stale_dict, virtual_times_gpipe, virtual_times_stale)
+
+
     exps = {
         "boolq_virtual": boolq_virtual,
         "boolq_seq": boolq_seq,
@@ -985,7 +1108,10 @@ if __name__ == '__main__':
         "virtual_stages_SEQ_us_vs_MIXED_US_stale": virtual_stages_SEQ_us_vs_MIXED_US_stale,
         "all_speedups_rte": all_speedups_rte,
         "wic_stale_mixed_vs_gpipe_seq_epoch_speedup": wic_stale_mixed_vs_gpipe_seq_epoch_speedup,
-        "boolq_stale_mixed_vs_gpipe_seq_epoch_speedup": boolq_stale_mixed_vs_gpipe_seq_epoch_speedup
+        "boolq_stale_mixed_vs_gpipe_seq_epoch_speedup": boolq_stale_mixed_vs_gpipe_seq_epoch_speedup,
+        'all_speedupts_multirc': all_speedups_multirc,
+        "boolq_stale_mixed_vs_gpipe_mixed_epoch_speedup": boolq_stale_mixed_vs_gpipe_mixed_epoch_speedup,
+        "wic_stale_mixed_vs_gpipe_mixed_epoch_speedup": wic_stale_mixed_vs_gpipe_mixed_epoch_speedup,
     }
 
     allplots = {
