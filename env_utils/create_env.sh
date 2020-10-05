@@ -2,7 +2,7 @@
 
 # Make sure you have prerequisites, e,g:
 #
-# apt-get install -y --no-install-recommends \
+# sudo apt-get install -y --no-install-recommends \
 #          build-essential \
 #          cmake \
 #          git \
@@ -47,7 +47,7 @@ avx2pillow_torchvision() {
     pip uninstall pillow
     CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
     # (2) Install torchvision from source.
-    pip install git+https://github.com/pytorch/vision.git@v0.6.0
+    pip install git+https://github.com/pytorch/vision.git@v0.7.0
 }
 
 cuda_awre_openmpi() {
@@ -56,9 +56,12 @@ cuda_awre_openmpi() {
     wget https://download.open-mpi.org/release/open-mpi/v4.0/openmpi-4.0.5.tar.gz
     tar -xvzf openmpi-4.0.5.tar.gz
     cd openmpi-4.0.5 || exit 1
-    ./configure --with-cuda
-    make
-    sudo make install
+    # --disable-mca-dso
+#    export MXM_HOME=/opt/mellanox/mxm
+
+    ./configure --with-cuda --without-ucx --enable-mpi-thread-multiple --with-mxm=/opt/mellanox/mxm --with-openib --with-knem=/opt/knem-1.1.4.90mlnx1
+    make -j 40
+    sudo make install -j 40
     sudo ldconfig
 }
 
@@ -92,7 +95,9 @@ pytorch_install() {
     export TORCH_CUDA_ARCH_LIST="7.5+PTX"
     export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
     export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
-    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
+    export BUILD_TEST=0
+    export USE_IBVERBS=0
+#    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
     python setup.py install
 }
 

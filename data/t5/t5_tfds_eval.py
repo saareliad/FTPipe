@@ -264,10 +264,14 @@ class T5Evaluator:
                 print("partial result:", checkpoint_step, results)
                 all_results[checkpoint_step] = results
             except Exception as e:
-                if all_results:
-                    warnings.warn(f"ignoring exception {str(e)}")
-                else:
-                    raise e
+                warnings.warn(f"ignoring exception {str(e)}")
+
+                # if all_results:
+                # else:
+                #     raise e
+
+        if len(all_results) == 0:
+            raise RuntimeError("could not evaluate any checkpoint")
 
         return all_results
 

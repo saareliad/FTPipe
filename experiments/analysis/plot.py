@@ -6,7 +6,7 @@ import numpy as np
 
 
 def plot_loss(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend=None, loss_per_batch=False,
-              step_every=1):
+              step_every=1, original_step_every=1):
     if fig is None:
         fig, axes = plt.subplots(nrows=2, ncols=1, figsize=(8, 10), )
         axes = axes.reshape(-1)
@@ -27,9 +27,12 @@ def plot_loss(fit_res: Union[NamedTuple, dict], fig=None, log_loss=False, legend
         else:
             data = fit_res[attr]
 
+        data = np.asarray(data)
         if loss_per_batch:
-            data = np.asarray(data)
             data = np.mean(data[:(len(data) // step_every) * step_every].reshape(-1, step_every), axis=1)
+
+        if traintest == 'train':
+            data *= original_step_every
 
         h = ax.plot(np.arange(1, len(data) + 1), data, label=legend)
         title = attr.replace("test", "valid")

@@ -1,4 +1,4 @@
-name: py38
+name: pt
 channels:
   - defaults
 dependencies:
@@ -18,6 +18,9 @@ dependencies:
     - yapf
     - t5
     - nlp # TODO: replace with datasets
+    - datasets
+    - git+https://github.com/networkx/networkx-metis.git  # For partitioning
+
 
 
 prefix: /home_local/saareliad/miniconda3/envs/py38
