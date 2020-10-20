@@ -181,7 +181,7 @@ def get_fixed_dict_and_times_single(exp_fn, checkpoints_eval_fn,
     return checkpoints_dict, times_list
 
 
-def analyze_datars(times1,times2, values1, values2):
+def analyze_datars(times1, times2, values1, values2, colors=['red', 'navy']):
     from adjustText import adjust_text
 
     all_ts = []
@@ -189,14 +189,13 @@ def analyze_datars(times1,times2, values1, values2):
     all_times = [*times1, *times2]
     all_vals = [*values1, *values2]
 
-    colors=['red', 'navy']
-    for times,values, color in zip([times1, times2], [values1,values2], colors):
+    for times, values, color in zip([times1, times2], [values1, values2], colors):
         max = np.max(values)
         min = values[0]
         percs = [0.75, 1]
         values = np.asarray(values)
         times = np.asarray(times)
-        ids = [np.argmax(values >= (x* (max-min) + min)) for x in percs]
+        ids = [np.argmax(values >= (x * (max - min) + min)) for x in percs]
 
         percs_nice = ["75%", "100%"]
 
@@ -205,19 +204,20 @@ def analyze_datars(times1,times2, values1, values2):
         all_ts.extend(ts)
 
         ax = plt.gca()
-        annotations = [child for child in ax.get_children() if isinstance(child, matplotlib.text.Annotation)]
+        annotations = [child for child in ax.get_children() if
+                       isinstance(child, matplotlib.text.Annotation) or isinstance(child, matplotlib.legend.Legend
+                                                                                    )]
 
-        adjust_text(ts, x=all_times, y=all_vals, add_objects=annotations, arrowprops= dict(arrowstyle="->", fill=True, color=color,))
-
+        adjust_text(ts, x=all_times, y=all_vals, add_objects=annotations,
+                    arrowprops=dict(arrowstyle="->", fill=True, color=color, ))
 
     # arrow_props = dict(arrowstyle="-|>", color='black')
-    arrow_props={}
+    arrow_props = {}
     # adjust_text(all_ts, x=all_times, y=all_vals, arrowprops=None)
     # adjust_text(all_ts, x=all_times, y=all_vals, arrowprops=arrow_props, force_text=0.0006,lim=277,force_points=0.05, force_objects=0.05)
 
     # text_location = (2, 15)
     # target_point = (xy[8], xy[8])
-
 
     # for target_point in points:
     #
@@ -975,8 +975,6 @@ if __name__ == '__main__':
         ax.plot([0] + list(stale_dict.keys()), [acc_without_ft] + list(stale_dict.values()), marker="o",
                 label="FTPipe", color="red")
 
-
-
         # ax.set_title("")
         ax.set_ylim(86, 92)
         ax.set_xlabel(f"Epochs")
@@ -1002,7 +1000,6 @@ if __name__ == '__main__':
                 label="GPipe", color="navy")
         ax.plot([0] + list(times_stale), [acc_without_ft] + list(stale_dict.values()), marker="o",
                 label="FTPipe", color="red")
-
 
         ax.set_ylim(86, 92)
         ax.set_xlabel(f"Time (Hours)")
@@ -1051,7 +1048,14 @@ if __name__ == '__main__':
         ax.set_ylim(86, 92)
         ax.set_xlabel(f"Time (Hours)")
         ax.set_ylabel(f"Accuracy")
-        ax.legend(frameon=False)
+        ax.legend(frameon=False, borderaxespad=0)
+
+        analyze_datars([0] + list(times_stale),
+                       [0] + list(times_seq),
+                       [acc_without_ft] + list(stale_dict.values()),
+                       [acc_without_ft] + list(seq_dict.values()),
+                       colors=['red', 'mediumseagreen']
+                       )
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)
         # fig.set_size_inches(width, height)

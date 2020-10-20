@@ -11,6 +11,7 @@ from transformers import (T5Config, T5Tokenizer)
 
 from .normal.NLP_models import (GPT2LMHeadModel, GPT2Model,
                                 StatelessGPT2LMHeadModel)
+from .normal.NLP_models.modeling_bert import BertForQuestionAnswering as BertForQuestionAnsweringNew
 from .normal.NLP_models.modeling_bert import BertForSequenceClassification
 from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
@@ -24,6 +25,7 @@ MODEL_TYPES = {
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
     'bert_squad_old': (BertConfig, BertForQuestionAnswering, BertTokenizer),
+    'bert_squad_new': (BertConfig, BertForQuestionAnsweringNew, BertTokenizer),
     'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
         (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
@@ -182,6 +184,12 @@ def bert_large_uncased_squad_8p():
                 output_past=False,
                 stateless_tied=False)
 
+def bert_8p():
+    return dict(model_type='bert_squad_new',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False)
 
 # GPipe version for the functions, as it has different balance.
 def gpt2_p4_lm_tied_gpipe():

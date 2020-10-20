@@ -42,13 +42,17 @@ def pretrained_model_config_and_tokenizer(
         do_lower_case=do_lower_case,
         cache_dir=cache_dir if cache_dir else None)
 
-    use_cdn = model_name_or_path not in {"t5-11b"}
+    # use_cdn = model_name_or_path not in {"t5-11b"}
+    extra_kwargs = {}
+    if model_name_or_path in {"t5-11b"}:
+        extra_kwargs['use_cdn'] = False
+
     model = model_class.from_pretrained(
         model_name_or_path,
         from_tf=bool('.ckpt' in model_name_or_path),
         config=config,
         cache_dir=cache_dir if cache_dir else None,
-        use_cdn=use_cdn)
+        **extra_kwargs)
 
     if do_resize_token_embedding:
         resize_token_embeddings(model, tokenizer)

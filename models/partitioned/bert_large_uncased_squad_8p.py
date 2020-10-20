@@ -381,6 +381,7 @@ def create_pipeline_configuration(DEBUG=False):
     }
     config['stages'] = stages
 
+    config['basic_blocks'] = basic_blocks
     return config
 
 
