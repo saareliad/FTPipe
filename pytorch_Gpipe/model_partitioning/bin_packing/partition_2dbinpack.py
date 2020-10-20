@@ -404,8 +404,8 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node]):
     stage_id_generator = count()
 
-    # shallow copy bins:
-    bins_to_id = {i: set(n.id for n in v) for i, v in bins.items()}
+    # shallow copy bins, exluding inputs:
+    bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
 
     nodes_with_out_edges_to_different_gpu = defaultdict(set)
     nodes_with_in_edges_from_different_gpu = defaultdict(set)
@@ -441,13 +441,24 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
             broken_stages_for_unbroken_stage = []
             cur_set = list()  # its sorted so its more efficient
             unbroken_stage = deque(sorted(unbroken_stage))
-            prev_topo_sort_id = unbroken_stage.popleft()
-            cur_set.append(prev_topo_sort_id)
+            while unbroken_stage:
+                prev_topo_sort_id = unbroken_stage.popleft()
+
+                if prev_topo_sort_id in id_to_node_worked_on:
+                    cur_set.append(prev_topo_sort_id)
+                    break
+                else:
+                    print(f"skipping input_v0: {prev_topo_sort_id}")
+            # cur_set.append(prev_topo_sort_id)
             while unbroken_stage:
                 topo_sort_id = unbroken_stage.popleft()
                 if topo_sort_id == prev_topo_sort_id + 1:
                     # easy, nothing to do.
                     pass
+                elif topo_sort_id not in id_to_node_worked_on:
+                    # a graph input
+                    print(f"skipping input_v1: {prev_topo_sort_id}")
+                    continue
                 else:
                     # Check if nothing is missing (it is possible due to layers_graph)
                     # Example: 9->13
@@ -466,6 +477,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                             try:
                                 cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
                             except KeyError as e:
+                                # raise e
                                 print("-V- Known bug/issue (currently happens in METIS only?). Raising extra info")
                                 print("-V- cur_nodes = [id_to_node_worked_on[x] for x in cur_set]")
                                 print("-V- id_to_node_worked_on:", id_to_node_worked_on)
@@ -515,8 +527,10 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                         broken_stages_for_unbroken_stage.append(cur_set)
                         cur_set = list()
 
-                cur_set.append(topo_sort_id)
-
+                if topo_sort_id in id_to_node_worked_on:
+                    cur_set.append(topo_sort_id)
+                else:
+                    print(f"skipping input_v2: {prev_topo_sort_id}")
                 prev_topo_sort_id = topo_sort_id
 
             if cur_set:
@@ -525,6 +539,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
 
         broken_stages.sort(key=lambda topo_sorted_list: topo_sorted_list[0])
 
+        # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
         print("unbroken_stages")
         print(unbroken_stages)
         print("broken_stages")

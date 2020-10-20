@@ -95,10 +95,12 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph):
     # prevent undesired partition borders like:
     # sender:
     #   return a
-    # reciever:
+    # receiver:
     #   do something only with a[0]
     # there is no need to send all the elements of a, if only some of them are used
 
+    n2 = graph.num_partitions
+    b4 = {n.stage_id for n in graph.nodes}
     for n in graph.nodes:
         if (n.type != NodeTypes.OP) or ("tuple::__getitem__" not in n.scope):
             continue
@@ -110,4 +112,9 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph):
         if index_node.type is NodeTypes.CONSTANT:
             # NOTE we only do this for constant index
             # if the index node itself has inputs better logic is needed to prevent cycles in the graph
+            # This moves the getitem one stage back back.
             getitem_node.stage_id = index_node.stage_id = tuple_node.stage_id
+
+    after = {n.stage_id for n in graph.nodes}
+    n3 = graph.num_partitions
+    assert n2 == n3, f"'ensure_no_unnecessary_tuple_sends' accidentally killed a stage {(n2,n3)}, {b4 - after}"

@@ -57,9 +57,14 @@ def compile_partitioned_model(graph: Graph,
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     """
-
+    n1 = graph.num_partitions
     ensure_inputs_are_used(graph)
+    n2 = graph.num_partitions
     ensure_no_unnecessary_tuple_sends(graph)
+    n3 = graph.num_partitions
+    # Assert that we don't accidentally kill stages.
+    assert n1 == n2, f"'ensure_inputs_are_used' accidentally killed a stage {(n1,n2)}"
+    assert n2 == n3, f"'ensure_no_unnecessary_tuple_sends' accidentally killed a stage {(n2,n3)}"
 
     layer_classes = {
         scope: type(layer)

@@ -3,6 +3,7 @@ from typing import Optional, Dict
 
 from .process_partition import post_process_partition
 from ..bin_packing.partition_2dbinpack import stages_from_bins, convert_handle_missing_print
+from ..bin_packing.post_process import cannonize_partition_indices
 from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
 __all__ = ["METIS_partition"]
@@ -82,6 +83,8 @@ def METIS_partition(graph: Graph,
             bins = defaultdict(list)
 
             for node, gpu_id in zip(work_graph.nodes, parts):
+                if node in work_graph.inputs:
+                    continue
                 node.gpu_id = gpu_id
                 unique_gpu_ids.add(gpu_id)
                 bins[gpu_id].append(node)
@@ -93,7 +96,7 @@ def METIS_partition(graph: Graph,
             stages_from_bins(graph=work_graph, bins=bins, id_to_node_worked_on=id_to_node)
 
         try:
-            post_process_partition(graph, edge_weight_function, assert_output_types=False,
+            post_process_partition(work_graph, edge_weight_function, assert_output_types=False,
                                    verbose_on_error=verbose_on_error)
             fail = False
             break
@@ -106,7 +109,7 @@ def METIS_partition(graph: Graph,
 
     # TODO this was written without virtual stages.
     n_parts = set(parts)
-    actual_nparts = len({n.stage_id for n in graph.nodes})
+    actual_nparts = len({n.stage_id for n in work_graph.nodes})
 
     if (actual_nparts < num_partitions):
         print("This is deprecated....")
@@ -122,6 +125,6 @@ def METIS_partition(graph: Graph,
         graph.induce_layer_partition(work_graph, layers_to_original)
 
     if use_virtual_stages:
-        stage_to_gpu_map = convert_handle_missing_print(bins=bins, graph=work_graph)
+        stage_to_gpu_map = convert_handle_missing_print(bins=bins, graph=graph)
 
     return graph
