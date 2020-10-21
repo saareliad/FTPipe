@@ -8,7 +8,7 @@ import networkx as nx
 from functools import reduce
 
 from torch.nn import Module
-
+from pytorch_Gpipe.model_partitioning.utils import re_assign_partition_indices
 from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
 # from .partition_class import Partition
@@ -57,14 +57,12 @@ def compile_partitioned_model(graph: Graph,
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     """
-    n1 = graph.num_partitions
-    ensure_inputs_are_used(graph)
-    n2 = graph.num_partitions
-    ensure_no_unnecessary_tuple_sends(graph)
-    n3 = graph.num_partitions
-    # Assert that we don't accidentally kill stages.
-    assert n1 == n2, f"'ensure_inputs_are_used' accidentally killed a stage {(n1,n2)}"
-    assert n2 == n3, f"'ensure_no_unnecessary_tuple_sends' accidentally killed a stage {(n2,n3)}"
+    try:
+        ensure_inputs_are_used(graph, assert_same_stages=True)
+        ensure_no_unnecessary_tuple_sends(graph, assert_same_stages=True)
+    except AssertionError as e:
+        print("Canonizing partition indices again after graph changed")
+        re_assign_partition_indices(graph)
 
     layer_classes = {
         scope: type(layer)

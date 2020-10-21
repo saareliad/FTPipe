@@ -554,7 +554,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
                 graph[n].stage_id = dummy_stage_id
 
         # Unify redundant stages
-        # cannonize_partition_indices(graph)
+        # re_assign_partition_indices(graph)
 
         # Current problem:
         # that we have 7->8>9 and we can spare 8,
@@ -652,7 +652,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
 
             #     # NOTE: this create an empty stage, but it will be wiped out by following functions
 
-    # cannonize_partition_indices(graph) <--- TODO: redundant
+    # re_assign_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
 
 

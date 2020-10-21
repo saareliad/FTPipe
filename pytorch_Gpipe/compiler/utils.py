@@ -81,8 +81,13 @@ def partitionOutputs(partition: List[Node],
     return [n for n in partition if isOutput(n)]
 
 
-def ensure_inputs_are_used(graph: Graph):
+def ensure_inputs_are_used(graph: Graph, assert_same_stages=True):
     # ensure all model inputs belong to stages that actually use them
+
+    if assert_same_stages:
+        n2 = graph.num_partitions
+        b4 = {n.stage_id for n in graph.nodes}
+
     for n in graph.nodes:
         if n.type != NodeTypes.IN:
             continue
@@ -90,17 +95,22 @@ def ensure_inputs_are_used(graph: Graph):
 
         n.stage_id = min(n.out_edges, key=lambda u: u.stage_id).stage_id
 
+    if assert_same_stages:
+        after = {n.stage_id for n in graph.nodes}
+        n3 = graph.num_partitions
+        assert n2 == n3, f"Accidentally killed a stage {(n2,n3)}, {b4 - after}"
 
-def ensure_no_unnecessary_tuple_sends(graph: Graph):
+def ensure_no_unnecessary_tuple_sends(graph: Graph, assert_same_stages=True):
     # prevent undesired partition borders like:
     # sender:
     #   return a
     # receiver:
     #   do something only with a[0]
     # there is no need to send all the elements of a, if only some of them are used
+    if assert_same_stages:
+        n2 = graph.num_partitions
+        b4 = {n.stage_id for n in graph.nodes}
 
-    n2 = graph.num_partitions
-    b4 = {n.stage_id for n in graph.nodes}
     for n in graph.nodes:
         if (n.type != NodeTypes.OP) or ("tuple::__getitem__" not in n.scope):
             continue
@@ -115,6 +125,7 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph):
             # This moves the getitem one stage back back.
             getitem_node.stage_id = index_node.stage_id = tuple_node.stage_id
 
-    after = {n.stage_id for n in graph.nodes}
-    n3 = graph.num_partitions
-    assert n2 == n3, f"'ensure_no_unnecessary_tuple_sends' accidentally killed a stage {(n2,n3)}, {b4 - after}"
+    if assert_same_stages:
+        after = {n.stage_id for n in graph.nodes}
+        n3 = graph.num_partitions
+        assert n2 == n3, f"Accidentally killed a stage {(n2,n3)}, {b4 - after}"

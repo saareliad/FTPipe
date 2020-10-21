@@ -1,10 +1,11 @@
 import os
 from collections import defaultdict
 from copy import copy
-from typing import List, Dict, Set
+from typing import Set
 
 import torch
 
+from pytorch_Gpipe.model_partitioning.utils import re_assign_partition_indices, has_stage_cycles
 from pytorch_Gpipe.model_profiling import Graph, Node, NodeTypes
 
 __all__ = ["post_process_partition"]
@@ -24,8 +25,8 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
         print extra info when cycle can't be solved
     '''
 
-    cannonize_partition_indices(graph)
-    if has_cycles(graph):
+    re_assign_partition_indices(graph)
+    if has_stage_cycles(graph):
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
                               ".")
@@ -34,13 +35,13 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
 
         # possibly redundent
         try:
-            cannonize_partition_indices(graph)
+            re_assign_partition_indices(graph)
         except:
             print(
-                "-W- ignoring exception of redundent cannonize_partition_indices(graph)")
+                "-W- ignoring exception of redundent re_assign_partition_indices(graph)")
 
     # this is a sanity check
-    if has_cycles(graph):
+    if has_stage_cycles(graph):
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_after_fix",
                               ".")
@@ -69,41 +70,6 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
     return graph
 
 
-def cannonize_partition_indices(graph: Graph):
-    out_edges = defaultdict(set)
-    for node in graph.nodes:
-        for o in node.out_edges:
-            out_edges[node.stage_id].add(o.stage_id)
-
-    for i, e in out_edges.items():
-        e.discard(i)
-
-    translation = {idx: i for i, idx in enumerate(topological_sort(out_edges))}
-    for node in graph.nodes:
-        node.stage_id = translation[node.stage_id]
-
-
-def topological_sort(out_edges: Dict[int, Set[int]]) -> List[int]:
-    visited = {i: False for i in out_edges}
-    stack = []
-
-    for i in out_edges.keys():
-        if not visited[i]:
-            _topological_sort(out_edges, i, visited, stack)
-
-    return stack
-
-
-def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int, bool], stack: List[int]):
-    visited[v] = True
-
-    for i in out_edges[v]:
-        if not visited[i]:
-            _topological_sort(out_edges, i, visited, stack)
-
-    stack.insert(0, v)
-
-
 def get_problematic_partitions(graph):
     """ For debug when cycle are detected """
     problems = []
@@ -114,15 +80,6 @@ def get_problematic_partitions(graph):
                 problems.append([v.stage_id, u.stage_id])
                 info.append([v.scope, u.scope])
     return problems, info
-
-
-def has_cycles(graph: Graph) -> bool:
-    for u in graph.nodes:
-        for v in u.out_edges:
-            if v.stage_id < u.stage_id:
-                return True
-
-    return False
 
 
 def break_partition_cycles(graph: Graph):
