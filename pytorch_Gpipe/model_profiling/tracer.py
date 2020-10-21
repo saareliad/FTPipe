@@ -1,19 +1,19 @@
+import operator
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
-import operator
-import warnings
-
 
 import torch
 import torch.nn as nn
-from torch import Tensor
 import torch.nn.functional as F
+from torch import Tensor
 from torch._overrides import get_overridable_functions
 
 from pytorch_Gpipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops,logical_ops, nested_map,get_call_site, tensor_creation_ops
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
+    tensor_creation_ops
+
 ##############################
 # Tracing Metadata
 ##############################
@@ -109,7 +109,7 @@ class ExplicitUntracedFunction():
                 return v._data
             return v
 
-        return nested_map(untraced, vs,full=True)
+        return nested_map(untraced, vs, full=True)
 
 
 class TracedFunction():
@@ -128,7 +128,6 @@ class TracedFunction():
         setattr(self.namespace, self.function_name, self)
 
     def __call__(self, *args, **kwargs):
-
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
@@ -241,15 +240,13 @@ class TracedValue(object):
         self.creation_site = get_call_site(__file__)
         
     def set_data(self, data):
-        assert isTracedValue(
+        assert is_traceable(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
 
-        #target device is managed by the stage and is not dynamic
-        #so we will convert this node to a CONSTANT
-        if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
-            data = torch.device(data)
-            self.node.constant_value = data
 
+        #NOTE assuming this is called after setting graph input dependencies
+        # aka we first record graph inputs prior to calling set_data
+        maybe_make_constant(self.node,data)
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
@@ -300,16 +297,17 @@ class TracedValue(object):
                           str), f"getattr support only for string args got {type(name)}"
 
         out = getattr(self._data, name)
-        if isTracedValue(out):
+        if is_traceable(out):
             name_arg = TracedValue(NodeTypes.CONSTANT, "/prim::Constant")
             name_arg.set_data(name)
             name_arg.node.constant_value = name
 
             ret = TracedValue(NodeTypes.OP,
                               f"/{self.namespace}::__getattribute__")
-            ret.set_data(out)
             record_arg(ret.id, self.id)
             record_arg(ret.id, name_arg.id)
+            ret.set_data(out)
+
             return ret
 
         return TracedInstanceFunction(self.id, self.namespace, out)
@@ -687,7 +685,7 @@ class TracedLayer(nn.Module):
     def __contains__(self, key):
         return key in self._module
 
-def isTracedValue(data):
+def is_traceable(data):
     """
     predicate to check if a value can be traced
     """
@@ -701,7 +699,7 @@ def isTracedValue(data):
 ##############################
 def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
     reset_tracing_state()
-    #just to be sure
+    # just to be sure
     _unwrap_layers(module)
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
@@ -730,9 +728,13 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     assert CURRENT_SCOPE == traced_module._name
 
     CURRENT_SCOPE = ""
+    nodes = NODES
 
-    nodes = make_constant(NODES)
+    nodes = discard_unused_nodes(nodes,output_id)
+
     nodes,output_id = duplicate_constants(nodes,output_id)
+
+    propagate_constant_tuple_accessors(nodes)
 
     nodes = discard_unused_nodes(nodes,output_id)
 
@@ -744,21 +746,21 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     nodes, output_id = set_node_indices(nodes, output_id)
     NODES.clear()
 
-
     is_valid, errors = check_is_valid_graph(nodes)
     if not is_valid:
         raise RuntimeError(errors)
 
     return Graph(nodes, input_kw_ids, [output_id], depth, basic_blocks)
 
-def find_reachable_nodes(nodes,output_id):
+
+def find_reachable_nodes(nodes, output_id):
     '''do a bfs from the output on the undirected graph to find all nodes that are 
     reachable from the output node this is really conservative some unused nodes will still remain
     '''
 
-    #TODO make this more strict, we still allow nodes that should be removed
+    # TODO make this more strict, we still allow nodes that should be removed
     open = {nodes[output_id]}
-    reachable=set()
+    reachable = set()
 
     while open:
         node = open.pop()
@@ -770,13 +772,9 @@ def find_reachable_nodes(nodes,output_id):
             if ("__i" in n.scope) or (n.value_type is torch.Tensor):
                 open.add(n)
 
-
         reachable.add(node)
 
-
     return reachable
-        
-        
 
 
 def prepare_args_and_kwargs(args=(), kwargs=None):
@@ -799,10 +797,10 @@ def prepare_args_and_kwargs(args=(), kwargs=None):
         v.set_data(a)
         wrapped_args.append(v)
 
-    n_args=len(args)
+    n_args = len(args)
     wrapped_kwargs = dict()
-    for i, (k, a) in enumerate(sorted(kwargs.items(),key=lambda t:t[0])):
-        v = TracedValue(NodeTypes.IN, f"input{n_args+i}")
+    for i, (k, a) in enumerate(sorted(kwargs.items(), key=lambda t: t[0])):
+        v = TracedValue(NodeTypes.IN, f"input{n_args + i}")
         v.set_data(a)
         wrapped_kwargs[k] = v
 
@@ -849,10 +847,11 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
                                                              full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
-        if isinstance(sub_layer,(nn.ModuleList,nn.ModuleDict)):
-            raise TypeError(f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
-        
-        if isinstance(sub_layer,(nn.ParameterList,nn.ParameterDict)):
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
+            raise TypeError(
+                f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+
+        if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
             continue
@@ -889,40 +888,40 @@ def duplicate_constants(nodes,output_id):
     new_nodes=dict()
     offset=0
     new_output_id=0
-    for idx in range(len(nodes)):
-        node = nodes[idx]
+    for node in nodes.values():
         if node.id == output_id:
-            new_output_id = node.id+offset
-        node.id+=offset
-        
+            new_output_id = node.id + offset
+        node.id += offset
+
         if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
-            for n_copy,o in enumerate(node.out_edges):
+            for n_copy, o in enumerate(node.out_edges):
                 copy_node = Node.from_other(node)
-                copy_node.id+=(n_copy)
-                o.replace_input(node,copy_node)
-                copy_node.out_edges={o}
+                copy_node.id += (n_copy)
+                o.replace_input(node, copy_node)
+                copy_node.out_edges = {o}
                 new_nodes[copy_node.id] = copy_node
-                offset+=1
+                offset += 1
         else:
             assert node.id not in new_nodes
-            new_nodes[node.id]=node
-    
-    return new_nodes,new_output_id
+            new_nodes[node.id] = node
 
-def discard_unused_nodes(nodes,output_id):
+    return new_nodes, new_output_id
+
+
+def discard_unused_nodes(nodes, output_id):
     new_nodes = []
     while True:
-        changed=False
-        reachable_nodes = find_reachable_nodes(nodes,output_id)
+        changed = False
+        reachable_nodes = find_reachable_nodes(nodes, output_id)
 
         for node in reversed(list(nodes.values())):
             if node.id == output_id:
                 new_nodes.append((node.id, node))
-            
+
             # if a >1:      a>1 will be traced but it has no meaning to us
             # as we only record the branch that was taken
             unused_branch = False
-            if node.type is NodeTypes.OP and (len(node.out_edges)== 0):
+            if node.type is NodeTypes.OP and (len(node.out_edges) == 0):
                 op_path = node.scope.rsplit("/", maxsplit=1)[1]
                 _, func_name = op_path.split("::")
                 unused_branch = func_name in logical_ops
@@ -930,40 +929,96 @@ def discard_unused_nodes(nodes,output_id):
             # a,b=f() will actually invoke __getitem__ 3 times so we discard the last node
             iter_sentinel = node.value_type is None
 
-            unused_constant_or_input = (node.type in [NodeTypes.IN,NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
+            unused_constant_or_input = (node.type in [NodeTypes.IN, NodeTypes.CONSTANT]) and (len(node.out_edges) == 0)
 
             unreachable = node not in reachable_nodes
 
-            if unused_branch or iter_sentinel or unused_constant_or_input or unreachable: 
+            if unused_branch or iter_sentinel or unused_constant_or_input or unreachable:
                 assert len(
                     node.out_edges) == 0, "unused traced value should not have outgoing edges"
 
                 for u in node.in_edges:
                     u.remove_output(node)
-                
-                changed=True
+
+                changed = True
             else:
                 new_nodes.append((node.id, node))
 
         if not changed:
             break
 
-        nodes=dict(reversed(new_nodes))
-        new_nodes=[]
-    
+        nodes = dict(reversed(new_nodes))
+        new_nodes = []
+
     # reverse dict_order
     return dict(reversed(new_nodes))
 
 
-def make_constant(nodes):
-    #devices are managed by the stage and are static
-    def device_predicate(n):
-        return n.value_type is torch.device
-    _make_constant(nodes,device_predicate)
-    return nodes
+def propagate_constant_tuple_accessors(nodes):
+    # t = (a,b)
+    # t_0 = t[0]
+    # t_1 = t[1]
+    # t_2 = t_0 + 10
+    # t_3 = t_1 * 2
+
+    #equivalent to
+    # t_2 = a + 10
+    # t_3 = b * 2
+
+    # we use do while semantics in order to handle nested tuples for example:
+    # ((a,b),c)[0][1] => (a,b)[1] => b
+    # NOTE we also do not support tuple concatenation (t_0+t_1)[1]
+
+    while True:
+        changed = False
+        for n in nodes.values():
+            if "prim::TupleConstruct" in n.scope:
+                tuple_elements = n.in_edges
+                for o in n.out_edges:
+                    # access using a constant index
+                    if ("tuple::__getitem__" in o.scope) and (o.in_edges[1].type is NodeTypes.CONSTANT):
+                        idx = o.in_edges[1].constant_value
+                        if not isinstance(idx,int):
+                            #NOTE we do not support propagating slicing here (a,b,c)[:2]
+                            continue
+                        accessed_element = tuple_elements[idx]
+                        tuple_accessor = o
+
+                        for dst in tuple_accessor.out_edges:
+                            changed = True
+                            # connect the element to the destination directly
+                            dst.replace_input(tuple_accessor,accessed_element)
+                            accessed_element.add_out_edge(dst)
+
+                        # make the tuple accessor a leaf node as it's no longer being used
+                        # later passes will remove this node entirely
+                        tuple_accessor.out_edges.clear()
+        if not changed:
+            break
 
 
-def _make_constant(nodes,predicate):
+def maybe_make_constant(node,data):
+    can_convert = False
+    if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+        # torch devices will be explicitly managed by the stage itself
+        # there is no need to dynamicaly infering the cuda device
+        data = torch.device(data)
+        can_convert = True
+    elif (node.type is NodeTypes.PRIMITIVE) and all(i.type is NodeTypes.CONSTANT for i in node.in_edges):
+        # for example (1,2,3) is constant there is no need to explicitly record the creation process
+        # 1,2,3 => TupleConstruct => (1,2,3) is simply (1,2,3)
+        # we can have 1 graph node instead of many
+        can_convert = True
+
+    if can_convert:
+        node.constant_value = data
+        node.type = NodeTypes.CONSTANT
+        for i in node.in_edges:
+            i.remove_output(node)
+        node.args.clear()
+        node.kwargs.clear()
+
+def _make_constant(nodes, predicate):
     for n in nodes.values():
         if predicate(n):
             for i in n.in_edges:
@@ -980,15 +1035,13 @@ def set_node_indices(nodes, output_id):
         assert idx <= node.id
 
         node.id = idx
-        
-        if node.type in [NodeTypes.OP,NodeTypes.PRIMITIVE]:
-            node.scope+=f"_{node.id}"
-        
+
+        if node.type in [NodeTypes.OP, NodeTypes.PRIMITIVE]:
+            node.scope += f"_{node.id}"
+
         new_nodes[idx] = node
 
     return new_nodes, nodes[output_id].id
-
-
 
 
 ##############################
@@ -1024,29 +1077,31 @@ def record_args(args, top_level):
                                                       top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(traced_children))
-
             for id in traced_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(a)(traced_children))
 
         elif isinstance(a, dict):
             traced_children, traced_ids = record_kwargs(a,
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(traced_children))
-
             for k, id in traced_ids.items():
                 record_kwarg(traced_value.id, k, id)
+
+            traced_value.set_data(type(a)(traced_children))
+
         elif isinstance(a, slice):
             traced_children, traced_ids = record_args((a.start, a.stop, a.step),
                                                       top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(a)))
-            traced_value.set_data(type(a)(*traced_children))
 
             for id in traced_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(a)(*traced_children))
 
         elif isinstance(a, TracedValue):
             traced_value = a
@@ -1078,20 +1133,20 @@ def record_kwargs(kwargs, top_level):
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(traced_children))
-
             for id in children_ids:
                 record_arg(traced_value.id, id)
+
+            traced_value.set_data(type(v)(traced_children))
 
         elif isinstance(v, dict):
             traced_children, traced_ids = record_kwargs(v,
                                                         top_level=False)
             traced_value = TracedValue(NodeTypes.PRIMITIVE,
                                        "/" + container_construct_op_name(type(v)))
-            traced_value.set_data(type(v)(traced_children))
-
             for key, id in traced_ids.items():
                 record_kwarg(traced_value.id, key, id)
+
+            traced_value.set_data(type(v)(traced_children))
 
         elif isinstance(v, TracedValue):
             traced_value = v
@@ -1145,15 +1200,15 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
             module._parameters[name] = traced_t
         else:
             module._buffers[name] = traced_t
-    
-    #parameterList/Dict need a special case to ensure correct scope registration
+
+    # parameterList/Dict need a special case to ensure correct scope registration
     # as they are modules but do not have a forward method
-    for name,c in module.named_children():
-        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
-            for p_name,p in c.named_parameters():
+    for name, c in module.named_children():
+        if isinstance(c, (nn.ParameterList, nn.ParameterDict)):
+            for p_name, p in c.named_parameters():
                 traced_p = TracedValue(NodeTypes.BUFF_PARAM,
-                               f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
-                
+                                       f"/{type(c).__name__}[{name}]/{type(p).__name__}[{p_name}]")
+
                 traced_p.set_data(p)
                 c._parameters[p_name] = traced_p
     yield
@@ -1167,18 +1222,18 @@ def record_free_floating_parameters_and_buffers(module: nn.Module):
         else:
             module._buffers[name] = t
 
-    #revert parameterList/Dict tracing
-    for name,c in module.named_children():
-        if isinstance(c,(nn.ParameterList,nn.ParameterDict)):
-            for p_name,p in c._parameters.items():
+    # revert parameterList/Dict tracing
+    for name, c in module.named_children():
+        if isinstance(c, (nn.ParameterList, nn.ParameterDict)):
+            for p_name, p in c._parameters.items():
                 c._parameters[p_name] = p._data
 
 
 def record_non_terminal_output(out):
-    #NOTE it is possible that a module returns unrecorded outputs
+    # NOTE it is possible that a module returns unrecorded outputs
     # like containers None etc. so we ensure that they are all recorded
 
-    recorded_outs,_ = record_args((out,),top_level=True)
+    recorded_outs, _ = record_args((out,), top_level=True)
     return recorded_outs[0]
 
 
@@ -1224,7 +1279,7 @@ def check_is_valid_graph(nodes):
                            f"scope: {node.scope}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {[n.id for n in node.args]}",
-                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                           f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
@@ -1237,7 +1292,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1248,7 +1303,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1273,7 +1328,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1284,7 +1339,7 @@ def check_is_valid_graph(nodes):
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False
@@ -1308,23 +1363,25 @@ def check_is_valid_graph(nodes):
                            f"value: {node.constant_value}",
                            f"incoming edges: {[n.id for n in node.in_edges]}",
                            f"positional args: {[n.id for n in node.args]}",
-                           f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                           f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                            f"outgoing edges: {[n.id for n in node.out_edges]}",
                            ""])
             valid = False
 
-        if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(node.value_type, Tensor):
-            #HACK send torch.Size in MPI as tuple
+        if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(
+                node.value_type, Tensor):
+            # HACK send torch.Size in MPI as tuple
             if node.value_type is torch.Size:
                 continue
-            if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (issubclass(node.value_type, Tensor))):
+            if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (
+            issubclass(node.value_type, Tensor))):
                 errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
                                f"node id: {i}",
                                f"node id: {i}",
                                f"scope: {node.scope}",
                                f"incoming edges: {[n.id for n in node.in_edges]}",
                                f"positional args: {[n.id for n in node.args]}",
-                               f"keyword args: {[(n.id,k) for n,k in node.kwargs.items()]}",
+                               f"keyword args: {[(n.id, k) for n, k in node.kwargs.items()]}",
                                f"outgoing edges: {[n.id for n in node.out_edges]}",
                                ""])
                 valid = False

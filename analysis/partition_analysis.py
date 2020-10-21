@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 import torch
 from collections import deque, defaultdict
@@ -11,21 +12,18 @@ from pprint import pprint
 import io
 from contextlib import redirect_stdout
 import warnings
-from typing import List, Set
+from typing import List, Set, Dict, Union, Any, Optional
 from functools import wraps
 from contextlib import contextmanager
 from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
 from pytorch_Gpipe.model_profiling import NodeTypes
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
-                             upper_utilization_bound, lower_utilization_bound,
                              apply_ratio)
 
 
-def rounddict(d, x=2):
-    return {k: round(v, x) for k, v in d.items()}
-
-
+def rounddict(d: Dict[Any, float], x=2):
+    return {k: round(number=v, ndigits=x) for k, v in d.items()}
 
 
 def run_analysis(sample,
@@ -38,37 +36,39 @@ def run_analysis(sample,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
-                 stages_on_same_gpu: List[Set[int]] = list()):
-    #kwarg input
+                 stages_on_same_gpu: Optional[List[Set[int]]] = None):
+    if not stages_on_same_gpu:
+        stages_on_same_gpu = list()
+    # kwarg input
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config['model inputs']])
-    elif not isinstance(sample,tuple):
+    elif not isinstance(sample, tuple):
         sample = (sample,)
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
 
-    TOPO_AWARE = False
     PRINT_THEORETICAL = False
     PRINT_MIN_MAX_BALANCE = False
-    
+
     PRINT_VAR_STD = False
-    
+
     UTILIZATION_SLOWDOWN_SPEEDUP = True
     PRINT_1F1B = True
+    DO_THEORETICAL = False
 
     TRY_SSGD_ANALYSIS = False
     TRY_ASGD_ANALYSIS = True
 
-
     # given:
     # stages_on_same_gpu = [{0, 4}]
-    # internal represntation:
+    # internal representation:
     # stages_on_same_gpu[0] = {0, 4}
     # stages_on_same_gpu[4] = {0, 4}
+    # pipeline representation:
+    # stage_to_device_map = [0,1,2,3,0,...]
 
     unique_stages_on_same_gpu = stages_on_same_gpu
     stages_on_same_gpu = defaultdict(set)
-
     for i in unique_stages_on_same_gpu:
         for j in i:
             stages_on_same_gpu[j] = i
@@ -78,27 +78,20 @@ def run_analysis(sample,
 
     num_dummy_stages = sum((len(i) - 1) for i in unique_stages_on_same_gpu)
 
-    if graph is not None:
-        # thoeretical analysis
+    if graph is not None and DO_THEORETICAL:
+        # theoretical analysis
         sequential_f, sequential_b, parallel_f, parallel_b = theoretical_analysis(
             graph, recomputation=recomputation, async_pipeline=async_pipeline)
         edges = edge_cut(graph)
         # theoretical analysis based on the graph assuming the computation is sequential
         theoretical_sequential_b_balance = worst_balance(sequential_b)
         theoretical_sequential_f_balance = worst_balance(sequential_f)
-        if TOPO_AWARE:
-            (topology_aware_sequential_f_balance,
-             topology_aware_sequential_b_balance) = topology_aware_balance(
-                 sequential_f, sequential_b, edges)
         # theoretical anaysis based on the graph assuming the computation is fully parallel
         theoretical_parallel_b_balance = worst_balance(parallel_b)
         theoretical_parallel_f_balance = worst_balance(parallel_f)
-        if TOPO_AWARE:
-            topology_aware_parallel_f_balance, topology_aware_parallel_b_balance = topology_aware_balance(
-                parallel_f, parallel_b, edges)
+
     else:
         edges = None
-        TOPO_AWARE = False
         PRINT_THEORETICAL = False
 
     # real statistics based on generated partitions
@@ -107,16 +100,16 @@ def run_analysis(sample,
     ((real_f_times, f_vars, f_deviance), (real_b_times, b_vars, b_deviance),
      comm_volume_stats, nocomm_real_f_times, nocomm_real_b_times,
      warnings_list) = profile_execution(
-         sample,
-         config,
-         n_iter + 1,
-         recomputation=recomputation,
-         bw_GBps=bw_GBps,
-         async_pipeline=async_pipeline,
-         add_comm_times_to_balance=add_comm_times_to_balance,
-         stages_on_same_gpu=stages_on_same_gpu)
+        sample,
+        config,
+        n_iter + 1,
+        recomputation=recomputation,
+        bw_GBps=bw_GBps,
+        async_pipeline=async_pipeline,
+        add_comm_times_to_balance=add_comm_times_to_balance,
+        stages_on_same_gpu=stages_on_same_gpu)
 
-    #max memory
+    # max memory
     if torch.cuda.is_available():
         max_memory_allocated = torch.cuda.max_memory_allocated()
 
@@ -146,7 +139,6 @@ def run_analysis(sample,
     def get_comm_vol_str(comm_volume_stats):
         communication_volume = dict()
         for idx, stats in comm_volume_stats.items():
-
             units = {
                 "input size": "MB",
                 "recieve_time": "ms",
@@ -162,6 +154,21 @@ def run_analysis(sample,
     n_partitions = sum(1 for k in config if isinstance(k, int))
     num_real_stages = n_partitions - num_dummy_stages
 
+    pipeline_representation_stage_to_device_map = list()
+    for stage_id in range(n_partitions):
+        seen_devices = set()
+        if stage_id in stages_on_same_gpu:
+            device_id = min(stages_on_same_gpu[stage_id])
+        else:
+            device_id = len(seen_devices)
+        seen_devices.add(device_id)
+        pipeline_representation_stage_to_device_map.append(device_id)
+
+    # Canonize
+    tmp = sorted(set(pipeline_representation_stage_to_device_map))
+    tmp = {v:i for i,v in enumerate(tmp)}
+    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
+
     if n_partitions != num_real_stages:
         # TODO: shrink everything
         for i in unique_stages_on_same_gpu:
@@ -170,8 +177,8 @@ def run_analysis(sample,
                 if k == j:
                     continue
                 for means_list in [
-                        real_f_times, real_b_times, nocomm_real_f_times,
-                        nocomm_real_b_times, comm_volume_stats
+                    real_f_times, real_b_times, nocomm_real_f_times,
+                    nocomm_real_b_times, comm_volume_stats
                 ]:
                     if isinstance(means_list[j], dict):
 
@@ -189,11 +196,6 @@ def run_analysis(sample,
     comm_volume_str = get_comm_vol_str(comm_volume_stats)
     real_b_balance = worst_balance(real_b_times)
     real_f_balance = worst_balance(real_f_times)
-
-    if TOPO_AWARE:
-        (topology_aware_real_f_balance,
-         topology_aware_real_b_balance) = topology_aware_balance(
-             real_f_times, real_b_times, edges)
 
     real_b_slowdown = slowdown(real_b_times, nocomm_real_b_times)
     real_f_slowdown = slowdown(real_f_times, nocomm_real_f_times)
@@ -221,11 +223,11 @@ def run_analysis(sample,
     try:
         tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
         seq_success = True
-    except (Exception,RuntimeError) as e:
+    except (Exception, RuntimeError) as e:
         print(f"sequential no_recomputation analysis failed: {sys.exc_info()[0]}", str(e))
         seq_success = False
 
-    if seq_success: 
+    if seq_success:
         expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
             pipe_times, tuple_seq_no_recom_times)
 
@@ -239,6 +241,13 @@ def run_analysis(sample,
     with io.StringIO() as buf, redirect_stdout(buf):
         pprint(d_param_count)
         s_param_count = buf.getvalue()
+
+    d_same_gpu_parameter_count = same_gpu_parameter_count(stage_param_count=d_param_count,
+                                                          stages_on_same_gpu=stages_on_same_gpu)
+
+    with io.StringIO() as buf, redirect_stdout(buf):
+        pprint(d_same_gpu_parameter_count)
+        s_gpu_param_count = buf.getvalue()
 
     fwd_plus_backward = dict()
     fwd_plus_backward['pipeline_with_non_parallel_comm'] = add_dicts(
@@ -263,7 +272,7 @@ def run_analysis(sample,
         for i, v in fwd_plus_backward['pipeline_no_comm'].items()
         if i != 'worstcase'
     }
-    
+
     for i in list(fwd_plus_backward.keys()):
         v = fwd_plus_backward[i]
         fwd_plus_backward[i] = rounddict(v, 2) if isinstance(
@@ -285,11 +294,12 @@ def run_analysis(sample,
         if num_dummy_stages:
             s += f"n_partitions:{n_partitions}, num_dummy_stages:{num_dummy_stages}\n"
             s += f"unique_stages_on_same_gpu: {unique_stages_on_same_gpu}\n"
+            s += f"\"stage_to_device_map\": {pipeline_representation_stage_to_device_map},\n"
 
         if edges is not None:
             s += f"cutting edges are edges between partitions\n"
             s += f"number of cutting edges: {len(edges)}\n\n"
-            # TODO: for partitions on differnt devices...
+            # TODO: for partitions on different devices...
 
         s += f"backward times {'do not ' if not recomputation else ''}include recomputation\n"
         if async_pipeline and recomputation:
@@ -301,11 +311,13 @@ def run_analysis(sample,
 
         s += f"\nStage parameter count:\n {s_param_count}"
 
+        if s_gpu_param_count:
+            s += f"\nGPU parameter count:\n {s_gpu_param_count}"
+
         with_comm_str = "with" if add_comm_times_to_balance else "without"
 
         s += f"\nreal times are based on real measurements of execution time ({with_comm_str} communication) of generated partitions ms\n"
         s += f"forward {rounddict(real_f_times)}\nbackward {rounddict(real_b_times)}\n"
-
 
         if PRINT_VAR_STD:
             s += f"variance of real execution times ms\n"
@@ -326,18 +338,6 @@ def run_analysis(sample,
             s += f"\nreal balance:\n"
             s += f"forward {real_f_balance:.3f}\nbackward {real_b_balance:.3f}\n"
 
-            # if TOPO_AWARE:
-            #     s += f"\ntopology aware balance is worst balance between 2 connected partitions\n"
-            #     s += f"theoretical sequential topology aware balance:\n"
-            #     s += f"forwad {topology_aware_sequential_f_balance:.3f}\n"
-            #     s += f"backward {topology_aware_sequential_b_balance:.3f}\n"
-            #     s += f"theoretical parallel topology aware balance:\n"
-            #     s += f"forwad {topology_aware_parallel_f_balance:.3f}\n"
-            #     s += f"backward {topology_aware_parallel_b_balance:.3f}\n"
-
-            #     s += f"\nreal topology aware balance:\n"
-            #     s += f"forwad {topology_aware_real_f_balance:.3f}\nbackward {topology_aware_real_b_balance:.3f}\n"
-
         s += f"\nAssuming bandwidth of {bw_GBps} GBps between GPUs\n"
         s += f"\ncommunication volumes size of activations of each partition\n"
         for idx, volume in comm_volume_str.items():
@@ -349,7 +349,6 @@ def run_analysis(sample,
         if PRINT_1F1B:
             s += f"\nAnalysis for T = fwd + bwd:\n {s_fwd_plus_backward}"
 
-        
         if UTILIZATION_SLOWDOWN_SPEEDUP:
             s += f"\nAnalysis for T = (1-R)fwd + R*bwd:\n"
             s += f"\nPipeline Slowdown: (compared to sequential executation with no communication, and same recompute policy)\n"
@@ -431,10 +430,9 @@ def run_analysis(sample,
             except Exception as e:
                 print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
                 # raise
-        
-        
+
     if torch.cuda.is_available():
-        s+= f"\nmax cuda memory used {max_memory_allocated/1e9:.2f}GB"
+        s += f"\nmax cuda memory used {max_memory_allocated / 1e9:.2f}GB"
     print(s)
 
     # Choose a metric to maximize and return it
@@ -457,7 +455,7 @@ def run_analysis(sample,
 # FIXME: setting different_links_between_accelerators=False because some parts were not implemented. will be fixed in next commit.
 def profile_execution(model_inputs,
                       partition_config,
-                      n_iters,
+                      n_iters: int,
                       recomputation=True,
                       bw_GBps=12,
                       async_pipeline=False,
@@ -465,8 +463,10 @@ def profile_execution(model_inputs,
                       stages_on_same_gpu=[],
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
-    '''perfrom forward/backward passes and measure execution times accross n batches
-    '''
+    """
+    Perform forward/backward passes and measure execution times across n_iters batches
+    # TODO: currently its just the same input sample n_iter times, this could be improved.
+    """
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
@@ -477,7 +477,7 @@ def profile_execution(model_inputs,
     communication_stats = {}
     is_parameter = set()
     if not isinstance(model_inputs, (tuple, list)):
-        model_inputs = (model_inputs, )
+        model_inputs = (model_inputs,)
 
     # Return warnings so we can print
     warnings_list = []
@@ -564,7 +564,7 @@ def profile_execution(model_inputs,
                             continue
 
                         recv_sizes_by_gpu[sender_stage_id] += (
-                            tensor_sizes(t) / 1e6)
+                                tensor_sizes(t) / 1e6)
 
                     max_recv_time = 0
                     for s, size in recv_sizes_by_gpu.items():
@@ -576,7 +576,7 @@ def profile_execution(model_inputs,
                 else:
                     recv_time = in_size_mb / bw_GBps
 
-                # TODO: calculate Backward send times with differnt links (sending grads)
+                # TODO: calculate Backward send times with different links (sending grads)
                 # TODO: calculate Forward send times with different links (sending activations)
 
                 # Compute times measurement
@@ -598,12 +598,12 @@ def profile_execution(model_inputs,
                 out_size_mb = 0
                 send_time = 0
 
-                #NOTE it's possible we record a tuple
-                #in that case we have only one output in the config but multiple in the model
+                # NOTE it's possible we record a tuple
+                # in that case we have only one output in the config but multiple in the model
                 if len(partition_config[idx]['outputs']) != len(outputs):
                     assert len(partition_config[idx]['outputs']) == 1
 
-                    outputs = (outputs, )
+                    outputs = (outputs,)
 
                 # outputs
                 # stage_outputs = outputs
@@ -713,6 +713,7 @@ def profile_execution(model_inputs,
                                 ub, lb, PARALLEL_RATIO)
                             b_time += extra_bwd_send_time
 
+                # TODO: can check nans
                 f_times[idx].append(f_time)
                 b_times[idx].append(b_time)
 
@@ -738,13 +739,19 @@ def force_out_of_place(model: torch.nn.Module):
         m.inplace = s
 
 
-def mean_var(times):
+def mean_var(times, drop=1):
     means = dict()
     variances = dict()
     avg_deviations = dict()
     for i, ts in times.items():
-        max_v = max(ts)
-        arr = np.array([t for t in ts if t < max_v])
+        for _ in range(drop):
+            max_v = max(ts)
+            vs_cand = [t for t in ts if t < max_v]
+            if len(vs_cand) == 0:
+                break
+            ts = vs_cand
+        arr = np.array(ts)
+
         means[i] = np.mean(arr)
         variances[i] = np.var(arr)
         avg_deviations[i] = np.abs((arr - means[i])).mean()
@@ -979,6 +986,7 @@ def theoretical_analysis(graph, recomputation=True, async_pipeline=False):
         the parallel assumption assumes that all computation paths are concurrent.
     '''
     n_parts = len(set(n.stage_id for n in graph.nodes))
+    print(f"Theoretical analysis found n_parts={n_parts}")
     parallel_b = dict()
     parallel_f = dict()
 
@@ -1068,7 +1076,6 @@ def extract_time(w, forward=False):
 
 
 def computation_communication_ratio(comp_times, comm_times):
-
     # comm_times = {k: v['send time'] for k, v in comm_times.items()}
     # comm_times = {k: v['recieve_times'] for k, v in comm_times.items()}
 
@@ -1093,7 +1100,6 @@ def utilization(times, comp_fraction):
 
 
 def slowdown(times, times_wo_comm):
-
     worst = max(times.values())
     n_partitions = len(times)
 
@@ -1124,7 +1130,6 @@ def imbbalance_slowdown(times):
 
 def expected_speedup_after_partitioning(fwd_times, bwd_times,
                                         fwd_times_wo_comm, bwd_times_wo_comm):
-
     n_partitions = len(fwd_times)
     assert (len(fwd_times) == len(bwd_times))
 
@@ -1193,28 +1198,7 @@ def worst_balance(times):
     return min(times.values()) / max(times.values())
 
 
-def topology_aware_balance(f_times, b_times, cutting_edges):
-    ''' find the lowest balance between 2 connected partitions
-    '''
-    f_balance = b_balance = 10
-    for u, v in cutting_edges:
-        f_ratio = min(f_times[u.stage_id], f_times[v.stage_id]) / \
-            max(f_times[u.stage_id], f_times[v.stage_id])
-
-        b_ratio = min(b_times[u.stage_id], b_times[v.stage_id]) / \
-            max(b_times[u.stage_id], b_times[v.stage_id])
-
-        if f_ratio < f_balance:
-            f_balance = f_ratio
-
-        if b_ratio < b_balance:
-            b_balance = b_ratio
-
-    return f_balance, b_balance
-
-
 def parameter_count(partition_config):
-
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     d = {}
     for i in range(n_partitions):
@@ -1226,3 +1210,22 @@ def parameter_count(partition_config):
     d['total'] = total
 
     return d
+
+
+def same_gpu_parameter_count(stage_param_count: Dict[Union[int, str], int], stages_on_same_gpu: Dict[int, Set[int]]):
+    def set_to_hashable(s: Set[int]):
+        return tuple(sorted(s))[0]
+
+    gpu_to_params = defaultdict(int)
+    for stage_id, v in stages_on_same_gpu.items():
+        k = set_to_hashable(v)
+        gpu_to_params[k] += stage_param_count[stage_id]
+
+    gpu_to_params['total'] = stage_param_count['total']
+    return dict(gpu_to_params)
+
+    # given:
+    # stages_on_same_gpu = [{0, 4}]
+    # internal represntation:
+    # stages_on_same_gpu[0] = {0, 4}
+    # stages_on_same_gpu[4] = {0, 4}
