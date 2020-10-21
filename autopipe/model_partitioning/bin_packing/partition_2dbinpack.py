@@ -12,11 +12,11 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
-from pytorch_Gpipe.model_partitioning.bin_packing.heap_dict import heapdict
-from pytorch_Gpipe.model_partitioning.bin_packing.post_process import post_process_partition
-from pytorch_Gpipe.model_partitioning.bin_packing.union_find import UnionFind
-from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction
-from pytorch_Gpipe.model_profiling import Graph, Node
+from autopipe.model_partitioning.bin_packing.heap_dict import heapdict
+from autopipe.model_partitioning.bin_packing.post_process import post_process_partition
+from autopipe.model_partitioning.bin_packing.union_find import UnionFind
+from autopipe.model_partitioning.heuristics import NodeWeightFunction
+from autopipe.model_profiling import Graph, Node
 
 
 # from ...model_profiling import Graph, Node, NodeWeightFunction
@@ -833,7 +833,7 @@ def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):
 
 
 if __name__ == '__main__':
-    from pytorch_Gpipe import build_graph
+    from autopipe import build_graph
     import torch
     from torch.nn import Sequential, Linear
 

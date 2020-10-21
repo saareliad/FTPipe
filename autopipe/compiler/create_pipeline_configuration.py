@@ -4,9 +4,9 @@ from typing import Dict, List, Tuple, Callable
 import torch
 from torch.nn import Module
 
-from pytorch_Gpipe.model_profiling import Graph
-from pytorch_Gpipe.compiler.utils import pretty_format_obj
-from pytorch_Gpipe.utils import nested_map, flatten
+from autopipe.model_profiling import Graph
+from autopipe.compiler.utils import pretty_format_obj
+from autopipe.utils import nested_map, flatten
 
 tab = '    '
 dtab = tab + tab

@@ -2,7 +2,7 @@ import sys
 sys.path.append("../")
 import torch
 import math
-from pytorch_Gpipe.utils import move_tensors,flatten
+from autopipe.utils import move_tensors,flatten
 # NOTE: can so simillar anaysis for ZerOs,
 # (multiply communication by x1.5 according to what they claim)
 

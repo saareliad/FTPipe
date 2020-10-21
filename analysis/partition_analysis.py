@@ -15,8 +15,8 @@ import warnings
 from typing import List, Set, Dict, Union, Any, Optional
 from functools import wraps
 from contextlib import contextmanager
-from pytorch_Gpipe.utils import flatten, move_tensors, nested_map
-from pytorch_Gpipe.model_profiling import NodeTypes
+from autopipe.utils import flatten, move_tensors, nested_map
+from autopipe.model_profiling import NodeTypes
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
                              apply_ratio)

@@ -20,7 +20,7 @@ from models.normal.NLP_models.modeling_t5_tied_weights import \
     T5ForConditionalGeneration as TiedT5ForConditionalGeneration
 from models.normal.NLP_models.modeling_t5_tied_weights import \
     T5Model as TiedT5Model
-from pytorch_Gpipe.model_profiling.tracer import (
+from autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 from . import register_task
 from .task import Parser, Partitioner

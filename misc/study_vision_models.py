@@ -3,11 +3,11 @@
 import sys
 sys.path.append("../")
 import torch
-from pytorch_Gpipe.model_profiling import Node, NodeTypes
+from autopipe.model_profiling import Node, NodeTypes
 import argparse
 import importlib
 from analysis import run_analysis
-from pytorch_Gpipe.utils import layerDict, tensorDict
+from autopipe.utils import layerDict, tensorDict
 # TODO: instea of code copy, do repeated calls to exisitng functions...
 from types import SimpleNamespace
 

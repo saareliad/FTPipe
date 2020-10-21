@@ -18,7 +18,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     has_fairseq = False
 
-from pytorch_Gpipe.model_profiling.tracer import (
+from autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 
 from . import register_task

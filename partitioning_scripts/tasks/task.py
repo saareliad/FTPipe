@@ -6,8 +6,8 @@ from typing import Dict
 
 import torch
 
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
-from pytorch_Gpipe.model_partitioning.bin_packing.partition_2dbinpack import SecondAndOnClusterPolicy, ReminderPolicy
+from autopipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
+from autopipe.model_partitioning.bin_packing.partition_2dbinpack import SecondAndOnClusterPolicy, ReminderPolicy
 
 
 class Parser(argparse.ArgumentParser, ABC):

@@ -4,7 +4,7 @@ from typing import Dict
 import torch
 from torch import Tensor
 from collections import deque
-from pytorch_Gpipe.utils import move_tensors
+from autopipe.utils import move_tensors
 
 def extra_communication_time_lower_bound(comp_time, comm_time):
     """communication is completly parallel to computation """

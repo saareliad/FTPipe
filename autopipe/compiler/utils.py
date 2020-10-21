@@ -3,7 +3,7 @@ from typing import List
 
 import torch
 
-from pytorch_Gpipe.model_profiling import Node, NodeTypes, Graph
+from autopipe.model_profiling import Node, NodeTypes, Graph
 
 tab = "    "
 dtab = tab + tab

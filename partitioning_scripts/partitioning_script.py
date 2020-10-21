@@ -8,9 +8,9 @@ from typing import Dict, Optional, Tuple
 
 sys.path.append("../")
 
-from pytorch_Gpipe.model_profiling.control_flow_graph import Graph, NodeTypes
-from pytorch_Gpipe import pipe_model, get_weight_functions
-from pytorch_Gpipe.utils import layerDict, tensorDict, move_tensors
+from autopipe.model_profiling.control_flow_graph import Graph, NodeTypes
+from autopipe import pipe_model, get_weight_functions
+from autopipe.utils import layerDict, tensorDict, move_tensors
 
 from partitioning_scripts.partition_async_pipe import partition_async_pipe
 from partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline

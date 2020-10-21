@@ -2,8 +2,8 @@ import os
 
 import torch
 
-from pytorch_Gpipe.model_partitioning.utils import re_assign_partition_indices, has_stage_cycles
-from pytorch_Gpipe.model_profiling import Graph
+from autopipe.model_partitioning.utils import re_assign_partition_indices, has_stage_cycles
+from autopipe.model_profiling import Graph
 
 __all__ = ["post_process_partition"]
 

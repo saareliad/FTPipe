@@ -3,7 +3,7 @@ import random
 from collections import defaultdict
 from typing import Dict, Iterable, Set, Iterator, List, Tuple, Any, Optional
 
-from pytorch_Gpipe.model_profiling import Node, Graph
+from autopipe.model_profiling import Node, Graph
 
 
 class PriorityQueue():

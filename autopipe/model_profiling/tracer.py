@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch._overrides import get_overridable_functions
 
-from pytorch_Gpipe.utils import traverse_model
+from autopipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
 from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
     tensor_creation_ops

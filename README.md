@@ -36,7 +36,7 @@ Sections start with a reference to the source file where the code related to the
 
 # High Level API
 
-[init.py](pytorch_Gpipe/__init__.py)
+[init.py](autopipe/__init__.py)
 
 our high level API can be described as follows in a hierarchical order
 
@@ -89,7 +89,7 @@ this function takes the graph and compiles it emitting python code
 
 ## Model Profiler
 
-[model_profiling/network_profiler.py](pytorch_Gpipe/model_profiling/network_profiler.py)
+[model_profiling/network_profiler.py](autopipe/model_profiling/network_profiler.py)
 
 this module is responsible to gather various metrics about all layers of the model
 emiting a Profile object for each layer:
@@ -117,7 +117,7 @@ the main parameters that influence such profiling are depth and basic blocks:
 
 ### Graph Builder
 
-[model_profiling/graph_builder.py](pytorch_Gpipe/model_profiling/graph_builder.py)
+[model_profiling/graph_builder.py](autopipe/model_profiling/graph_builder.py)
 
 this module is tasked with converting a model into our graph representation using tracing.
 it digests the raw trace and omits a graph detailing the model according to given depth and basic blocks config
@@ -164,7 +164,7 @@ as we are using tracing there are several limitations that come with it:
 
 ### Graph Representation
 
-[model_profiling/control_flow_graph.py](pytorch_Gpipe/model_profiling/control_flow_graph.py)
+[model_profiling/control_flow_graph.py](autopipe/model_profiling/control_flow_graph.py)
 
 our Graph is a simple data structre that holds nodes and does not have special logic
 
@@ -172,7 +172,7 @@ our Graph is a simple data structre that holds nodes and does not have special l
 
 ## METIS Partitioning
 
-[model_partitioning/partition_graph.py](pytorch_Gpipe/model_partitioning/partition_graph.py)
+[model_partitioning/partition_graph.py](autopipe/model_partitioning/partition_graph.py)
 
 this module involves the necessary calls in order to perform METIS partKway method on our graph
 
@@ -182,13 +182,13 @@ def METIS_partition(graph, num_partitions,node_weight_function,edge_weight_funct
 
 ## Pipedream Partitioning
 
-[model_partitioning/pipedream_partition.py](pytorch_Gpipe/model_partitioning/pipedream_partition.py)
+[model_partitioning/pipedream_partition.py](autopipe/model_partitioning/pipedream_partition.py)
 this module involves the necessary logic in order to perform pipedream partition method on our graph
 #TODO not yet functional
 
 ## Partitioning Post Processing
 
-[model_partitioning/process_partition.py](pytorch_Gpipe/model_partitioning/process_partition.py)
+[model_partitioning/process_partition.py](autopipe/model_partitioning/process_partition.py)
 
 this module takes the partitioned graph and applies various fixes to problem that can occur due to
 the partition process
@@ -197,7 +197,7 @@ the partition process
 
 ## Partitioned model File
 
-[compiler/compile_partitioned_model.py](pytorch_Gpipe/compiler/compile_partitioned_model.py)
+[compiler/compile_partitioned_model.py](autopipe/compiler/compile_partitioned_model.py)
 
 this module is the gateway to generating partitioned code.
 it's responsible to generate helper methods to be used by the generated code.
@@ -227,7 +227,7 @@ the config is composed of a dicionary with the following fields:
 
 ### Constructor Method
 
-[compiler/constructor.py](pytorch_Gpipe/compiler/constructor.py)
+[compiler/constructor.py](autopipe/compiler/constructor.py)
 
 generates code for partition **init** method
 
@@ -238,7 +238,7 @@ generates code for partition **init** method
 
 ### Forward Method
 
-[compiler/partition_forward_method.py](pytorch_Gpipe/compiler/partition_forward_method.py)
+[compiler/partition_forward_method.py](autopipe/compiler/partition_forward_method.py)
 
 this module is tasked with generation the entire forward method for each partition.
 code is generated according to topological sorting of the partition
@@ -250,7 +250,7 @@ def generate_forward_method(partition, model_outputs,
 
 ### State Methods
 
-[compiler/state_methods.py](pytorch_Gpipe/compiler/state_methods.py)
+[compiler/state_methods.py](autopipe/compiler/state_methods.py)
 
 generates the load/state dict methods and the named param/buffer methods
 ensuring full transperency between partitioned and original model
@@ -269,16 +269,16 @@ this sections involves logic needed in order to instantiate method calls for pyt
 
 ### Supported Types
 
-[compiler/supported_types.py](pytorch_Gpipe/compiler/supported_types.py)
+[compiler/supported_types.py](autopipe/compiler/supported_types.py)
 
 contains declearations for our supported type each type can be then compared against a given type
 in order to perform type matching
 
 ### Declaration Parsing
 
-[compiler/parse_declarations.py](pytorch_Gpipe/compiler/parse_declarations.py)
+[compiler/parse_declarations.py](autopipe/compiler/parse_declarations.py)
 
-contains our logic in order to parse [declerations.py](pytorch_Gpipe/compiler/declarations.txt)
+contains our logic in order to parse [declerations.py](autopipe/compiler/declarations.txt)
 which contains all of the methods we support.
 
 for each functions we create a Function representation which we can then compare againt given types
@@ -286,7 +286,7 @@ in order to perfrom overload resolution and generate the correct function call.
 
 # Synchronous Pipeline
 
-[pipeline.py](pytorch_Gpipe/pipeline.py)
+[pipeline.py](autopipe/pipeline.py)
 
 contains our logic for synchronous pipeline according to [Gpipe](https://arxiv.org/pdf/1811.06965.pdf)
 

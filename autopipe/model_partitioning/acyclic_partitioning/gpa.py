@@ -1,9 +1,9 @@
 import random
 from typing import Dict, Tuple, List
 
-from pytorch_Gpipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, \
+from autopipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, \
     SimpleNode
-from pytorch_Gpipe.model_profiling import Node, Graph
+from autopipe.model_profiling import Node, Graph
 
 
 # adapted from https://github.com/KaHIP/KaHIP/blob/master/lib/partition/coarsening/matching/gpa/gpa_matching.cpp

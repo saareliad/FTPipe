@@ -8,8 +8,8 @@ import networkx as nx
 from functools import reduce
 
 from torch.nn import Module
-from pytorch_Gpipe.model_partitioning.utils import re_assign_partition_indices
-from pytorch_Gpipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
+from autopipe.model_partitioning.utils import re_assign_partition_indices
+from autopipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
 # from .partition_class import Partition
 from .compile_modelParallel_module import create_model_parallel_module

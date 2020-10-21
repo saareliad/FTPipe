@@ -1,6 +1,6 @@
 import sys
 sys.path.append("../")
-from pytorch_Gpipe import pipe_model
+from autopipe import pipe_model
 from analysis import run_analysis,convert_to_analysis_format
 from models.normal import alexnet
 import torch
@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import importlib
 from partition_async_pipe import AsyncPipePartitioner
 from functools import partial
-from pytorch_Gpipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction
+from autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction
 import os
 
 from models.normal.NLP_models.stateless import StatelessLinear, StatelessEmbedding, StatelessSequential, CompositionStatelessSequential
