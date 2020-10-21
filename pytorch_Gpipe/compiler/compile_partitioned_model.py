@@ -57,12 +57,16 @@ def compile_partitioned_model(graph: Graph,
     output_file:
         optional path to the generated code. if None uses generated_{model_name}{numberOfPatitions}.py
     """
+    re_assign = False
     try:
         ensure_inputs_are_used(graph, assert_same_stages=True)
         ensure_no_unnecessary_tuple_sends(graph, assert_same_stages=True)
     except AssertionError as e:
-        print("Canonizing partition indices again after graph changed")
-        re_assign_partition_indices(graph)
+        if re_assign:
+            print("Re assigning partition indices after graph changed")
+            re_assign_partition_indices(graph)
+        else:
+            raise e
 
     layer_classes = {
         scope: type(layer)

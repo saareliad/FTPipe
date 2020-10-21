@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 
 sys.path.append("../")
 
-from pytorch_Gpipe.model_profiling.control_flow_graph import Graph
+from pytorch_Gpipe.model_profiling.control_flow_graph import Graph, NodeTypes
 from pytorch_Gpipe import pipe_model, get_weight_functions
 from pytorch_Gpipe.utils import layerDict, tensorDict, move_tensors
 
@@ -176,9 +176,13 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
         gpu_to_stages = defaultdict(set)
         stage_to_gpu = dict()
         for n in graph.nodes:
-            if n.gpu_id is None:
+            if n.gpu_id is None or n in graph.inputs or n.type == NodeTypes.CONSTANT:
                 continue
             gpu_to_stages[n.gpu_id].add(n.stage_id)
+            if n.stage_id in stage_to_gpu:
+                assert stage_to_gpu[n.stage_id] == n.gpu_id, (stage_to_gpu[n.stage_id],n.gpu_id)
+            else:
+                assert n.gpu_id is not None
             stage_to_gpu[n.stage_id] = n.gpu_id
         if gpu_to_stages:
             analysis_kwargs['stages_on_same_gpu'] = list(gpu_to_stages.values())

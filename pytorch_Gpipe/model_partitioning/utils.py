@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Dict, Set, List
 
-from pytorch_Gpipe import Graph
+from pytorch_Gpipe.model_profiling.control_flow_graph import Graph
 
 
 def re_assign_partition_indices(graph: Graph):
