@@ -1,13 +1,11 @@
 import sys
+
 sys.path.append("../")
 import torch
-import math
 from autopipe.utils import move_tensors, flatten
-# NOTE: can so simillar anaysis for ZerOs,
+# NOTE: can so similar analysis for ZerOs,
 # (multiply communication by x1.5 according to what they claim)
-import torch.nn.functional as F
 from .analysis_utils import (extra_communication_time_lower_bound,
-                             extra_communication_time_upper_bound,
                              upper_utilization_bound, lower_utilization_bound,
                              apply_ratio)
 
@@ -19,8 +17,8 @@ def run_analysis(sample,
                  verbose=True,
                  comm_comp_concurrency_ratio=0):
     """ Assuming bw_GBps is bw between worker and master.
-        Assuming all smaples are the same size.
-        currently n_workers is not relevant, theoritically its linearly scaling.
+        Assuming all samples are the same size.
+        currently n_workers is not relevant, theoretically its linearly scaling.
     """
     # NOTE: this is the "heavy" part in the function.
     comp_time = cuda_computation_times(model, sample)
@@ -90,7 +88,7 @@ def cuda_computation_times(model, inputs):
     ''' measure forward/backward time of a partition on the GPU
     '''
     if not isinstance(inputs, tuple):
-        inputs = (inputs, )
+        inputs = (inputs,)
     model.cuda()
     # now we move inputs to GPU
     inputs = move_tensors(inputs, 'cuda')
@@ -119,12 +117,12 @@ def cuda_computation_times(model, inputs):
 
 
 def asgd_anayslsis_speedup_vs_ratio_graph(
-    all_ratios,
-    sample,
-    model,
-    n_workers,
-    bw_GBps=12,
-    verbose=True,
+        all_ratios,
+        sample,
+        model,
+        n_workers,
+        bw_GBps=12,
+        verbose=True,
 ):
     comp_time = cuda_computation_times(model, sample)
     speedups = []
@@ -137,8 +135,7 @@ def asgd_anayslsis_speedup_vs_ratio_graph(
 
     return speedups, ratios
 
-
 # if __name__ == "__main__":
-#     import transfomers
+#     import transformers
 
-#     model = transfomers.BertModel.from_pretrained('bert-base-uncased')
+#     model = transformers.BertModel.from_pretrained('bert-base-uncased')

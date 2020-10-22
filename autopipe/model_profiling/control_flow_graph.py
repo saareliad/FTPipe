@@ -482,7 +482,8 @@ class Graph():
             is_constant = node.type is NodeTypes.CONSTANT
             op_without_inputs = (node.type in [NodeTypes.PRIMITIVE, NodeTypes.OP]) and (len(node.in_edges) == 0)
 
-            # NOTE i hate this but it handles passing labels which are used only at last partiton
+            # NOTE i hate this but it handles passing labels which are used only at last partition
+            # FIXME this /2 is problematic since we topo sort.
             input_or_buff_param_with_one_use_at_end = (node.type in [NodeTypes.IN, NodeTypes.BUFF_PARAM]) and (
                     len(node.out_edges) == 1)
             if input_or_buff_param_with_one_use_at_end:

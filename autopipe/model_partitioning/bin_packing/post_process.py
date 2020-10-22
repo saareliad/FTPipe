@@ -22,6 +22,9 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
         print extra info when cycle can't be solved
     '''
 
+    # TODO: assert that stages are connected componenets.
+    # Otherwise,
+
     re_assign_partition_indices(graph)
     # this is a sanity check
 
@@ -29,6 +32,14 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
         if os.environ.get("DEBUG", False):
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
                               ".")
+
+        problems, info = get_problematic_partitions(graph)
+        for p, i in zip(problems, info):
+            print("===Problem===")
+            print(p)
+            for ii in i:
+                print(ii)
+
         error = "error cycle detected mutual dependency between partitions"
         raise AssertionError(error)
 

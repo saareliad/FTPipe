@@ -166,7 +166,7 @@ def run_analysis(sample,
 
     # Canonize
     tmp = sorted(set(pipeline_representation_stage_to_device_map))
-    tmp = {v:i for i,v in enumerate(tmp)}
+    tmp = {v: i for i, v in enumerate(tmp)}
     pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
 
     if n_partitions != num_real_stages:
@@ -919,7 +919,7 @@ def cpu_time(partition,
                           recomputation=recomputation,
                           inputs_requires_grad=inputs_requires_grad)
 
-    # Delete gradeinets to save space
+    # Delete gradients to save space
     for p in partition.parameters():
         p.grad = None
 
@@ -1091,10 +1091,10 @@ def utilization(times, comp_fraction):
     # TODO: I still think this statistic can be improved... its just an estimation.
 
     worst = max(times.values())
-    # This assumes that the GPU is utilized while we do comunication. (but its generally not)
+    # This assumes that the GPU is utilized while we do communication. (but its generally not)
     base_util = {k: round(v / worst, 2) for k, v in times.items()}
 
-    # Therefore we mutiply by comp fraction
+    # Therefore we multiply by comp fraction
     comp_util = {k: base_util[k] * comp_fraction[k] for k in comp_fraction}
     return comp_util
 

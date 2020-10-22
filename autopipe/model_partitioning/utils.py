@@ -3,10 +3,11 @@ from typing import Dict, Set, List
 
 from autopipe.model_profiling.control_flow_graph import Graph
 
-
 def re_assign_partition_indices(graph: Graph):
     out_edges = defaultdict(set)
     for node in graph.nodes:
+        # if node in graph.inputs:
+        #     continue
         for o in node.out_edges:
             out_edges[node.stage_id].add(o.stage_id)
 

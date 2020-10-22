@@ -58,11 +58,15 @@ def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP
             current_dict_prefix = DICT_PREFIX.format(i)
         for counter in range(NUM_RUNS):
             main_kwargs['override_dict'] = override_dict
-            try:
+            if NUM_RUNS>1:
+                try:
+                    out = main(**main_kwargs)
+                except (Exception, RuntimeError, AssertionError) as e:
+                    last_exception = e
+                    continue
+            else:
                 out = main(**main_kwargs)
-            except (Exception, RuntimeError, AssertionError) as e:
-                last_exception = e
-                continue
+
             (analysis_result, output_file) = out
 
             name = output_file

@@ -1,6 +1,5 @@
 import warnings
 from collections import deque, defaultdict
-from dataclasses import dataclass
 from enum import Enum
 from itertools import count
 from pprint import pprint
@@ -69,38 +68,79 @@ def sum_subsplit_weight(subsplit):
 def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict[int, List[Union[List, Any]]], C: int,
                    reminder_policy: ReminderPolicy = ReminderPolicy.ToLast):
     all_splits = []
-
+    assert len(clusters.cluster.unique()) == C
     # Make splits
     # Change data type: Pandas object. (id->Index)
     clusters = [list(clusters.groupby("cluster").get_group(c).sort_values("id").itertuples()) for c in range(C)]
+    # clusters: List[List[Any]]
+    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
+    print("cluster_lengths, before compressing", clusters_lengths)
+    # nest clusters with zero
+    new_clusters = get_unified_clusters(clusters, to_unify)
 
-    def to_set(v,s):
+    clusters = new_clusters
+
+    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
+    print("cluster_lengths, after compressing", clusters_lengths)
+
+    for c_i, cluster in enumerate(clusters):
+        n_i = len(cluster)
+        reminder = n_i % K
+        only_reminder = False
+        if n_i < K:
+            only_reminder = True
+            warnings.warn(
+                f"small number of items in cluster {c_i}: {n_i} need at least {K}. will treat as reminder with policy {reminder_policy}")
+            # raise NotImplementedError(f"insufficient number of items in cluster {c_i}: {n_i} need at least {K}")
+        # if reminder > 0:
+        #     pass
+
+        N = n_i // K
+
+        if not only_reminder:
+            cluster_for_split = cluster if not reminder else cluster[:-reminder]
+            split = list(maketree(n=N, iterable=cluster_for_split))
+        else:
+            # split = [[] for _ in range(K)]
+            cluster_for_split = cluster
+            split = [[x] for x in cluster_for_split]
+            reminder = 0
+
+        if reminder > 0:
+            if reminder_policy == ReminderPolicy.ToLast:
+                warnings.warn(
+                    f"cluster {c_i} is problematic, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
+                # extend last.
+                split[-1].extend(cluster[-reminder:])
+            elif reminder_policy == ReminderPolicy.ToMin:
+                warnings.warn(
+                    f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in min weight partition")
+                min_idx = np.argmin([sum_subsplit_weight(subsplit) for subsplit in split])
+                split[min_idx].extend(cluster[-reminder:])
+            else:
+                raise NotImplementedError(f"reminder_policy:{reminder_policy}")
+
+        all_splits.append(split)
+    return all_splits
+
+
+def get_unified_clusters(clusters, to_unify):
+    # init state used to check
+    def to_set(v, s):
         if not isinstance(v, list):
             s.add(v)
             return
         for x in v:
-            if isinstance(x, list):
-                for xx in x:
-                    to_set(xx, s)
-            else:
-                to_set(x, s)
+            to_set(x, s)
 
-
-    A,B = set(), set()
+    A, B = set(), set()
     to_set(clusters, A)
-    # if len(clusters) > 2:
-    #     raise NotImplementedError()
 
-    # clusters: List[List[Any]]
-    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
-    print("cluster_lengths, before compressing", clusters_lengths)
-
-    # nest clusters with zero
     new_clusters = []
     for c_i, cluster in enumerate(clusters):
         to_unify_for_cluster = to_unify[c_i]
         cluster_D = {i.Index: i for i in cluster}
-        deleted_from_cluster = {} # dict: deleted->new_dest
+        deleted_from_cluster = {}  # dict: deleted->new_dest
         next_gen = []
         first_time = True
         while first_time or next_gen:
@@ -133,7 +173,8 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
                         if not z in deleted_from_cluster:
                             raise e
                         else:
-                            warnings.warn(f"found a double: {l}, I already deleted {z} and unified it with {deleted_from_cluster[z]}, will unify now to {x}")
+                            warnings.warn(
+                                f"found a double: {l}, I already deleted {z} and unified it with {deleted_from_cluster[z]}, will unify now to {x}")
                             next_gen.append(sorted([x, deleted_from_cluster[z]]))
                             continue
 
@@ -154,52 +195,9 @@ def get_all_splits(K: int, clusters, id_to_node: Dict[int, Node], to_unify: Dict
 
         new_clusters.append(cluster)
 
-
     to_set(new_clusters, B)
-    assert A == B, (A,B)
-
-    clusters = new_clusters
-
-    clusters_lengths = {i: len(clusters[i]) for i in range(len(clusters))}
-    print("cluster_lengths, after compressing", clusters_lengths)
-
-    for c_i, cluster in enumerate(clusters):
-        n_i = len(cluster)
-        reminder = n_i % K
-        only_reminder = False
-        if n_i < K:
-            only_reminder = True
-            warnings.warn(f"small number of items in cluster {c_i}: {n_i} need at least {K}. will treat as reminder with policy {reminder_policy}")
-            # raise NotImplementedError(f"insufficient number of items in cluster {c_i}: {n_i} need at least {K}")
-        if reminder > 0:
-            pass
-
-        N = n_i // K
-
-        cluster_for_split = cluster if not reminder else cluster[:-reminder]
-        if not only_reminder:
-            split = list(maketree(n=N, iterable=cluster_for_split))
-        else:
-            # split = [[] for _ in range(K)]
-            split = [[x] for x in cluster_for_split]
-            reminder = 0
-
-        if reminder > 0:
-            if reminder_policy == ReminderPolicy.ToLast:
-                warnings.warn(
-                    f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in last partition")
-                # extend last.
-                split[-1].extend(cluster[-reminder:])
-            elif reminder_policy == ReminderPolicy.ToMin:
-                warnings.warn(
-                    f"cluster {c_i} is problematic {c_i}, {n_i}%{K}!=0, will put reminding {reminder} nodes in min weight partition")
-                min_idx = np.argmin([sum_subsplit_weight(subsplit) for subsplit in split])
-                split[min_idx].extend(cluster[-reminder:])
-            else:
-                raise NotImplementedError(f"reminder_policy:{reminder_policy}")
-
-        all_splits.append(split)
-    return all_splits
+    assert A == B, (A, B)
+    return new_clusters
 
 
 def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int, THRESHOLD=0):
@@ -254,10 +252,9 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
     for node_id in nodes_below_thresholds.index:
         node = graph[node_id]
         # find a "big"
-
-        # TODO: this can all happen normally with graph matirx representation and mamtuls
+        # go over candidates by distance
+        # Note: this can be implemented with graph matirx representation and mamtuls
         # (A^x length x paths)
-
         nesting_to_take = 0
         NESTING_LIMIT = len(graph) + 1
         while True:
@@ -275,21 +272,9 @@ def make_clusters(graph: Graph, nodes: List[Node], node_weight_function, C: int,
             if nesting_to_take >= NESTING_LIMIT:
                 raise NotImplementedError(f"did not find node with above THRESHOLD={THRESHOLD} weight to unify")
 
-    # fix to 8->9 and 8->10 and 9->10 prolem which is reduced to 8->9->10 and useless data jump between gpus
-    # TODO
-    # TODO
-    # TODO
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO  topo sort out edges for nodes.
-    # TODO: topo sort all node ids in the graph
-    # TODO: go over candidates by distance (Can use matrices representation...)
+    # fix to 8->9 and 8->10 and 9->10 problem which is reduced to 8->9->10 and useless data jump between gpus
 
+    # topo sort out edges for nodes: (works since the graph is topo sorted)
     for n in graph.nodes:
         n.out_edges.sort(key=lambda x: x.id)
 
@@ -319,6 +304,7 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                      second_and_on_cluster_policy: SecondAndOnClusterPolicy = SecondAndOnClusterPolicy.BestFitBinPacking,
                      reminder_policy: ReminderPolicy = ReminderPolicy.ToLast,
                      ):
+    # FIXME: some bins are missing!
     # result
     bins = defaultdict(list)
     bin_weights = heapdict({i: 0 for i in range(K)})
@@ -328,6 +314,7 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
                                 reminder_policy=reminder_policy)
 
     def check_memory_fit(candidate, bin_id):
+        # TODO: currently this was only used in PoC for encoder decoder where we know a-priori it will fit.
         return True
 
     def choose_bin(subsplit, subsplit_idx, cluster_idx):
@@ -404,140 +391,18 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node]):
     stage_id_generator = count()
 
-    # shallow copy bins, exluding inputs:
+    # shallow copy bins, excluding inputs:
     bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
 
     nodes_with_out_edges_to_different_gpu = defaultdict(set)
     nodes_with_in_edges_from_different_gpu = defaultdict(set)
-    for gpu_id, v in bins.items():
+    all_broken_stages = []
+    for gpu_id, nodes_in_bin in bins.items():
         # Find all connected components in the bin
-        uf = UnionFind(elements=bins_to_id[gpu_id])
-        visited = set()
-        open = deque(sorted(v, key=lambda x: x.id))
-        while open:
-            x = open.popleft()
-            x: Node
-            for y in x.out_edges:
-                if y.id not in uf:
-                    nodes_with_out_edges_to_different_gpu[gpu_id].add(x)
-                    nodes_with_in_edges_from_different_gpu[y.gpu_id].add(y)
-                    continue
-                uf.union(x.id, y.id)
+        unbroken_stages = get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
+                                              nodes_with_out_edges_to_different_gpu)
 
-        # Now, it is problematic if we have:
-        #  a->d, b->d, c->d, b->c, and b->d
-        # each on different gpu.
-        # problem is we can't say {b,d} are same stage because it will create a cycle:
-        # a->bd->c->bd
-        # if we can break bd, we can solve it afterwards.
-        # we already know how to break:
-        # af->b->c->d->e->af
-        # but how can we know it?
-
-        unbroken_stages = uf.sorted_components()
-        broken_stages = []
-        # Break stages according to topological sort
-        for unbroken_stage in unbroken_stages:
-            broken_stages_for_unbroken_stage = []
-            cur_set = list()  # its sorted so its more efficient
-            unbroken_stage = deque(sorted(unbroken_stage))
-            while unbroken_stage:
-                prev_topo_sort_id = unbroken_stage.popleft()
-
-                if prev_topo_sort_id in id_to_node_worked_on:
-                    cur_set.append(prev_topo_sort_id)
-                    break
-                else:
-                    print(f"skipping input_v0: {prev_topo_sort_id}")
-            # cur_set.append(prev_topo_sort_id)
-            while unbroken_stage:
-                topo_sort_id = unbroken_stage.popleft()
-                if topo_sort_id == prev_topo_sort_id + 1:
-                    # easy, nothing to do.
-                    pass
-                elif topo_sort_id not in id_to_node_worked_on:
-                    # a graph input
-                    print(f"skipping input_v1: {prev_topo_sort_id}")
-                    continue
-                else:
-                    # Check if nothing is missing (it is possible due to layers_graph)
-                    # Example: 9->13
-                    # prev: {7,8, 9}
-                    # unbroken: {13,14,15}
-                    # candidate is 13.
-                    # Now, the following code
-                    # checks that there is no path from {7,8,9} to {13,14,15} via missing {10,11,12}
-                    # if there is: break: 13 can't be together with {7,8,9}.
-                    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
-                    is_ok = True
-                    for missing_topo_sort_id in missing_topo_sort_ids:
-                        # TODO: missing_topo_sort_id in graph is redundant, but here just in case
-                        if missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on:
-                            # TODO: this is too coarse grained. Need to actually check if there is a cycle.
-                            try:
-                                cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
-                            except KeyError as e:
-                                # raise e
-                                print("-V- Known bug/issue (currently happens in METIS only?). Raising extra info")
-                                print("-V- cur_nodes = [id_to_node_worked_on[x] for x in cur_set]")
-                                print("-V- id_to_node_worked_on:", id_to_node_worked_on)
-                                print("-V- cur_set", cur_set)
-                                print("-V- Finding problematic keys:")
-                                _first = True
-                                for x in cur_set:
-                                    if x not in id_to_node_worked_on:
-                                        if _first:
-                                            print("-V- First problematic key (node_id):", x)
-                                            _first = False
-                                        else:
-                                            print("-V- Problematic key (node_id):", x)
-                                raise e
-
-                            scs = set(cur_set)
-                            missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if
-                                                           x not in scs and x in id_to_node_worked_on]
-                            nodes_left_in_unborken_stage = set(id_to_node_worked_on[x] for x in unbroken_stage)
-                            nodes_left_in_unborken_stage.add(id_to_node_worked_on[topo_sort_id])
-
-                            A: Set[Node] = set(cur_nodes)
-                            B: Set[Node] = set(nodes_left_in_unborken_stage)
-                            edge_nodes: Set[Node] = set(missing_nodes_in_work_graph)
-                            edges = []
-                            for a in A:
-                                for c in a.out_edges:
-                                    if c in edge_nodes:
-                                        edges.append((0, c.id + 2))
-
-                            for c in edge_nodes:
-                                for nc in c.out_edges:
-                                    if nc in edge_nodes:
-                                        edges.append((c.id + 2, nc.id + 2))
-                                    elif nc in B:
-                                        edges.append((c.id + 2, 1))
-
-                            G = nx.DiGraph(incoming_graph_data=edges)
-                            G.add_node(0)
-                            G.add_node(1)
-                            has_path = nx.algorithms.shortest_paths.generic.has_path(G, 0, 1)
-                            # Scream if has path
-                            is_ok = not has_path
-                            if not is_ok:
-                                break
-                    if not is_ok:
-                        broken_stages_for_unbroken_stage.append(cur_set)
-                        cur_set = list()
-
-                if topo_sort_id in id_to_node_worked_on:
-                    cur_set.append(topo_sort_id)
-                else:
-                    print(f"skipping input_v2: {prev_topo_sort_id}")
-                prev_topo_sort_id = topo_sort_id
-
-            if cur_set:
-                broken_stages_for_unbroken_stage.append(cur_set)
-            broken_stages.extend(broken_stages_for_unbroken_stage)
-
-        broken_stages.sort(key=lambda topo_sorted_list: topo_sorted_list[0])
+        broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id)
 
         # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
         print("unbroken_stages")
@@ -547,113 +412,179 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
 
         broken_stages: List[List[int]]
 
-        # Give a dummy stage id
-        for dummy_stage_id, broken_stage in zip(stage_id_generator, broken_stages):
-            # Try to break stage if not TOPOLOGICALLY sorted.
-            for n in broken_stage:
-                graph[n].stage_id = dummy_stage_id
+        all_broken_stages.extend(broken_stages)
+
+        # # Give a dummy stage id
+        # for dummy_stage_id, broken_stage in zip(stage_id_generator, broken_stages):
+        #     # Try to break stage if not TOPOLOGICALLY sorted.
+        #     for n in broken_stage:
+        #         graph[n].stage_id = dummy_stage_id
 
         # Unify redundant stages
         # re_assign_partition_indices(graph)
 
-        # Current problem:
-        # that we have 7->8>9 and we can spare 8,
-        # however 8 is in the same GPU (bin) with 10 somehow
-        # ids 34,35 -> 41
-        # TODO: this should be fix with topo sort edges so I am about to deprecate this fix as its ofter unessesary,
-        # And there is a bug in the way we do it (we look at stages we did not break yet. as its inside a for)
-
-        EXPERIMENTAL_FIX_ONE_TO_ONE = False
-        if EXPERIMENTAL_FIX_ONE_TO_ONE:
-            fixes = []
-
-            @dataclass
-            class Fix:
-                stage_id: int
-                dst_stage_id: int
-                gpu_id: int
-                dst_gpu_id: int
-
-            for broken_stage in broken_stages:
-                # if not broken_stage:
-                #     continue
-                #
-                tmp = graph[broken_stage[0]]
-                gpu_id = tmp.gpu_id
-                stage_id = tmp.stage_id
-                all_outputs = set()
-                all_gpus_ids = set()
-                for n in broken_stage:
-                    n = graph[n]
-                    for out in n.out_edges:
-                        if out.stage_id != n.stage_id:
-                            all_outputs.add(out.stage_id)
-                            if len(all_outputs) > 1:
-                                break
-                            if len(all_outputs) == 1 and len(all_gpus_ids) == 1 and out.gpu_id not in all_gpus_ids:
-                                print("all_gpus_ids, out.gpu_id, out.id, out.scope:")
-                                print(all_gpus_ids, out.gpu_id, out.id, out.scope, )
-
-                                print("all graph:")
-                                print("{}  |  {}  |  {} ".format("id", "stage", "gpu"))
-
-                                for x in graph.nodes:
-                                    print("{}  |  {}  |  {} ".format(x.id, x.stage_id, x.gpu_id))
-                                raise ValueError(f"Detected problematic GPU id {out.gpu_id}")
-                            all_gpus_ids.add(out.gpu_id)
-
-                    if len(all_outputs) > 1:
-                        break
-                if len(all_outputs) == 1:
-                    dst_stage_id = next(iter(all_outputs))
-                    assert len(all_gpus_ids) == 1
-                    dst_gpu_id = next(iter(all_gpus_ids))
-
-                    # Important:
-                    # Unify only if in same GPU.
-                    print(f"-I- one2one stage: {stage_id}->{dst_stage_id}  ||| GPU: {gpu_id}->{dst_gpu_id}")
-                    if dst_gpu_id == gpu_id:
-                        fixes.append(
-                            Fix(stage_id=stage_id, gpu_id=gpu_id, dst_gpu_id=dst_gpu_id, dst_stage_id=dst_stage_id))
-
-            print(f"-I- got {len(fixes)} fixes.")
-            d_stage_to_dst = dict()
-            d_gpu_to_dst = dict()
-            for fix in fixes:
-                d_stage_to_dst[fix.stage_id] = fix.dst_stage_id
-                d_gpu_to_dst[fix.gpu_id] = fix.dst_gpu_id
-
-            def last_dst_stage(stage_id, stack=None):
-                if stage_id in d_stage_to_dst:
-                    if stack is None:
-                        stack = []
-                    stack.append(stage_id)
-                    return last_dst_stage(d_stage_to_dst[stage_id], stack)
-                else:
-                    for v in stack:
-                        d_stage_to_dst[v] = stage_id
-                    return stage_id
-
-            # Apply on all to fix the d_stage_to_dst dict to last
-            for stage_id in list(d_stage_to_dst.keys()):
-                last_dst_stage(stage_id)
-
-            print(f"-I- fixing d_stage_to_dst: {d_stage_to_dst}")
-            for i, v in d_stage_to_dst.items():
-                a = [n.id for n in graph.nodes if n.stage_id == i]
-                b = [n.id for n in graph.nodes if n.stage_id == v]
-                print("-I-merge:", i, v, a, b)
-
-            # Replace
-            for n in graph.nodes:
-                if n.stage_id in d_stage_to_dst:
-                    dst = d_stage_to_dst[n.stage_id]
-                    n.stage_id = dst
-
-            #     # NOTE: this create an empty stage, but it will be wiped out by following functions
+    all_broken_stages.sort(key=lambda topo_sorted_list: topo_sorted_list[0])
+    for i, topo_sorted_list in enumerate(all_broken_stages):
+        for nid in topo_sorted_list:
+            n = id_to_node_worked_on[nid]
+            n.stage_id = i
 
     # re_assign_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
+
+
+def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id):
+    # Now, it is problematic if we have:
+    #  a->d, b->d, c->d, b->c, and b->d
+    # each on different gpu.
+    # problem is we can't say {b,d} are same stage because it will create a cycle:
+    # a->bd->c->bd
+    # if we can break bd, we can solve it afterwards.
+    # we already know how to break:
+    # af->b->c->d->e->af
+    # but how can we know it?
+
+    broken_stages = []
+    # Break stages according to topological sort
+    for unbroken_stage in unbroken_stages:
+        broken_stages_for_unbroken_stage = []
+        cur_set = list()  # its sorted so its more efficient
+        unbroken_stage = deque(sorted(unbroken_stage))
+
+        # Get the first non-input node in stage.
+        while unbroken_stage:
+            prev_topo_sort_id = unbroken_stage.popleft()
+            if prev_topo_sort_id in id_to_node_worked_on:
+                cur_set.append(prev_topo_sort_id)
+                break
+            else:
+                print(f"skipping input_v0: {prev_topo_sort_id}")
+        # cur_set.append(prev_topo_sort_id)
+
+        while unbroken_stage:
+            topo_sort_id = unbroken_stage.popleft()
+            if topo_sort_id == prev_topo_sort_id + 1:
+                # easy, nothing to do.
+                pass
+            elif topo_sort_id not in id_to_node_worked_on:
+                # a graph input
+                print(f"skipping input_v1: {prev_topo_sort_id}")
+                # continue
+            else:
+                # check if there is some path:
+                # cur_set --> missing --> {topo_sort_id | unbroken_stage}
+                has_path_via_missing_nodes = ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph,
+                                                                                        id_to_node_worked_on,
+                                                                                        prev_topo_sort_id, topo_sort_id,
+                                                                                        unbroken_stage)
+
+                if has_path_via_missing_nodes:
+                    broken_stages_for_unbroken_stage.append(cur_set)
+                    cur_set = list()
+
+                    # FIXME Assert:
+                    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
+                    for mid in missing_topo_sort_ids:
+                        in_bins = any(map(lambda v: mid in v, bins_to_id.values()))
+                        if not in_bins:
+                            print(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+                            raise ValueError(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+
+            if topo_sort_id in id_to_node_worked_on:
+                cur_set.append(topo_sort_id)
+                prev_topo_sort_id = topo_sort_id
+            else:
+                print(f"skipping input_v2: {prev_topo_sort_id}")
+                # Get a new prev_topo_sort_id
+                while unbroken_stage:
+                    prev_topo_sort_id = unbroken_stage.popleft()
+                    if prev_topo_sort_id in id_to_node_worked_on:
+                        cur_set.append(prev_topo_sort_id)
+                        break
+                    else:
+                        print(f"skipping input_v3: {prev_topo_sort_id}")
+
+        if cur_set:
+            broken_stages_for_unbroken_stage.append(cur_set)
+        broken_stages.extend(broken_stages_for_unbroken_stage)
+    broken_stages.sort(key=lambda topo_sorted_list: topo_sorted_list[0])
+    # #
+    # #
+    # # for i, topo_sorted_list in enumerate(broken_stages):
+    # #     for nid in topo_sorted_list:
+    # #         n = id_to_node_worked_on[nid]
+    # #         n.stage_id = i
+
+    return broken_stages
+
+
+def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked_on, prev_topo_sort_id, topo_sort_id,
+                                               unbroken_stage):
+    # Check if nothing is missing (it is possible due to layers_graph)
+    # Example: 9->13
+    # prev: {7,8, 9}
+    # unbroken: {13,14,15}
+    # candidate is 13.
+    # Now, the following code
+    # checks that there is no path from {7,8,9} to {13,14,15} via missing {10,11,12}
+    # if there is: break: 13 can't be together with {7,8,9}.
+    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
+    is_ok = True
+    for missing_topo_sort_id in missing_topo_sort_ids:
+        if not (missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on):
+            continue
+        #  Need to actually check if there is a cycle.
+        cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
+        scs = set(cur_set)
+        missing_nodes_in_work_graph = [id_to_node_worked_on[x] for x in missing_topo_sort_ids if
+                                       x not in scs and x in id_to_node_worked_on]
+        nodes_left_in_unborken_stage = set(id_to_node_worked_on[x] for x in unbroken_stage)
+        nodes_left_in_unborken_stage.add(id_to_node_worked_on[topo_sort_id])
+
+        A: Set[Node] = set(cur_nodes)
+        B: Set[Node] = set(nodes_left_in_unborken_stage)
+        edge_nodes: Set[Node] = set(missing_nodes_in_work_graph)
+        edges = []
+        for a in A:
+            for c in a.out_edges:
+                if c in edge_nodes:
+                    edges.append((0, c.id + 2))
+
+        for c in edge_nodes:
+            for nc in c.out_edges:
+                if nc in edge_nodes:
+                    edges.append((c.id + 2, nc.id + 2))
+                elif nc in B:
+                    edges.append((c.id + 2, 1))
+
+        G = nx.DiGraph(incoming_graph_data=edges)
+        G.add_node(0)
+        G.add_node(1)
+        has_path = nx.algorithms.shortest_paths.generic.has_path(G, 0, 1)
+        # Scream if has path
+        is_ok = not has_path
+        if not is_ok:
+            break
+    has_path_via_missing_nodes = not is_ok
+    return has_path_via_missing_nodes
+
+
+def get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
+                        nodes_with_out_edges_to_different_gpu):
+    uf = UnionFind(elements=bins_to_id[gpu_id])
+    visited = set()
+    open = deque(sorted(nodes_in_bin, key=lambda x: x.id))
+    while open:
+        x = open.popleft()
+        x: Node
+        for y in x.out_edges:
+            if y.id not in uf:
+                nodes_with_out_edges_to_different_gpu[gpu_id].add(x)
+                nodes_with_in_edges_from_different_gpu[y.gpu_id].add(y)
+                continue
+            uf.union(x.id, y.id)
+    unbroken_stages = uf.sorted_components()
+    return unbroken_stages
 
 
 def analyze_n_clusters(nodes: List[Node], node_weight_function, max_k=10, THRESHOLD=0, manual_choose_n_clusters=True):
@@ -745,8 +676,8 @@ def partition_2dbin_pack(graph: Graph,
 
     clusters, to_unify = make_clusters(work_graph, nodes, node_weight_function, C=C, THRESHOLD=THRESHOLD)
     bins = best_Fit_cluster(K, clusters, id_to_node=id_to_node, to_unify=to_unify, C=C,
-                             second_and_on_cluster_policy=second_and_on_cluster_policy,
-                             reminder_policy=reminder_policy)
+                            second_and_on_cluster_policy=second_and_on_cluster_policy,
+                            reminder_policy=reminder_policy)
     # sort
     for v in bins.values():
         v.sort(key=lambda x: x.Index)

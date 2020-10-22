@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 from typing import Dict
 import torch
@@ -6,8 +7,9 @@ from torch import Tensor
 from collections import deque
 from autopipe.utils import move_tensors
 
+
 def extra_communication_time_lower_bound(comp_time, comm_time):
-    """communication is completly parallel to computation """
+    """communication is completely parallel to computation """
     if comp_time >= comm_time:
         return 0
     else:
@@ -15,18 +17,18 @@ def extra_communication_time_lower_bound(comp_time, comm_time):
 
 
 def extra_communication_time_upper_bound(comp_time, comm_time):
-    """communication is completly not parallel to computation """
+    """communication is completely not parallel to computation """
     return comm_time
 
 
 def upper_utilization_bound(comp_time, comm_time):
-    """communication is completly parallel to computation """
+    """communication is completely parallel to computation """
     comm_time = extra_communication_time_lower_bound(comp_time, comm_time)
     return comp_time / (comm_time + comp_time)
 
 
 def lower_utilization_bound(comp_time, comm_time):
-    """communication is completly not parallel to computation """
+    """communication is completely not parallel to computation """
     comm_time = extra_communication_time_upper_bound(comp_time, comm_time)
     return comp_time / (comm_time + comp_time)
 
@@ -35,9 +37,9 @@ def apply_ratio(upper, lower, ratio):
     return (upper * (1 - ratio)) + (lower * ratio)
 
 
-def convert_to_analysis_format(config:Dict, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Dict:
+def convert_to_analysis_format(config: Dict, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Dict:
     """convert a pipeline configuration to a simpler format used by the analysis module
-       this is a convertion to a legacy format which should not be used except for the analysis"""
+       this is a conversion to a legacy format which should not be used except for the analysis"""
     analysis_config = dict()
 
     analysis_config['model inputs'] = config['model_inputs']
@@ -48,17 +50,15 @@ def convert_to_analysis_format(config:Dict, layers: Dict[str, Tensor], tensors: 
         stage_config['inputs'] = list(cfg['inputs'].keys())
         stage_config['outputs'] = list(cfg['outputs'].keys())
 
-        stage = cfg['stage_cls'](layers, tensors,device=cfg['devices'][0])
+        stage = cfg['stage_cls'](layers, tensors, device=cfg['devices'][0])
         stage_config['model'] = stage
         analysis_config[idx] = stage_config
 
     return analysis_config
 
 
-
-
 def run_partitions(model_inputs, analysis_config):
-    #kwarg input
+    # kwarg input
     if isinstance(model_inputs, dict):
         model_inputs = tuple(
             [model_inputs[i] for i in analysis_config['model inputs']])
@@ -66,7 +66,7 @@ def run_partitions(model_inputs, analysis_config):
     n_partitions = sum(1 for k in analysis_config if isinstance(k, int))
 
     if not isinstance(model_inputs, tuple):
-        model_inputs = (model_inputs, )
+        model_inputs = (model_inputs,)
 
     activations = {}
 
@@ -98,4 +98,3 @@ def run_partitions(model_inputs, analysis_config):
             parts.append(idx)
 
     return [activations[o] for o in analysis_config['model outputs']]
-
