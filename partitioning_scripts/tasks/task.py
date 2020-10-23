@@ -290,7 +290,7 @@ class Parser(argparse.ArgumentParser, ABC):
             help="wether to use multilevel partitioning algorithm")
         group.add_argument("--objective",
                            choices=["edge_cut", "stage_time"],
-                           default="edge_cut",
+                           default="stage_time",
                            help="partitioning optimization objective")
         group.add_argument("--constraint",
                            choices=["time", "memory"],
