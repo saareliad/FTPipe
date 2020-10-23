@@ -5,6 +5,10 @@ from models.normal.vision_models import ResNet
 from . import register_task
 from .task import Parser, Partitioner
 
+
+#model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
+_HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"))
+
 _VGG16_BN = dict(vgg16_bn=dict())
 
 _RESENETS = dict(resnet50_imagenet=dict(block=ResNet.Bottleneck,
@@ -64,6 +68,7 @@ _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet.ResNet)
 _register_model(_AMOEBANET_D, amoebanetd)
 _register_model(_VGG16_BN, vgg16_bn)
+_register_model(_HUB, torch.hub.load)
 
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
