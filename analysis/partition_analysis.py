@@ -400,39 +400,61 @@ def run_analysis(sample,
             n_workers = num_real_stages
             model = sequential_model
             comm_comp_concurrency_ratio = 0.5
-            try:
-                asgd_expected_speedup, asgd_stats = asgd_run_analysis(
-                    sample,
-                    model,
-                    n_workers,
-                    bw_GBps=bw_GBps,
-                    verbose=verbose,
-                    comm_comp_concurrency_ratio=comm_comp_concurrency_ratio)
-                # except Exception as e:
-                if verbose:
-                    asgd_output = None
-                    with io.StringIO() as buf, redirect_stdout(buf):
-                        print()
-                        print('Printing ASGD analysis:')
-                        print(
-                            f"(assuming {comm_comp_concurrency_ratio} concurency between communication and computation)"
-                        )
-                        pprint(rounddict(asgd_stats))
-                        print(
-                            f"asgd_expected_speedup: {asgd_expected_speedup:.3f}"
-                        )
-                        pipeline_to_asgd_speedup = expected_speedup / asgd_expected_speedup
-                        print(f"Pipeline/ASGD: {pipeline_to_asgd_speedup:.3f}")
-                        asgd_output = buf.getvalue()
+            DROP_BATCH_FOR_ASGD=False
+            asgd_ok = False
+            first_time=True
+            asgd_div = 1
+            asgd_sample = sample
+            while not asgd_ok or first_time:
+                if not first_time and DROP_BATCH_FOR_ASGD:
+                    asgd_div*=2
+                    if asgd_div > len(asgd_sample):
+                        break
+                    len_to_take = len(asgd_sample)//2
+                    asgd_sample = asgd_sample[:len_to_take]
+                elif not first_time and not DROP_BATCH_FOR_ASGD:
+                    break
+                else:
+                    first_time=False
 
-                    print(asgd_output)
+                print(f"Trying ASGD analysis with batch size {len(sample)} per worker")
+                try:
+                    asgd_expected_speedup, asgd_stats = asgd_run_analysis(
+                        sample,
+                        model,
+                        n_workers,
+                        bw_GBps=bw_GBps,
+                        verbose=verbose,
+                        comm_comp_concurrency_ratio=comm_comp_concurrency_ratio)
+                    asgd_ok=True
+                    # except Exception as e:
+                    if verbose:
+                        if asgd_div>1:
+                            warnings.warn("ASGD STATS ARE FOR LOWER BATCH, please ignore it")
+                        asgd_output = None
+                        with io.StringIO() as buf, redirect_stdout(buf):
+                            print()
+                            print('Printing ASGD analysis:')
+                            print(
+                                f"(assuming {comm_comp_concurrency_ratio} concurency between communication and computation)"
+                            )
+                            pprint(rounddict(asgd_stats))
+                            print(
+                                f"asgd_expected_speedup: {asgd_expected_speedup:.3f}"
+                            )
+                            pipeline_to_asgd_speedup = expected_speedup / asgd_expected_speedup
+                            print(f"Pipeline/ASGD: {pipeline_to_asgd_speedup:.3f}")
+                            asgd_output = buf.getvalue()
 
-            except Exception as e:
-                print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
-                # raise
+                        print(asgd_output)
+                        break
+
+                except Exception as e:
+                    print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
+                    asgd_ok = False
 
     if torch.cuda.is_available():
-        s += f"\nmax cuda memory used {max_memory_allocated / 1e9:.2f}GB"
+        s += f"\nAnalysis max cuda memory used {max_memory_allocated / 1e9:.2f}GB"
     print(s)
 
     # Choose a metric to maximize and return it

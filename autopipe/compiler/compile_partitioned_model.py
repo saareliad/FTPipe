@@ -272,6 +272,14 @@ def get_stages_depth_from_end(graph) -> Dict[int, int]:
             warnings.warn(f"Stage {i} was not used in output calculation. distance_dict={distance_dict}")
 
     if len(set(distance_dict.values())) < num_partitions:
-        warnings.warn(f"Detected parallel stages. Naive pipelines can't run this. distance_dict={distance_dict}")
+        all_depths = sorted(set(distance_dict.values()))
+        d = {}
+        pard = {}
+        for x in all_depths:
+            d[x] = [s for s, xx in distance_dict.items() if xx==x]
+            if len(d[x]) > 1:
+                pard[x] = d[x]
+
+        warnings.warn(f"Detected parallel stages. Naive pipelines can't run this. parallel stages={pard}")
 
     return distance_dict
