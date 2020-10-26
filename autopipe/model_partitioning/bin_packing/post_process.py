@@ -10,7 +10,7 @@ __all__ = ["post_process_partition"]
 
 def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_error=True,
                            assert_output_types=False) -> Graph:
-    '''
+    """
     process the partition and optimize it
     called as part of partition_graph method
 
@@ -20,10 +20,9 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
         the Graph object that was partitioned
     verbose_on_error:
         print extra info when cycle can't be solved
-    '''
+    """
 
-    # TODO: assert that stages are connected componenets.
-    # Otherwise,
+    # TODO: assert that stages are connected components.
 
     re_assign_partition_indices(graph)
     # this is a sanity check
