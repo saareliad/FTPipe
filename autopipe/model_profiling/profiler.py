@@ -180,6 +180,7 @@ class GraphProfiler():
     def avg_time(times, drop=2):
         vs = times
         # FIXME: this should only drop one
+        max_v = None
         for i in range(drop):
             max_v = max(vs)
             vs_cand = [t for t in vs if t < max_v]

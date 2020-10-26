@@ -197,8 +197,8 @@ def tracing_not_supported(func):
     """a decortaor to have pretty error messages when accessing an unsupported
     __magic__ method
     """
-    
-    #TODO add general warning
+
+    # TODO add general warning
     # show file name, actual line, operator
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -238,15 +238,14 @@ class TracedValue(object):
         NODES[self.id] = self.node
 
         self.creation_site = get_call_site(__file__)
-        
+
     def set_data(self, data):
         assert is_traceable(
             data), f"TracedValue expects a basic type got {type(data)} scope {self.scope}"
 
-
-        #NOTE assuming this is called after setting graph input dependencies
+        # NOTE assuming this is called after setting graph input dependencies
         # aka we first record graph inputs prior to calling set_data
-        maybe_make_constant(self.node,data)
+        maybe_make_constant(self.node, data)
         self._data = data
         self.namespace = f"{type(self._data).__name__}"
         self.node.value_type = type(data)
@@ -269,8 +268,8 @@ class TracedValue(object):
             # so here we try and find the namespace explicitly
             # first encounter was when tracing a torch.relu_
             namespace = None
-            for m in [torch,F,torch.functional]:
-                if hasattr(m,func_name):
+            for m in [torch, F, torch.functional]:
+                if hasattr(m, func_name):
                     namespace = m.__name__
                     break
             if namespace is None:
@@ -314,9 +313,9 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
-    #intentionaly explicit
-    #NOTE if the method requires specific syntax
-    #then it should be also added in utils.py
+    # intentionaly explicit
+    # NOTE if the method requires specific syntax
+    # then it should be also added in utils.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
     ##############################
 
@@ -334,33 +333,31 @@ class TracedValue(object):
     def __setitem__(self, idx, value):
         pass
 
-    #NOTE this must return an integer
+    # NOTE this must return an integer
     def __len__(self):
-        #TODO add general warning
+        # TODO add general warning
         # show file name, actual line, operator
         # print(f"{self.scope}::__len__ is treated as constant")
         return len(self._data)
 
     @tracing_not_supported
-    def __contains__(self,key):
+    def __contains__(self, key):
         pass
 
-        
     ##############################
     # Conversions
     ##############################
-    
-    #support for conditionals if statements while loops etc.
-    #NOTE this must return unwraped value
+
+    # support for conditionals if statements while loops etc.
+    # NOTE this must return unwraped value
     # it is prohibited to not return a converted value
     def __bool__(self):
         return bool(self._data)
-    
 
     ##############################
     # Unary operations
     ##############################
-    
+
     @delegate_to_traced_value
     def __neg__(self):
         pass
@@ -433,7 +430,6 @@ class TracedValue(object):
     def __or__(self, other):
         pass
 
-
     ##############################
     # Reflected Arithmetic operators
     ##############################
@@ -490,7 +486,6 @@ class TracedValue(object):
     def __ror__(self, other):
         pass
 
-    
     ##############################
     # Augmented  Assingment operators
     ##############################
@@ -547,7 +542,6 @@ class TracedValue(object):
     def __ior__(self, other):
         pass
 
-
     ##############################
     # Logical operations
     ##############################
@@ -589,7 +583,6 @@ class TracedInstanceFunction(object):
         self.namespace = namespace
 
     def __call__(self, *args, **kwargs):
-
         # record the operation
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
@@ -661,7 +654,7 @@ class TracedLayer(nn.Module):
         return out
 
     def __getattr__(self, name):
-        #NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
+        # NOTE this is different than what we did in TracedValue as layers store buffers/parameters/modules in separate dicts
         try:
             return super().__getattr__(name)
         except Exception:
@@ -684,6 +677,7 @@ class TracedLayer(nn.Module):
 
     def __contains__(self, key):
         return key in self._module
+
 
 def is_traceable(data):
     """
@@ -709,7 +703,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     _wrap_traced_layers(module, depth=depth,
-                                      basic_blocks=basic_blocks)
+                        basic_blocks=basic_blocks)
 
     trace_registered_functions()
     ExplicitUntracedFunctions.enable()
@@ -735,13 +729,13 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     CURRENT_SCOPE = ""
     nodes = NODES
 
-    nodes = discard_unused_nodes(nodes,output_id)
+    nodes = discard_unused_nodes(nodes, output_id)
 
-    nodes,output_id = duplicate_constants(nodes,output_id)
+    nodes, output_id = duplicate_constants(nodes, output_id)
 
     propagate_constant_tuple_accessors(nodes)
 
-    nodes = discard_unused_nodes(nodes,output_id)
+    nodes = discard_unused_nodes(nodes, output_id)
 
     # record input kwargs explicitly as they are not passed by position
     # we only retain kwargs that are actually used
@@ -889,10 +883,10 @@ def reset_tracing_state():
     TracedValue.ID = 0
 
 
-def duplicate_constants(nodes,output_id):
-    new_nodes=dict()
-    offset=0
-    new_output_id=0
+def duplicate_constants(nodes, output_id):
+    new_nodes = dict()
+    offset = 0
+    new_output_id = 0
     for node in nodes.values():
         if node.id == output_id:
             new_output_id = node.id + offset
@@ -966,7 +960,7 @@ def propagate_constant_tuple_accessors(nodes):
     # t_2 = t_0 + 10
     # t_3 = t_1 * 2
 
-    #equivalent to
+    # equivalent to
     # t_2 = a + 10
     # t_3 = b * 2
 
@@ -983,8 +977,8 @@ def propagate_constant_tuple_accessors(nodes):
                     # access using a constant index
                     if ("tuple::__getitem__" in o.scope) and (o.in_edges[1].type is NodeTypes.CONSTANT):
                         idx = o.in_edges[1].constant_value
-                        if not isinstance(idx,int):
-                            #NOTE we do not support propagating slicing here (a,b,c)[:2]
+                        if not isinstance(idx, int):
+                            # NOTE we do not support propagating slicing here (a,b,c)[:2]
                             continue
                         accessed_element = tuple_elements[idx]
                         tuple_accessor = o
@@ -992,7 +986,7 @@ def propagate_constant_tuple_accessors(nodes):
                         for dst in tuple_accessor.out_edges:
                             changed = True
                             # connect the element to the destination directly
-                            dst.replace_input(tuple_accessor,accessed_element)
+                            dst.replace_input(tuple_accessor, accessed_element)
                             accessed_element.add_out_edge(dst)
 
                         # make the tuple accessor a leaf node as it's no longer being used
@@ -1002,9 +996,9 @@ def propagate_constant_tuple_accessors(nodes):
             break
 
 
-def maybe_make_constant(node,data):
+def maybe_make_constant(node, data):
     can_convert = False
-    if isinstance(data,torch.device) or (data == "cpu") or (isinstance(data,str) and "cuda" in data):
+    if isinstance(data, torch.device) or (data == "cpu") or (isinstance(data, str) and "cuda" in data):
         # torch devices will be explicitly managed by the stage itself
         # there is no need to dynamicaly infering the cuda device
         data = torch.device(data)
@@ -1022,6 +1016,7 @@ def maybe_make_constant(node,data):
             i.remove_output(node)
         node.args.clear()
         node.kwargs.clear()
+
 
 def _make_constant(nodes, predicate):
     for n in nodes.values():
@@ -1379,7 +1374,7 @@ def check_is_valid_graph(nodes):
             if node.value_type is torch.Size:
                 continue
             if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (
-            issubclass(node.value_type, Tensor))):
+                    issubclass(node.value_type, Tensor))):
                 errors.extend(["tensor value value not recorded in all of TENSOR_SHAPES TENSOR_DTYPES VALUE_TYPES",
                                f"node id: {i}",
                                f"node id: {i}",

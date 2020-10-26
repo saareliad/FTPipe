@@ -1,3 +1,8 @@
+"""
+generates the load/state dict methods and the named param/buffer methods
+ensuring full transparency between partitioned and original model
+# TODO: go over it and make it normal with code conventions
+"""
 from typing import Tuple
 
 import torch
@@ -8,9 +13,9 @@ dtab = tab + tab
 
 
 def generate_partition_state_methods() -> str:
-    ''' generate partition methods state_dict() load_state_dict() named_buffers() and named_parameters()
-        our custom implementation gurrentees 100% compatibility with the original model same names will be used
-    '''
+    """ generate partition methods state_dict() load_state_dict() named_buffers() and named_parameters()
+        our custom implementation guarantees 100% compatibility with the original model same names will be used
+    """
     state_dict = generateStateDictFunction()
     load_state_dict = generateLoadStateDict()
     named_parameters = generateNamedParametersFunction()

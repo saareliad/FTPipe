@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -7,6 +7,7 @@ import torch.nn as nn
 from ..utils import flatten, nested_map, traverse_model, get_device, ExecTimes
 
 __all__ = ['profile_network']
+
 
 # TODO: DEPRECATED
 def profile_network(
@@ -340,6 +341,7 @@ def set_req_grad_for_parameters(ts):
     """ For model parameters which are sent across the pipeline, grad requirements at profiling are always true
         # TODO: support freezing
     """
+
     def f(t):
         if not isinstance(t, torch.Tensor):
             return t

@@ -18,10 +18,7 @@ from .utils import move_tensors, ExecTimes
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
-__all__ = [
-    'pipe_model', 'profile_network', 'trace_module', 'partition_model',
-    'METIS_partition'
-]
+__all__ = ['pipe_model', 'trace_module', 'partition_model']
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
