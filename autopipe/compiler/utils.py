@@ -112,7 +112,7 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph, assert_same_stages=True):
     # there is no need to send all the elements of a, if only some of them are used
     if assert_same_stages:
         n2 = graph.num_partitions
-        b4 = {n.stage_id for n in graph.nodes}
+        b4allstages = {n.stage_id for n in graph.nodes}
 
     for n in graph.nodes:
         if (n.type != NodeTypes.OP) or ("tuple::__getitem__" not in n.scope):
@@ -144,4 +144,4 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph, assert_same_stages=True):
     if assert_same_stages:
         after = {n.stage_id for n in graph.nodes}
         n3 = graph.num_partitions
-        assert n2 == n3, f"Accidentally killed a stage {(n2, n3)}, {b4 - after}"
+        assert n2 == n3, f"Accidentally killed a stage {(n2, n3)}, {b4allstages - after}"

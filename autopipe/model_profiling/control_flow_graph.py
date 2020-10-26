@@ -385,7 +385,7 @@ class Graph():
 
     def state(self):
         '''
-        returns a dicitionary containing the graphs state
+        returns a dictionary containing the graphs state
         '''
         node_states = dict()
         for node in self.nodes:

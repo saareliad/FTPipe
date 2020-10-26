@@ -1,5 +1,5 @@
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 import torch
 import torch.nn as nn
@@ -8,7 +8,7 @@ from ..utils import flatten, nested_map, traverse_model, get_device, ExecTimes
 
 __all__ = ['profile_network']
 
-
+# TODO: DEPRECATED
 def profile_network(
         net: nn.Module,
         sample_batch: tuple = (),
@@ -20,7 +20,7 @@ def profile_network(
         recomputation=False,
         force_no_recomp_scopes=None,
 ) -> Dict[str, ExecTimes]:
-    '''
+    """
     profiles a network's computation time(forward/backward)
     returns a dictionary from layer_scope to ExecTimes
 
@@ -30,7 +30,7 @@ def profile_network(
         the network we wish to profile a nn.Module
 
     sample_batch:
-        a sample batch that will be used to measure executation time of network
+        a sample batch that will be used to measure execution time of network
         can be single/multiple inputs
 
     kwargs:
@@ -41,13 +41,13 @@ def profile_network(
         for eg. if basic_blocks = nn.Sequential then the profiler will break it down to its components
 
     max_depth:
-        determins how far the profiler will go in the model tree
+        determines how far the profiler will go in the model tree
 
     n_iter:
         number of iteration to use for profiling
-        the profiling will be averaged accross all iterations
+        the profiling will be averaged across all iterations, after throwing several outliers
 
-    '''
+    """
     if kwargs is None:
         kwargs = {}
     if basic_blocks is None:
@@ -62,7 +62,7 @@ def profile_network(
     else:
         f = force_no_recomp_scopes
 
-    # wrap all individula layers for profiling
+    # wrap all individual layers for profiling
     layers_dict = _wrap_profiled_layers(net,
                                         max_depth,
                                         basic_blocks,
@@ -156,18 +156,13 @@ def _unwrap_layers(module: nn.Module):
 
 
 class Wrapper(nn.Module):
-    '''
-    a module whose purpose is to profile a given layer\n
-    when the wrapper performs forward propagation it records the following metrics:\n
-        forward_time: the execution time of a forward pass of the underlying layer in milliseconds\n
-        backward_time: the execution time of a backward pass of the underlying layer in milliseconds\n
-
-    Parameters
-    ----------
-    sub_module:
-        a nn.module to be profiled
-
-    '''
+    """
+    A module whose purpose is to profile a given layer
+    when the wrapper performs forward propagation it records the following metrics:
+        forward_time: the execution time of a forward pass of the underlying layer in milliseconds
+        backward_time: the execution time of a backward pass of the underlying layer in milliseconds
+    with slight changes when recomputation is set to True.
+    """
 
     def __init__(self,
                  sub_module: nn.Module,
@@ -182,14 +177,15 @@ class Wrapper(nn.Module):
         self.scope = scope
         self.save_memory_mode = save_memory_mode
         self.recomputation = recomputation
+        self.device = None
 
         if save_memory_mode:
             self.layer.to('cpu')
 
     def forward(self, *inputs: tuple, **kwargs: Dict):
-        '''
-        perform forward and backward pass of the underlying layer and measure metrics
-        '''
+        """
+        Perform forward and backward pass of the underlying layer and measure metrics
+        """
 
         if self.save_memory_mode:
             self.device = torch.device("cuda")
@@ -202,11 +198,9 @@ class Wrapper(nn.Module):
 
         # detach inputs from previous history enabling us to measure execution time
         # only for this layer
+        # Tensor inputs are already detach, here comes special detach for torch.nn.Parameters
         detached_inputs = set_req_grad_for_parameters(inputs)
-        # TODO: we  the input as requires grad, as this is mostly the case,
-        #  the grad has to be passed backward.
-        # However, then gradient creation will be computed for all
-
+        # TODO: for shared weights we count the gradient creation twice, even though it could be accumulation 2nd time.
         with torch.set_grad_enabled(not self.recomputation):
             # if recomputation: its a dummy forward
             forward_time, outputs, _ = time_op(self.device, self.layer,
@@ -219,7 +213,7 @@ class Wrapper(nn.Module):
             forward_time, outputs, _ = time_op(self.device, self.layer,
                                                *detached_inputs, **kwargs)
 
-        # NOTE: the commented code is less accurate, but it can be usefull for memory problems
+        # NOTE: the commented code is less accurate, but it can be useful for memory problems
         # reduce outputs to calculate dummy loss
         # loss = torch.zeros(1, requires_grad=False, device=device)
         # for out in flatten(outputs):
@@ -249,7 +243,7 @@ class Wrapper(nn.Module):
                                           grad_tensors=grad_tensors)
 
             # TODO: also create option to check gradient accumulation,
-            #  in case this is the domminant case
+            #  in case this is the dominant case
 
             # delete gradients to save memory after backward.
             for p in self.parameters():
@@ -307,9 +301,9 @@ class Wrapper(nn.Module):
             self.layer.to('cuda')  # HACK, assuming its called only at cuda.
 
 
-def time_op(device, func, *inputs: tuple, **kwargs: Dict):
+def time_op(device, func, *inputs: tuple, **kwargs):
     cuda_mem = 0
-    if (device.type == 'cuda'):
+    if device.type == 'cuda':
         torch.cuda.reset_max_memory_allocated(device=device)
         base_mem = torch.cuda.max_memory_allocated(device=device)
 
@@ -343,6 +337,9 @@ def avg_time(times):
 
 
 def set_req_grad_for_parameters(ts):
+    """ For model parameters which are sent across the pipeline, grad requirements at profiling are always true
+        # TODO: support freezing
+    """
     def f(t):
         if not isinstance(t, torch.Tensor):
             return t

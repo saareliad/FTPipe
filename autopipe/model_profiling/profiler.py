@@ -163,7 +163,7 @@ class GraphProfiler():
     @staticmethod
     def get_grads(ts):
         # NOTE: these dummy gradients will cause problems:
-        # will probalbly miss-measure everything with sparsity.
+        # will probably miss-measure everything with sparsity.
         # (e.g dropout, relu, the layer right before giant embedding layers...)
         return [torch.randn_like(t) for t in ts]
 

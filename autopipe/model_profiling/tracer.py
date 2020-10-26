@@ -698,6 +698,11 @@ def is_traceable(data):
 # Tracing procedure
 ##############################
 def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_blocks=()):
+    if basic_blocks is None:
+        basic_blocks = ()
+    if kwargs is None:
+        kwargs = dict()
+
     reset_tracing_state()
     # just to be sure
     _unwrap_layers(module)

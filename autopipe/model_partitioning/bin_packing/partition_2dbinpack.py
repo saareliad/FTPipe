@@ -764,7 +764,7 @@ def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):
 
 
 if __name__ == '__main__':
-    from autopipe import build_graph
+    from autopipe import build_profiled_graph
     import torch
     from torch.nn import Sequential, Linear
 
@@ -781,7 +781,7 @@ if __name__ == '__main__':
 
     model = model.cuda()
     inputs = inputs.cuda()
-    graph = build_graph(model, args=(inputs,), n_iter=50)
+    graph = build_profiled_graph(model, model_args=(inputs,), n_iter=50)
 
     node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1, MULT_FACTOR=100000)
     # graph.display(node_weight_function=node_weight_function)
@@ -855,3 +855,11 @@ if __name__ == '__main__':
 #               'T5ForConditionalGeneration/Linear[lm_head]':0,
 #               'T5ForConditionalGeneration/CrossEntropyLoss[lm_loss]':0,
 #           }
+
+
+# for gpu_id in [0,1,2,3]:
+#     nn = {n for n in work_graph.nodes if n.gpu_id == gpu_id}
+#     stages = sorted({n.stage_id for n in nn})
+#     for s in stages:
+#         nnns = sorted({n.id for n in nn if n.stage_id == s})
+#         print(s, nnns)
