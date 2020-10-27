@@ -1,7 +1,7 @@
-import torch.distributed as dist
-import torch
 import time
 
+import torch
+import torch.distributed as dist
 
 BACKEND = 'gloo'
 CUDA = True

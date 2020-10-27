@@ -1,5 +1,5 @@
-import torch.distributed as dist
 import torch
+import torch.distributed as dist
 
 """ Will test MPI with this later... """
 
@@ -37,7 +37,6 @@ if __name__ == "__main__":
 
         assert torch.all(tensor2 == torch.ones(*shape).mul_(2))
         print("Done")
-
 
 """
 python -m torch.distributed.launch --nnodes 1 --nproc_per_node 2 --node_rank 0 misc/tst_isend.py

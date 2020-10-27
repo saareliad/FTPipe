@@ -427,8 +427,10 @@ def start_mutiprocessing():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
     args.world_size = args.nprocs
+    start_method='fork'
 
-    start_method='spawn'
+    mp.set_start_method(start_method)
+
     # create queues for communication
     rcv_queues = mp_queue_matrix(args, start_method=start_method)
     buffer_reuse_queues = mp_queue_matrix(args,start_method=start_method)

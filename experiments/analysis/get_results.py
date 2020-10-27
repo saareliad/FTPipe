@@ -1,8 +1,10 @@
-import pandas as pd
-import json
-import glob
-import os
 import argparse
+import glob
+import json
+
+import pandas as pd
+
+
 # TODO: result dir
 
 
@@ -12,7 +14,7 @@ def alg(fn):
         if ga_alg in fn:
             return ga_alg
         ws_alg = "{a}_ws"
-        if ws_alg+"_" in fn:
+        if ws_alg + "_" in fn:
             return ws_alg
 
     return "gpipe" if "gpipe" in fn else "aggmsnag" if "aggmsnag" in fn else "msnag" if "msnag" in fn else "stale" if "stale" in fn else "BUG"
@@ -114,7 +116,6 @@ if __name__ == "__main__":
 
     WRITE = {'squad': write_squad_desc_df, 'lm': write_lm_desc_df}
     FILTER = {'squad': filter_desc_df_squad, 'lm': filter_desc_df_lm}
-
 
     if args.write:
         WRITE[args.task]()

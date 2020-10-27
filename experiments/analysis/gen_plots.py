@@ -1,10 +1,10 @@
-from . import plot
-import matplotlib.pyplot as plt
 import os
 
-import sys
-sys.path.append("..")
-from experiments import load_experiment
+import matplotlib.pyplot as plt
+
+from experiments.experiments import load_experiment
+from . import plot
+
 
 # Options are:
 # plot.plot_grad_norm
@@ -59,7 +59,6 @@ def wrn_16x4_4p_with_grad_norm():
 
 
 def wrn_16x4_4p_with_fit_plot():
-
     d = dict(fig=None, plot_fn=plot.plot_fit)
     # 5 warm up  for all
     fn_to_contour = {
@@ -158,7 +157,6 @@ def wrn16x4_c100_p2_gap():
 
 
 def debug_gap_wrn16x4_c100():
-
     out_base_name = "debug_gap_wrn16x4_c100"
     out_dir = "results/figs"
     # plot_fn = plot.plot_gap
@@ -181,16 +179,17 @@ def debug_gap_wrn16x4_c100():
 
 
 def regime_adaptation():
-
     out_base_name = "regime_adaptation"
     out_dir = "results/figs"
     plot_fn = plot.plot_fit
 
     ra = {"results/RA/RA_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_64_se_1_seed_1322019.json": "b64_ra_msnag_ws"}
-    normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "b128_msnag_ws"}
+    normal = {
+        "results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "b128_msnag_ws"}
     fn_to_contour = {**ra, **normal}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
+
 
 def tta():
     out_base_name = "tta2"
@@ -201,10 +200,14 @@ def tta():
 
     # normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
     normal = {}
-    ws_wp = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
-    ws_wp_ga = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga" }
-    msnag_recomp = {"results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json" : "msnag+recomp"}
-    pipedream = {"results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
+    ws_wp = {
+        "results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    ws_wp_ga = {
+        "results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga"}
+    msnag_recomp = {
+        "results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json": "msnag+recomp"}
+    pipedream = {
+        "results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
 
     fn_to_contour = {**normal, **msnag_recomp, **ws_wp, **ws_wp_ga, **ddp, **pipedream, **ddp_bs_512}
 
@@ -220,15 +223,18 @@ def tta_wo_512():
 
     # normal = {"results/with_times_good/norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
     normal = {}
-    ws_wp = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
-    ws_wp_ga = {"results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga" }
-    msnag_recomp = {"results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json" : "msnag+recomp"}
-    pipedream = {"results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
+    ws_wp = {
+        "results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_bs_128_se_1_seed_1322019.json": "msnag+ws"}
+    ws_wp_ga = {
+        "results/NEW_NESTEROV/NESTEROV_norecomp_wrn_28x10_c100_dr03_p4_cifar100_msnag_ws_ga_bs_128_se_1_seed_1322019.json": "msnag+ws+ga"}
+    msnag_recomp = {
+        "results/NEW_NESTEROV/exp_rn_wrn_28x10_c100_dr03_p4_cifar100_msnag_bs_128_se_1_seed_314159.json": "msnag+recomp"}
+    pipedream = {
+        "results/with_times_good/pipedream_wrn_28x10_c100_dr03_p4_cifar100_stale_ws_bs_128_se_1_seed_42.json": "pipedream"}
 
     fn_to_contour = {**normal, **msnag_recomp, **ws_wp, **ws_wp_ga, **ddp, **pipedream}
 
     gen_plot_from_dict(fn_to_contour, plot_fn, out_base_name, out_dir=out_dir)
-
 
 
 if __name__ == "__main__":

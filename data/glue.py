@@ -1,22 +1,19 @@
 # Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
 import os
-import numpy as np
 import types
+from collections import defaultdict
+from typing import Callable, Dict
+
+import numpy as np
 import torch
 import torch.nn as nn
-
 from torch.utils.data import TensorDataset
-
+from transformers import EvalPrediction
 from transformers.data.datasets.glue import GlueDataset, GlueDataTrainingArguments
 from transformers.data.metrics import glue_compute_metrics
-
 from transformers.data.processors.glue import (glue_output_modes,
                                                glue_tasks_num_labels)
 
-from transformers import EvalPrediction
-from typing import Callable, Dict
-
-from collections import defaultdict
 from .datasets import CommonDatasetHandler, register_dataset
 
 
@@ -38,7 +35,8 @@ class GlueLoss(torch.nn.Module):
             try:
                 loss = self.loss(logits.view(-1, self.num_labels), labels.view(-1))
             except Exception as e:
-                print(self.num_labels, logits.shape, logits.view(-1, self.num_labels).shape, labels.shape, labels.view(-1).shape)
+                print(self.num_labels, logits.shape, logits.view(-1, self.num_labels).shape, labels.shape,
+                      labels.view(-1).shape)
                 raise e
 
         return loss
@@ -46,7 +44,6 @@ class GlueLoss(torch.nn.Module):
 
 def build_compute_metrics_fn(
         task_name: str) -> Callable[[EvalPrediction], Dict]:
-
     try:
         # num_labels = glue_tasks_num_labels[task_name]
         output_mode = glue_output_modes[task_name]
@@ -146,14 +143,14 @@ def make_just_by_ds(ds, just, **kw):
     A = set(MAP_NAMES_TO_FEATURES[i] for i in just)
     if kw['is_last_partition']:
         A |= LAST_PARTITION_EXTRA_LABELS
-    
+
     # cache_name = "_".join(sorted(list(A)))
-    
+
     d = defaultdict(list)
     for feature in ds:
         for key, val in vars(feature).items():
             if val is None:
-                continue   # For exmple, token_type_ids are None for roberta.
+                continue  # For exmple, token_type_ids are None for roberta.
             if key in A:
                 d[key].append(val)
             #     if key in LAST_PARTITION_EXTRA_LABELS:
@@ -282,30 +279,29 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
     return train_ds, dev_ds, set_eval
 
 
-
 class SEP_GLUE_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
         d = extract_needed_keywords(**kw)
-        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**d)
+        train_ds, dev_ds, extra = get_just_x_or_y_train_dev_dataset(**d)
         self.train_ds = train_ds
         self.dev_ds = dev_ds
         self.extra = extra
 
     def get_train_ds(self, **kw):
         return self.train_ds
-    
+
     def get_test_ds(self, **kw):
         return self.dev_ds
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
-        
+
     def get_modify_trainer_fn(self):
         return self.extra
 
-register_dataset("glue", SEP_GLUE_DatasetHandler)
 
+register_dataset("glue", SEP_GLUE_DatasetHandler)
 
 
 def extract_needed_keywords(**kw):
@@ -327,6 +323,7 @@ def extract_needed_keywords(**kw):
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer
+
     # import ptvsd
     # port = 3000 + 0
     # # args.num_data_workers = 0  # NOTE: it does not work without this.

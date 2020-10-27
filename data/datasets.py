@@ -1,10 +1,10 @@
-import torch
-from torch.utils.data import Dataset, DistributedSampler, DataLoader, Sampler
 import abc
 
+import torch
+from torch.utils.data import DistributedSampler
 
 AVAILABLE_DATASETS = {
-#     'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue', "t5_squad"
+    #     'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue', "t5_squad"
 }
 
 
@@ -14,13 +14,13 @@ class CommonDatasetHandler(abc.ABC):
 
     def get_train_ds(self, *args, **kw):
         raise NotImplementedError()
-    
+
     def get_test_ds(self, *args, **kw):
         NotImplementedError()
-    
+
     def get_validation_ds(self, *args, **kw):
         NotImplementedError()
-    
+
     def get_modify_trainer_fn(self):
         pass
 
@@ -30,6 +30,7 @@ class CommonDatasetHandler(abc.ABC):
 
 def register_dataset(name, common_handler: CommonDatasetHandler):
     AVAILABLE_DATASETS[name] = common_handler
+
 
 ##################################
 # A modified DistributedSampler
@@ -41,7 +42,7 @@ class MyNewDistributedSampler(DistributedSampler):
     # only problem with it is *deterministic shuffling*, which will be the same for all experiments.
     # so we add experiment seed to make it fun.
 
-    MAX_INT = 2**32  # Used to prevent overflow
+    MAX_INT = 2 ** 32  # Used to prevent overflow
 
     def __init__(self, experiment_manual_seed, *args, **kw):
         super().__init__(*args, **kw)

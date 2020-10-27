@@ -13,7 +13,6 @@ from models.load_pipeline_weights_to_hf import T5HFLoader
 from models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
 
-
 def load_huggingface_checkpoint(args, cp_number, spread_across_devices=True, **kwargs):
     if spread_across_devices:
         hf_transformers_model_class = ModelParallelT5ForConditionalGeneration

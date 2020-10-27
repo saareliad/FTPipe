@@ -26,9 +26,9 @@ def _shift_right(config, input_ids):
     shifted_input_ids[..., 1:] = input_ids[..., :-1].clone()
     shifted_input_ids[..., 0] = decoder_start_token_id
 
-    #NOTE is not None
+    # NOTE is not None
     # assert pad_token_id is not None, "self.model.config.pad_token_id has to be defined."
-    assert is_not_None(pad_token_id),"self.model.config.pad_token_id has to be defined."
+    assert is_not_None(pad_token_id), "self.model.config.pad_token_id has to be defined."
     # replace possible -100 values in lm_labels by `pad_token_id`
     shifted_input_ids.masked_fill_(shifted_input_ids == -100, pad_token_id)
 
@@ -37,32 +37,32 @@ def _shift_right(config, input_ids):
     return shifted_input_ids
 
 
-def get_attention_mask(input_shape,attention_mask,device,is_decoder=False,dtype=torch.float32):
+def get_attention_mask(input_shape, attention_mask, device, is_decoder=False, dtype=torch.float32):
     # attention_mask is the original decoder/encoder attention mask given to the model
     # for encoder we will pass input_ids.size() and attention_mask
     # for decoder we will pass decoder_input_ids.size() and decoder_attention_mask
     if is_None(attention_mask):
-        attention_mask = torch.ones(input_shape,device=device)
+        attention_mask = torch.ones(input_shape, device=device)
 
     # ourselves in which case we just need to make it broadcastable to all heads.
-    return get_extended_attention_mask(attention_mask, input_shape,is_decoder=is_decoder,dtype=dtype)
+    return get_extended_attention_mask(attention_mask, input_shape, is_decoder=is_decoder, dtype=dtype)
 
 
-def get_inverted_encoder_attention_mask(mask_shape,encoder_attention_mask,device,dtype=torch.float32):
+def get_inverted_encoder_attention_mask(mask_shape, encoder_attention_mask, device, dtype=torch.float32):
     # mask_shape is batch_size,encoder_seq_length
     # encoder_attention_mask is the original attention_mask given to the model
     if is_None(encoder_attention_mask):
-        encoder_attention_mask = torch.ones(mask_shape,device=device)
+        encoder_attention_mask = torch.ones(mask_shape, device=device)
 
     if is_not_None(encoder_attention_mask):
-        inverted_encoder_attention_mask = invert_attention_mask(encoder_attention_mask,dtype=dtype)
+        inverted_encoder_attention_mask = invert_attention_mask(encoder_attention_mask, dtype=dtype)
     else:
         inverted_encoder_attention_mask = None
 
     return inverted_encoder_attention_mask
 
 
-def invert_attention_mask(encoder_attention_mask,dtype=torch.float32):
+def invert_attention_mask(encoder_attention_mask, dtype=torch.float32):
     """type: torch.Tensor -> torch.Tensor"""
     if encoder_attention_mask.dim() == 3:
         encoder_extended_attention_mask = encoder_attention_mask[:, None, :, :]
@@ -89,7 +89,7 @@ def invert_attention_mask(encoder_attention_mask,dtype=torch.float32):
     return encoder_extended_attention_mask
 
 
-def get_extended_attention_mask(attention_mask, input_shape,is_decoder=False,dtype=torch.float32):
+def get_extended_attention_mask(attention_mask, input_shape, is_decoder=False, dtype=torch.float32):
     """Makes broadcastable attention mask and causal mask so that future and maked tokens are ignored.
 
     Arguments:
@@ -110,7 +110,7 @@ def get_extended_attention_mask(attention_mask, input_shape,is_decoder=False,dty
         # - if the model is an encoder, make the mask broadcastable to [batch_size, num_heads, seq_length, seq_length]
         if is_decoder:
             batch_size, seq_length = input_shape
-            seq_ids = torch.arange(seq_length,device=attention_mask.device)
+            seq_ids = torch.arange(seq_length, device=attention_mask.device)
             causal_mask = seq_ids[None, None, :].repeat(batch_size, seq_length, 1) <= seq_ids[None, :, None]
             # causal and attention masks must have same type with pytorch version < 1.3
             causal_mask = causal_mask.to(attention_mask.dtype)

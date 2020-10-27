@@ -1,5 +1,6 @@
-from run.helper import run_grid_on_multi_gpu_per_run, RunGridHelper
 import argparse
+
+from run.helper import run_grid_on_multi_gpu_per_run, RunGridHelper
 
 ALL_SEEDS = [42, 20202020, 77777777, 314159, 1322019]
 
@@ -118,12 +119,9 @@ def grad_accumulation_WRN():
 
 
 def t5_glue():
-
     ALL_TASKS = {
 
     }
-
-
 
     def mp_helper(helper,
                   alg="stale_nr",

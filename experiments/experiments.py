@@ -1,8 +1,7 @@
-
 import json
-from typing import NamedTuple, Dict, Any, Tuple
 import os
 from types import SimpleNamespace
+from typing import NamedTuple, Dict, Any, Tuple
 
 
 def load_experiment(filename) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
@@ -49,9 +48,9 @@ def save_experiment(run_name, out_dir, config, fit_res: Dict):
             json.dump(output, f, indent=2)
         except Exception as e:
             print("-E- error saving experiment, printing for easier debug")
-            print("-"*40)
+            print("-" * 40)
             print(output)
-            print("-"*40)
+            print("-" * 40)
             raise e
 
     print(f'*** Output file {output_filename} written')
@@ -85,7 +84,7 @@ class ArgsStasher:
         if not hasattr(args, STASH_NAME):
             return
         sd = getattr(args, STASH_NAME)
-        for replaced_key,old_value in sd.items():
+        for replaced_key, old_value in sd.items():
             attr = args
             if isinstance(replaced_key, tuple):
                 for a in replaced_key[:-1]:

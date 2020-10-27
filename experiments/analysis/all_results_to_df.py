@@ -1,13 +1,12 @@
+import itertools
 import os
 from typing import NamedTuple  # for bwd compatibility
-import itertools
-import pandas as pd
+
 import numpy as np
-import os
-import argparse
-import sys
-sys.path.append("..")
-from experiments import load_experiment
+import pandas as pd
+
+from experiments.experiments import load_experiment
+
 
 def is_json(fn):
     return ".json" in fn
@@ -29,13 +28,13 @@ class InferStuff:
         self.fit_res = fit_res
 
         stat_to_default = {
-            'step_every': 1    
+            'step_every': 1
         }
 
         def get_from_cfg(stat):
             # config.get(i, stat_to_default.get(i,None))
             return config[stat] if stat in config else stat_to_default[stat]
-        
+
         self.interesting_from_config = {
             i: get_from_cfg(i) for i in ["model", "dataset", 'seed', 'bs_train', 'step_every']
         }
@@ -57,7 +56,7 @@ class InferStuff:
         ga = "gap_aware" in self.config
         ws = "weight_stashing" in self.config and self.config["weight_stashing"]
         pipedream = "work_scheduler" in self.config and (
-            self.config["work_scheduler"] == "PIPEDREAM")
+                self.config["work_scheduler"] == "PIPEDREAM")
         sync = "is_sync" in self.config and self.config['is_sync']
         ddp = "ddp" in self.config and self.config['ddp']
 
@@ -87,7 +86,7 @@ class InferStuff:
             # Merge existing stuff
             if i in self.all_data:
                 to_delete.add(i)
-                assert(i == "epoch")
+                assert (i == "epoch")
                 if len(v) > len(self.all_data[i]):
                     self.all_data[i] = v
                     self.max_len = len(v)
@@ -152,7 +151,7 @@ class InferStuff:
     def replicate(self):
         """ Replicate stuff """
         for i, v in self.interesting_from_config.items():
-            self.all_data[i] = [v]*self.max_len
+            self.all_data[i] = [v] * self.max_len
 
     def to_df(self):
         return pd.DataFrame(self.all_data)
@@ -205,13 +204,13 @@ def print_uniques(csv, cols=["alg", 'bs_train', "model", "dataset", 'seed', 'ste
 
 
 if __name__ == "__main__":
-
     def two_partitions():
         path = "results/2partitions"
         csv_name = "2partitions.csv"
         csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(path, csv_name)
+
 
     def four_partitions():
         path = "results/4partitions"
@@ -220,9 +219,10 @@ if __name__ == "__main__":
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(path, csv_name)
 
+
     def all_results_with_sequential():
-        paths = [# "results/2partitions",
-                 "results/4partitions", 'results/sequential']
+        paths = [  # "results/2partitions",
+            "results/4partitions", 'results/sequential']
         # csv_name = "2p_4p_seq_ddpsim"
         csv_name = "4p_seq_ddpsim.csv"
         csv_out_dir = ""
@@ -230,19 +230,21 @@ if __name__ == "__main__":
         all_results_to_csv(paths, csv_name)
         print_uniques(csv_name)
 
+
     def four_partitions_ddp_for_meeting():
         paths = ["results/4partitions/stale",
-        "results/4partitions/ws/",
-        "results/4partitions/ws_msnag_ga/",
-        "results/4partitions/msnag_ws/",
-        "results/4partitions/msnag/",
-        "results/4partitions/msnag_ga/",
-         'results/ddp_all']     
+                 "results/4partitions/ws/",
+                 "results/4partitions/ws_msnag_ga/",
+                 "results/4partitions/msnag_ws/",
+                 "results/4partitions/msnag/",
+                 "results/4partitions/msnag_ga/",
+                 'results/ddp_all']
         csv_name = "for_meeting.csv"
         csv_out_dir = ""
         csv_name = os.path.join(csv_out_dir, csv_name)
         all_results_to_csv(paths, csv_name)
         print_uniques(csv_name)
-    
+
+
     four_partitions_ddp_for_meeting()
     # all_results_with_sequential()

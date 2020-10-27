@@ -218,6 +218,7 @@ def get_input_gpt2_lm(args, config, tokenizer) -> Dict[str, torch.Tensor]:
     # else:
     #     sample = {"input_ids": batch}
 
+
 def load_and_cache_examples_squad(args, tokenizer):
     # Load data features from cache or dataset file
     input_dir = args.data_dir if args.data_dir else "."
@@ -300,6 +301,7 @@ def get_input_bert_squad(args, config, tokenizer) -> Dict[str, torch.Tensor]:
 
     return sample
 
+
 if __name__ == '__main__':
     # download dataset from https://s3.amazonaws.com/research.metamind.io/wikitext/wikitext-2-raw-v1.zip
     # export TRAIN_FILE=wikitext-2-raw/wiki.train.raw
@@ -317,7 +319,8 @@ if __name__ == '__main__':
     parser.add_argument("--step_every", type=int, default=2)
 
     ## GPT2
-    parser.add_argument("--train_data_file", type=str, default=os.path.join(DATA_DIR, "wikitext-2-raw/wiki.train.raw"), help="for gpt2")
+    parser.add_argument("--train_data_file", type=str, default=os.path.join(DATA_DIR, "wikitext-2-raw/wiki.train.raw"),
+                        help="for gpt2")
     parser.add_argument("--overwrite_cache", action="store_true", default=False, help="for gpt2")
 
     ## BERT

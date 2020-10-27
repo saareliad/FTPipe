@@ -13,7 +13,6 @@ class ModelParallelDatasetInterface(abc.ABC):
     def get_separate_just_x_or_y_train_test_dl(self, just):
         pass
 
-
 # Desired abilities
 
 ################

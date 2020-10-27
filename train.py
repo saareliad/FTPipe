@@ -20,7 +20,7 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
                                                    SmallerLastBatchPolicy.ProportionalStep)
 
-    save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps",None)
+    save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps", None)
     approx_step_per_epoch = train_dl_len // args.step_every
     if save_checkpoint_every_x_epochs is not None:
         save_checkpoint_every_x_epochs = save_checkpoint_every_x_epochs // approx_step_per_epoch
@@ -121,7 +121,8 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
             if batches_left < train_batches_limit:
                 # Re-define last batch train shapes.
                 # now, the last batch shapes are not smaller.
-                logger.info("batches_left are smaller than dataloader or limit: killing comm_handler.last_batch_train_shapes")
+                logger.info(
+                    "batches_left are smaller than dataloader or limit: killing comm_handler.last_batch_train_shapes")
                 partition.comm_handler.last_batch_train_shapes = None
 
             # handle step every.

@@ -1,25 +1,23 @@
 # Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
 import os
+import types
 from functools import partial
 from multiprocessing import Pool, cpu_count
+from types import SimpleNamespace
 
-from tqdm import tqdm
-
-import types
 import torch
 from torch.utils.data import TensorDataset
-
-from transformers.data.processors.squad import (
-    SquadV2Processor, SquadV1Processor, squad_convert_example_to_features_init,
-    squad_convert_example_to_features)
-
+from tqdm import tqdm
 # NOTE: this import is in order to evluate squad with pipeline
 from transformers.data.metrics.squad_metrics import (
     compute_predictions_log_probs,
     compute_predictions_logits,
     squad_evaluate,
 )
-from types import SimpleNamespace
+from transformers.data.processors.squad import (
+    SquadV2Processor, SquadV1Processor, squad_convert_example_to_features_init,
+    squad_convert_example_to_features)
+
 from .datasets import CommonDatasetHandler, register_dataset
 
 
@@ -157,7 +155,6 @@ def load_and_cache_examples_just_x_or_y(
         version_2_with_negative=False,
         **kw  # hacky and uneeeded but whatever
 ):
-
     # Load data features from cache or dataset file
     squad_dir = get_squad_dir(DATA_DIR, version_2_with_negative)
     input_dir = squad_dir
@@ -299,7 +296,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
     threads = min(threads, cpu_count())
     with Pool(threads,
               initializer=squad_convert_example_to_features_init,
-              initargs=(tokenizer, )) as p:
+              initargs=(tokenizer,)) as p:
         # TODO: take care of squad_convert_example_to_features
         annotate_ = partial(
             squad_convert_example_to_features,
@@ -421,7 +418,6 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                     d['input1'] = attetion_mask
 
             if kw['is_last_partition']:
-
                 all_start_positions = torch.tensor(
                     [f.start_position for f in features], dtype=torch.long)
                 all_end_positions = torch.tensor(
@@ -585,6 +581,7 @@ def evaluate(
 
 if __name__ == "__main__":
     from transformers import AutoTokenizer
+
     # import ptvsd
     # port = 3000 + 0
     # # args.num_data_workers = 0  # NOTE: it does not work without this.
@@ -653,13 +650,13 @@ class SEP_SQUAD_DatasetHandler(CommonDatasetHandler):
 
     def get_train_ds(self, **kw):
         return self.train_ds
-    
+
     def get_test_ds(self, **kw):
         return self.dev_ds
-    
+
     def get_validation_ds(self, **kw):
         NotImplementedError()
-        
+
     def get_modify_trainer_fn(self):
         return self.extra
 

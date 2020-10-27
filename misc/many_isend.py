@@ -1,7 +1,8 @@
-import torch.distributed as dist
-import torch
-import os
 import argparse
+import os
+
+import torch
+import torch.distributed as dist
 
 """ CODE TO TEST MANY ISENDS MPI """
 
@@ -13,7 +14,6 @@ shape = (512, 32, 32, 64)
 def wait(handlers):
     for i in handlers:
         i.wait()
-
 
 
 def parse_cli():
@@ -40,21 +40,22 @@ def parse_cli():
                         default='gloo',
                         type=str,
                         help='distributed backend to use')
-    
+
     parser.add_argument('--world_size',
                         default=2,
                         type=int,
                         help="World size")
-    
+
     args = parser.parse_args()
     return args
+
 
 def gloo_cuda_test():
     BACKAND = 'gloo'
     NUM_ISEND = 3
     shape = (512, 32, 32, 64)
     args = parse_cli()
-   
+
     local_rank = args.local_rank
     rank = args.local_rank
     print(local_rank)
@@ -66,7 +67,7 @@ def gloo_cuda_test():
     current_env["WORLD_SIZE"] = str(args.world_size)  # str(dist_world_size)
     current_env["RANK"] = str(rank)
     current_env["LOCAL_RANK"] = str(local_rank)
-    
+
     dist.init_process_group(BACKAND, init_method="env://", rank=rank, world_size=2)
     handlers = []
     if dist.get_rank() == 0:
@@ -74,7 +75,7 @@ def gloo_cuda_test():
         if BACKAND == 'mpi':
             torch.cuda.set_device(device)
         tensors = [torch.ones(*shape, device=device) for _ in range(NUM_ISEND)]
-        handlers = [dist.isend(tensors[i], 1, tag=i+1)
+        handlers = [dist.isend(tensors[i], 1, tag=i + 1)
                     for i in range(NUM_ISEND)]
     else:
         device = torch.device("cuda:1")
@@ -82,15 +83,13 @@ def gloo_cuda_test():
             torch.cuda.set_device(device)
         tensors = [torch.zeros(*shape, device=device)
                    for _ in range(NUM_ISEND)]
-        handlers = [dist.irecv(tensors[i], 0, tag=i+1)
+        handlers = [dist.irecv(tensors[i], 0, tag=i + 1)
                     for i in range(NUM_ISEND)]
 
     wait(handlers)
     for i in range(NUM_ISEND):
         assert torch.all(tensors[i] == torch.ones(*shape, device=device))
     print(f"Done {dist.get_rank()}")
-
-
 
 
 def test_general():
@@ -101,7 +100,7 @@ def test_general():
         if BACKAND == 'mpi':
             torch.cuda.set_device(device)
         tensors = [torch.ones(*shape, device=device) for _ in range(NUM_ISEND)]
-        handlers = [dist.isend(tensors[i], 1, tag=i+1)
+        handlers = [dist.isend(tensors[i], 1, tag=i + 1)
                     for i in range(NUM_ISEND)]
     else:
         device = torch.device("cuda:1" if BACKAND == 'mpi' else "cpu")
@@ -109,7 +108,7 @@ def test_general():
             torch.cuda.set_device(device)
         tensors = [torch.zeros(*shape, device=device)
                    for _ in range(NUM_ISEND)]
-        handlers = [dist.irecv(tensors[i], 0, tag=i+1)
+        handlers = [dist.irecv(tensors[i], 0, tag=i + 1)
                     for i in range(NUM_ISEND)]
 
     wait(handlers)
@@ -118,11 +117,9 @@ def test_general():
     print(f"Done {dist.get_rank()}")
 
 
-
 if __name__ == "__main__":
     gloo_cuda_test()
     # test_general()
-
 
 # CUDA_VISIBLE_DEVICES="5,6" mpirun -np 2 python many_isend.py
 # For CPU:
