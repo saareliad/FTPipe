@@ -2,6 +2,8 @@ import argparse
 import io
 import itertools
 import os
+# Avoid annoying import of tensorflow caused by HF transformers.
+os.environ['USE_TORCH']="1"
 import time
 from contextlib import redirect_stdout
 from pprint import pprint

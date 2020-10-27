@@ -184,12 +184,14 @@ def bert_large_uncased_squad_8p():
                 output_past=False,
                 stateless_tied=False)
 
+
 def bert_8p():
     return dict(model_type='bert_squad_new',
                 model_name_or_path='bert-large-uncased-whole-word-masking',
                 do_lower_case=True,
                 output_past=False,
                 stateless_tied=False)
+
 
 # GPipe version for the functions, as it has different balance.
 def gpt2_p4_lm_tied_gpipe():
@@ -328,6 +330,7 @@ def t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages():
                 },
                 stateless_tied=True)
 
+
 def t5_3b_tied_lmheads_64_4_8p_bw12_squad1_acyclic():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-3b',
@@ -343,6 +346,7 @@ def t5_3b_tied_lmheads_64_4_8p_bw12_squad1_acyclic():
                     "output_hidden_states": False
                 },
                 stateless_tied=True)
+
 
 def t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic():
     return dict(model_type='t5_stateless',
@@ -360,6 +364,7 @@ def t5_3b_tied_lmheads_512_4_8p_bw12_squad1_acyclic():
                 },
                 stateless_tied=True)
 
+
 def t5_small_tied_lmheads_512_4_3p_bw12_squad1_virtual_stages():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-small',
@@ -375,6 +380,7 @@ def t5_small_tied_lmheads_512_4_3p_bw12_squad1_virtual_stages():
                     "output_hidden_states": False
                 },
                 stateless_tied=True)
+
 
 def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
     return dict(model_type='t5_stateless',
