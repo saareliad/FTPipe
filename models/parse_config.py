@@ -85,10 +85,6 @@ class PartitioningConfigParser:
                                                                      stage_to_rank_map=stage_to_rank_map,
                                                                      prefer_seq_sends=prefer_seq_sends)
 
-        from pprint import pprint
-        pprint(f"Stage: {self.stage_id} send_ranks: {self.send_ranks}")
-        pprint(f"Stage: {self.stage_id} receive_ranks: {self.receive_ranks}")
-
         # Handle sending target in pipe. (deprecated)
         if send_target_in_pipe:
             warnings.warn("Sending targets in pipeline is deprecated")
@@ -113,11 +109,11 @@ class PartitioningConfigParser:
         self.training_tensor_dtypes = self.eval_tensor_dtypes = pipe_config.get_dtypes_for_stage(self.stage_id)
 
         # Grad requirements for input tensors
-        # FIXME: the could be done smarter
+        # FIXME: could be done smarter
         self.req_grad = pipe_config.get_inputs_req_grad_for_stage(self.stage_id)
 
         # Grad requirements for output tensors (infer)
-        # FIXME:
+        # FIXME: could be done smarter
         self.outputs_req_grad = pipe_config.get_outputs_req_grad_for_stage(self.stage_id)
 
         _check_shared_parameters(pipe_config)

@@ -103,7 +103,7 @@ class PipelineConfig:
         if 'req_grad' in next(iter(my_outputs.values())):
             return {i: v['req_grad'] for i, v in my_outputs.items()}
 
-        warnings.warn("inferring output req grad. deprecated")
+        warnings.warn("inferring output req grad from input req grad. (deprecated)")
         # its needed also for module outputs but the value is unused (don't care)
         # outputs_req_grad = {output: True for output in my_outputs}
         outputs_req_grad = {}
