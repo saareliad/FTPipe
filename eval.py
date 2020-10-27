@@ -95,13 +95,6 @@ def get_all_eval_results(args):
         else:
             raise NotImplementedError()
             # TODO: map with GPU queue.
-    elif args.dataset == "t5_squad":  # deprecated
-        from data.t5 import t5_squad
-        for cp_number in all_cps:
-            args.cp_number = cp_number
-            args.eval_on_cuda = True
-            squad_result = t5_squad.evaluate_squad_checkpoint(args, cp_number=args.cp_number)
-            all_results[cp_number] = squad_result
     else:
         # TODO: allow others.
         raise NotImplementedError()

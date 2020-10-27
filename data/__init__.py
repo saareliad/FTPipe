@@ -5,7 +5,7 @@ from .datasets import *
 from . import cv, lm
 from .from_args_and_kw import *
 # Now, import all so available datasets will be loaded
-from .t5 import t5_squad, t5_tfds
+from .t5 import t5_tfds
 
 
 def is_explicit_non_seperated_dataset(args):

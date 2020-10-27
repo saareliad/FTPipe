@@ -2,26 +2,27 @@ import os
 from typing import Dict
 
 import torch
-
-from data.utils import compute_and_cache
-from .t5_squad import get_inverted_encoder_attention_mask, _shift_right, get_attention_mask
-
-try:
-    import t5
-    import tensorflow_datasets as tfds
-    import mesh_tensorflow.transformer.dataset as transformer_dataset
-    import tensorflow.compat.v1 as tf
-except Exception as e:
-    print("please use: pip install t5")
-    raise e
-
 from torch.utils.data import TensorDataset
+
 from data.datasets import CommonDatasetHandler, register_dataset
-from .t5_tfds_eval import T5Evaluator
+from data.utils import compute_and_cache
 from experiments.experiments import auto_file_name
+from .preproc import _shift_right, get_attention_mask, get_inverted_encoder_attention_mask
+from .t5_tfds_eval import T5Evaluator
+
+
+# try:
+#     import t5
+#     import tensorflow_datasets as tfds
+#     import mesh_tensorflow.transformer.dataset as transformer_dataset
+#     import tensorflow.compat.v1 as tf
+# except Exception as e:
+#     print("please use: pip install t5")
+#     raise e
 
 
 def get_t5_available_tasks(verbose=False):
+    import t5
     if verbose:
         for i in t5.data.TaskRegistry.names():
             print(i)
@@ -38,7 +39,7 @@ def get_t5_sequence_length_from_args(args):
 
 def torch_tensor_dict_from_args(args,
                                 config,
-                                dataset_split=tfds.Split.TRAIN,
+                                dataset_split="train",
                                 preproc_device="cpu"):
     mixture_or_task_name = args.mixture_or_task_name
     sequence_length = get_t5_sequence_length_from_args(args)
@@ -66,7 +67,7 @@ def rte_tensor_dataset(config,
                       "inputs": 128,
                       "targets": 16
                   },
-                  dataset_split=tfds.Split.TRAIN,
+                  dataset_split="train",
                   use_cached=False,
                   pack=False)
 
@@ -143,9 +144,13 @@ def our_collate_fn(batch, device, config):
 
 def like_mtf(mixture_or_task_name: str,
              sequence_length: Dict[str, int],
-             dataset_split=tfds.Split.TRAIN,
+             dataset_split="train",
              use_cached=False,
              pack=True):
+    import t5
+    import tensorflow.compat.v1 as tf
+    import mesh_tensorflow.transformer.dataset as transformer_dataset
+
     # https://github.com/google-research/text-to-text-transfer-transformer/blob/5053a463eac3423284c327bf36e61988189239c1/t5/models/mesh_transformer.py
 
     mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
@@ -186,11 +191,14 @@ def like_mtf(mixture_or_task_name: str,
 
 
 def tokens_to_batches(dataset, batch_size, drop_remainder=False):
+    import tensorflow_datasets as tfds
     dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
     return tfds.as_numpy(dataset)
 
 
 def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
+    # import tensorflow_datasets as tfds
+
     config = dataset_keywords['config']
     preproc_device = dataset_keywords.get("preproc_device", "cpu")
 
@@ -217,34 +225,29 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     def compute_full_train():
         return torch_tensor_dict_from_args(args,
                                            config,
-                                           dataset_split=tfds.Split.TRAIN,
+                                           dataset_split="train",
                                            preproc_device=preproc_device)
 
     def compute_full_eval():
         return torch_tensor_dict_from_args(args,
                                            config,
-                                           dataset_split=tfds.Split.VALIDATION,
+                                           dataset_split="validation",
                                            preproc_device=preproc_device)
 
-    def compute_subset_train():
-        d = compute_and_cache(compute_full_train, big_cache_name_train)
+    def compute_subset_from_full(full_func, full_cache_name):
+        d = compute_and_cache(full_func, full_cache_name)
         to_drop = [i for i in d.keys() if i not in subset_of_inputs]
-        # train_dataset.drop(to_drop)
         for i in to_drop:
             del d[i]
         d = [torch.tensor(d[i]) for i in just]
-        train_dataset = TensorDataset(*d)
-        return train_dataset
+        ds = TensorDataset(*d)
+        return ds
+
+    def compute_subset_train():
+        return compute_subset_from_full(compute_full_train, big_cache_name_train)
 
     def compute_subset_eval():
-        d = compute_and_cache(compute_full_eval, big_cache_name_eval)
-        to_drop = [i for i in d.keys() if i not in subset_of_inputs]
-        # train_dataset.drop(to_drop)
-        for i in to_drop:
-            del d[i]
-        d = [torch.tensor(d[i]) for i in just]
-        dev_dataset = TensorDataset(*d)
-        return dev_dataset
+        return compute_subset_from_full(compute_full_eval, big_cache_name_eval)
 
     train_dataset = compute_and_cache(compute_subset_train,
                                       small_cache_name_train)

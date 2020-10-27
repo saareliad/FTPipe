@@ -1,16 +1,14 @@
-import os
 import torch
-from torch.utils.data import Dataset, DistributedSampler, DataLoader, Sampler
-from typing import List, Tuple
+from torch.utils.data import DataLoader
+
 from models.simple_partitioning_config import PipelineConfig
-from .hardcoded_dirs import DEFAULT_DATA_DIR
-
-
 from .datasets import (
     AVAILABLE_DATASETS,
     # DICT_DATASET_JUST_XY_FUNC,
     MyNewDistributedSampler
 )
+from .hardcoded_dirs import DEFAULT_DATA_DIR
+
 
 # new_distributed_get_train_valid_dl_from_args  (train, valid)
 # simplified_get_train_valid_dl_from_args  (train, valid)
@@ -66,18 +64,17 @@ def get_dataloader_keywords(args):
 
 
 def get_data_dir(args):
-    # TODO: according to ranks, for replicated stages.
     DATA_DIR = getattr(args, "data_dir", DEFAULT_DATA_DIR)
     DATA_DIR = DATA_DIR if DATA_DIR else DEFAULT_DATA_DIR
     return DATA_DIR
 
-# TODO: handle dl_kw being propegated
+
 def get_separate_dls_from_args(args,
                                pipe_config=None,
                                dataset_keywords=dict(),
                                verbose=False,
                                # currently unused:
-                               shuffle_train=True,):
+                               shuffle_train=True, ):
     just = get_just(args, pipe_config=pipe_config)
     if not just and not getattr(args, "load_extra_inputs", False):  # Empty
         return None, None, [], None
@@ -85,13 +82,13 @@ def get_separate_dls_from_args(args,
     dataloader_keywords = get_dataloader_keywords(args)
     assert 'shuffle' not in dataloader_keywords, str(dataloader_keywords)
     experiment_manual_seed = torch.initial_seed()
-    
+
     try:
         handler = AVAILABLE_DATASETS[args.dataset](just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
     except KeyError as e:
         print("available datasets", AVAILABLE_DATASETS.keys())
         raise e
-    
+
     ds_train = handler.get_train_ds(just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
     ds_test = handler.get_test_ds(just=just, DATA_DIR=data_dir, args=args, **dataset_keywords)
     dataloader_keywords = handler.modify_dataloader_keywords(dataloader_keywords)

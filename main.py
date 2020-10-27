@@ -33,17 +33,17 @@ def parse_distributed_cli(parser):
     parser.add_argument('--rank',
                         default=None,
                         type=int,
-                        help="Rank of worker")
+                        help="Rank of worker, given by torch.distributed.launch, overridden otherwise")
     parser.add_argument('--local_rank',
                         default=0,
                         type=int,
-                        help="Local rank of worker")
+                        help="Local rank of worker, given by torch.distributed.launch, overridden otherwise")
 
     parser.add_argument('--distributed_backend',
                         choices=['gloo', 'nccl', 'mpi'],
                         default='mpi',
                         type=str,
-                        help='distributed backend to use')
+                        help='distributed backend to use, given by torch.distributed.launch, overridden otherwise')
 
     parser.add_argument('--nnodes', default=1, type=int, help='number of nodes')
 
@@ -286,8 +286,10 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
     print(f"rank{rank}: save_distributed_experiment - Done")
 
 
-def mp_queue_matrix(args, ack=False):
+def mp_queue_matrix(args, ack=False, start_method='spawn'):
     """create queues matrix to be shared among precesses"""
+    mmp = mp.get_context(start_method)
+
     world_size = args.world_size
     cfg = args.model
     prefer_seq_sends = True
@@ -317,10 +319,10 @@ def mp_queue_matrix(args, ack=False):
         # send_ranks_i: recv acks on activations from these ranks
         # receive_ranks_i:  little less than # recv acks on gradients from these ranks
         for r in itertools.chain.from_iterable(send_ranks_i.values()):
-            queues[rank][r] = mp.SimpleQueue()
+            queues[rank][r] = mmp.SimpleQueue()
 
         for r in itertools.chain.from_iterable(receive_ranks_i.values()):
-            queues[rank][r] = mp.SimpleQueue()
+            queues[rank][r] = mmp.SimpleQueue()
 
     return queues
 
@@ -426,18 +428,22 @@ def start_mutiprocessing():
     parse_json_config(args, args.config, first=True)
     args.world_size = args.nprocs
 
-    # create queus for communication
-    rcv_queues = mp_queue_matrix(args)
-    buffer_reuse_queues = mp_queue_matrix(args)
+    start_method='spawn'
+    # create queues for communication
+    rcv_queues = mp_queue_matrix(args, start_method=start_method)
+    buffer_reuse_queues = mp_queue_matrix(args,start_method=start_method)
     # TODO: change to normal q
     share = (rcv_queues, buffer_reuse_queues)
+
+    assert not torch.cuda.is_initialized()
+
 
     mp.start_processes(multiprocessing_worker,
                        args=(args, share),
                        nprocs=args.nprocs,
                        join=True,
                        daemon=False,
-                       start_method='fork')
+                       start_method=start_method)
 
 
 def start_mpi_overlay():

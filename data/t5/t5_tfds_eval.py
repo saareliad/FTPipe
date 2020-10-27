@@ -3,8 +3,8 @@ import logging
 import os
 import warnings
 
-import t5
-import tensorflow.compat.v1 as tf
+# import t5
+# import tensorflow.compat.v1 as tf
 import torch
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
@@ -12,7 +12,6 @@ from transformers import T5ForConditionalGeneration
 from models.load_pipeline_weights_to_hf import T5HFLoader
 from models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
-get_dataset = t5.models.hf_model.get_dataset
 
 
 def load_huggingface_checkpoint(args, cp_number, spread_across_devices=True, **kwargs):
@@ -144,6 +143,10 @@ class T5Evaluator:
             decoding strategy. See the documentation for
             `transformers.PretrainedModel.generate()` for options.
         """
+        import t5
+        import tensorflow.compat.v1 as tf
+        get_dataset = t5.models.hf_model.get_dataset
+
         mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
         vocab = mixture_or_task.output_features["targets"].vocabulary
 
@@ -277,6 +280,8 @@ class T5Evaluator:
 
 
 def write_lines_to_file(lines, filename):
+    import tensorflow.compat.v1 as tf
+
     """Write each line to filename, replacing the file if it exists."""
     if tf.io.gfile.exists(filename):
         tf.io.gfile.remove(filename)
