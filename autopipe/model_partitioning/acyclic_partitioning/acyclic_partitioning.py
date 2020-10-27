@@ -33,7 +33,7 @@ STAGE_TIME_MSE = False
 # and is parallelized anyways
 # if someday we'll partition with replication this would need to be addressed
 
-# TODO decide wether to enable stage_time mse objective
+# TODO decide whether to enable stage_time mse objective
 
 # TODO edge weights are not consistent across levels when using multilevel partitioning
 # we have the assumption that edge weights are dependant only on the source
@@ -597,7 +597,7 @@ def calculate_edge_cut(edge_weights: Dict[Tuple[SimpleNode, SimpleNode], float])
 ###################################################################################################
 
 def calculate_stage_time_gain(v: SimpleNode, dst: int, state: PartitionState, use_mse=STAGE_TIME_MSE) -> float:
-    # TODO decide wether to include communication
+    # TODO decide whether to include communication
     node_weights = state.node_weights
     volumes = state.stage_volumes
 

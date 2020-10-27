@@ -51,7 +51,7 @@ def compile_partitioned_model(graph: Graph,
     generate_activation_propagation:
         in cases where a stage sends an activation to multiple stages.
         for example 0->[1,3,4]
-        decide weather to have each stage send the activation to the next target
+        decide whether to have each stage send the activation to the next target
         0->1->3->4
         or have it sent directly from the source
     output_file:

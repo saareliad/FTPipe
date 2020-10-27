@@ -476,7 +476,7 @@ def variableNameGenerator() -> Iterator[str]:
 
 
 def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_inputs: List[Node]):
-    # the folowing will cause an error because
+    # the following will cause an error because
     # def forward(self,x0):
     # x0+=1
     # when we detach we make x0 a leaf

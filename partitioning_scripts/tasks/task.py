@@ -142,30 +142,30 @@ class Parser(argparse.ArgumentParser, ABC):
             default=False,
             action="store_true",
             help=
-            "wether to use the old network_profiler instead of the newer graph based profiler"
+            "whether to use the old network_profiler instead of the newer graph based profiler"
         )
         group.add_argument(
             "--disable_op_profiling",
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        group.add_argument("--partitioning_method", choices=["ACYCLIC", "METIS", "2DBIN"], default="ACYCLIC")
+        group.add_argument("--partitioning_method", "-m", choices=["ACYCLIC", "METIS", "2DBIN"], default="ACYCLIC")
         group.add_argument(
             "--generate_model_parallel",
             action="store_true",
             default=False,
             help=
-            "wether to generate a modelParallel version of the partitioning")
+            "whether to generate a modelParallel version of the partitioning")
         group.add_argument(
             "--generate_explicit_del",
             action="store_true",
             default=False,
-            help="wether to generate del statements in partitioned code")
+            help="whether to generate del statements in partitioned code")
         group.add_argument(
             "--no_activation_propagation",
             action="store_true",
             default=False,
-            help="wether to not propgate activations in the pipeline, and having direct sends instead"
+            help="whether to not propgate activations in the pipeline, and having direct sends instead"
         )
 
         group.add_argument("-a",
@@ -198,7 +198,7 @@ class Parser(argparse.ArgumentParser, ABC):
         group.add_argument("--metis_attempts", type=int, default=1000,
                            help="number of attempts for running the METIS partitioning algorithm")
         group.add_argument("--metis_verbose_on_error", action="store_true", default=False,
-                           help="wether to print the cause of the error")
+                           help="whether to print the cause of the error")
         group.add_argument("--metis_seed",
                            required=False,
                            type=int,
@@ -287,7 +287,7 @@ class Parser(argparse.ArgumentParser, ABC):
             "--multilevel",
             action="store_true",
             default=False,
-            help="wether to use multilevel partitioning algorithm")
+            help="whether to use multilevel partitioning algorithm")
         group.add_argument("--objective",
                            choices=["edge_cut", "stage_time"],
                            default="stage_time",

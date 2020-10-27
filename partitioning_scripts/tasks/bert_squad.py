@@ -92,7 +92,7 @@ class ParsePartitioningOptsSquad(Parser):
             "--precompute_attention_mask",
             action="store_true",
             default=False,
-            help="wether to compute attention mask inside or outside the model"
+            help="whether to compute attention mask inside or outside the model"
         )
         group.add_argument(
             "--max_seq_length",

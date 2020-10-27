@@ -6,7 +6,7 @@ from typing import Dict, List
 
 try:
     import datasets as nlp
-except Exception as e:
+except ImportError as e:
     warnings.warn("Did not find datasets, will import nlp instead")
     import nlp
 
