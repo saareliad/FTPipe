@@ -1,4 +1,5 @@
 import os
+import pickle
 
 import torch
 
@@ -25,9 +26,33 @@ class TorchCache:
             torch.save(self.v, self.cache_name)
 
 
+class PickleCache:
+    def __init__(self, cache_name, overwrite=False):
+        self.cache_name = cache_name
+        self.exists = os.path.exists(cache_name)
+        self.overwrite = overwrite
+        self.v = None
+
+    def __enter__(self):
+        if self.exists:
+            print(f"loading from cache: {self.cache_name}")
+            with open(self.cache_name, "rb") as f:
+                self.v = pickle.load(f)
+        else:
+            print(f"computing value for {self.cache_name}")
+        return self
+
+    def __exit__(self, type, value, traceback):
+        if not self.exists or self.overwrite:
+            print(f"saving to cache: {self.cache_name}")
+            assert self.v is not None, "You should enter a value"
+            with open(self.cache_name, "wb") as f:
+                pickle.dump(self.v, f)
+
+
 def compute_and_cache(compute_function, cache_name, *args, **kw):
     """
-    Compute or load from cache, optionaly save results to cache.
+    Compute or load from cache, optionally save results to cache.
     Return computed value
     Examples:
         # compute big

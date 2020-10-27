@@ -474,6 +474,8 @@ def get_cifar_10_just_x_or_y_train_ds(**kw):
     DATA_DIR = kw.get("DATA_DIR", DEFAULT_DATA_DIR)
 
     train_transform, _ = cifar10_transformations()
+    if not isinstance(just, str):
+        raise ValueError(f"'just' should be in x,y. Got {just} instead.")
     just = just.lower()
     if just == 'x':
         ds_train_X = CIFAR10JustX(root=DATA_DIR,

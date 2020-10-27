@@ -25,7 +25,7 @@ from .datasets import (
 
 
 def _is_hardcoded_xy(args):
-    HARDCODED_JUST_XY = {"cifar100", "cifar100", "imagenet", "wt2"}  # HACK: used to hardcode this.
+    HARDCODED_JUST_XY = {"cifar10", "cifar100", "imagenet", "wt2"}  # HACK: used to hardcode this.
     is_hardcoded_xy = args.dataset in HARDCODED_JUST_XY
     return is_hardcoded_xy
 

@@ -47,3 +47,11 @@ register_cv_hardcoded_model(name='resnet50_imagenet_p8',
                dict_params=dict(block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000),
                model_class=ResNet,
                generated_file_name_or_path='resnet50_imagenet_p8')
+
+
+register_cv_hardcoded_model(name='wrn_16x4_c10_p2',
+                            dict_params=dict(depth=16, num_classes=10, widen_factor=4, drop_rate=0.0),
+                            model_class=WideResNet,
+                            generated_file_name_or_path='wrn_16x4_c10_p2')
+
+
