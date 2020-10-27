@@ -2,8 +2,9 @@ import argparse
 import io
 import itertools
 import os
+
 # Avoid annoying import of tensorflow caused by HF transformers.
-os.environ['USE_TORCH']="1"
+os.environ['USE_TORCH'] = "1"
 import time
 from contextlib import redirect_stdout
 from pprint import pprint
@@ -330,6 +331,8 @@ def mp_queue_matrix(args, ack=False, start_method='spawn'):
 
 
 def multiprocessing_worker(rank, args, share):
+    # This is set and forced so the dataloader forks with COW.
+    mp.set_start_method('fork', force=True)
     local_rank = rank
     args.rank = rank
     args.local_rank = local_rank
@@ -429,18 +432,13 @@ def start_mutiprocessing():
     args = parse_cli()
     parse_json_config(args, args.config, first=True)
     args.world_size = args.nprocs
-    start_method='fork'
-
-    mp.set_start_method(start_method)
+    # should be able to fork here as well, but something calls poison_fork() and I didn't find it...
+    start_method = 'spawn'
 
     # create queues for communication
     rcv_queues = mp_queue_matrix(args, start_method=start_method)
-    buffer_reuse_queues = mp_queue_matrix(args,start_method=start_method)
-    # TODO: change to normal q
+    buffer_reuse_queues = mp_queue_matrix(args, start_method=start_method)
     share = (rcv_queues, buffer_reuse_queues)
-
-    assert not torch.cuda.is_initialized()
-
 
     mp.start_processes(multiprocessing_worker,
                        args=(args, share),
