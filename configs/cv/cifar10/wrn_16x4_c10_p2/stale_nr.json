@@ -7,6 +7,7 @@
     "statistics": "cv",
     "distributed_backend": "mpi",
     "model": "wrn_16x4_c10_p2",
+    "stage_to_device_map": [0, 1],
     "dataset": "cifar10",
     "trainer": {
         "type": "cv",
