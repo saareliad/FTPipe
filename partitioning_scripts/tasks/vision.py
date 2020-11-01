@@ -5,9 +5,11 @@ from models.normal.vision_models import ResNet
 from . import register_task
 from .task import Parser, Partitioner
 
-
-#model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
-_HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"))
+# model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
+_HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"),
+            vit_large_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_large_patch16_224',
+                                       pretrained=True)
+            )
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
