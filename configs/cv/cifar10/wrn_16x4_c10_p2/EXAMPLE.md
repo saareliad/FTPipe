@@ -37,7 +37,6 @@ relevant lines in [configs/cv/cifar10/wrn_16x4_c10_p2/stale_nr.json](configs/cv/
 to
 ```json
     "stage_to_device_map": [0, 0],
-    "nprocs": 1,
 ```
 
 ## Model
