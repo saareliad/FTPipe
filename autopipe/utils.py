@@ -12,9 +12,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-__all__ = ["traverse_model", "traverse_params_buffs",
-           "layerDict", "tensorDict"]
-
 
 def is_None(a):
     return operator.is_(a, None)
@@ -33,7 +30,7 @@ ExecTimes = collections.namedtuple(
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
                    basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[
     Tuple[nn.Module, str, nn.Module]]:
-    '''
+    """
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
     -----------
@@ -45,7 +42,7 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
         a list of modules that if encountered will not be broken down
     full:
         whether to yield only layers specified by the depth and basick_block options or to yield all layers
-    '''
+    """
     if prefix is None:
         prefix = type(module).__name__
 
@@ -63,14 +60,14 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
 
 
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
-    '''
+    """
     iterate over model's buffers and parameters yielding obj,obj_scope
 
     Parameters:
     -----------
     model:
         the model to iterate over
-    '''
+    """
     if prefix is None:
         prefix = type(module).__name__
 
@@ -233,7 +230,7 @@ def force_out_of_place(func):
 
     ##############################
     # Magic Method delegation
-    # intentionaly explicit
+    # intentionally explicit
     # NOTE if the method requires specific syntax
     # then it should be also added in model_profiling/tracer.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
@@ -337,7 +334,7 @@ def convert_none_checks(input_file: str, output_file: str):
         path to the python output file to which write the result
     """
     res = []
-    modifed = False
+    modified = False
     with open(input_file, 'r') as f:
         for idx, original in enumerate(f.readlines()):
             is_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is None'
@@ -345,7 +342,7 @@ def convert_none_checks(input_file: str, output_file: str):
             line = re.sub(is_None_pattern, r'is_None(\1)', original)
             line = re.sub(is_not_None_pattern, r'is_not_None(\1)', line)
             if line != original:
-                modifed = True
+                modified = True
                 print(f"-I- changed line {idx}")
                 print(f"from {original.lstrip().rstrip()}")
                 print(f"to {line.lstrip().rstrip()}")
@@ -353,7 +350,7 @@ def convert_none_checks(input_file: str, output_file: str):
 
             res.append(line)
 
-    if modifed:
+    if modified:
         lines = ['import operator\n']
         lines.append(inspect.getsource(is_None))
         lines.append(inspect.getsource(is_not_None))
