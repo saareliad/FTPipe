@@ -3,16 +3,17 @@ import os
 import pathlib
 import warnings
 from collections import OrderedDict
-from typing import List, Dict, Optional, Iterable
-import networkx as nx
 from functools import reduce
+from typing import List, Dict, Optional, Iterable
 
+import networkx as nx
 from torch.nn import Module
+
 from autopipe.model_partitioning.utils import re_assign_partition_indices
 from autopipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
 # from .partition_class import Partition
-from .compile_modelParallel_module import create_model_parallel_module
+from .compile_single_machine_model_parallel import create_model_parallel_module
 from .create_pipeline_configuration import create_pipeline_configuration
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
@@ -28,10 +29,10 @@ def compile_partitioned_model(graph: Graph,
                               model: Module,
                               batch_dim: int,
                               generate_model_parallel: bool = False,
-                              generate_explicit_del=False,
-                              generate_activation_propagation=True,
+                              generate_explicit_del: bool = False,
+                              generate_activation_propagation: bool = True,
                               output_file: Optional[str] = None,
-                              move_tensors=False):
+                              ):
     """
     generates the code for the partitioned model.
        The partitions can be consumed using the `create_pipeline_configuration` method in the generated code
@@ -144,9 +145,9 @@ def group_nodes_by_stage_id(nodes: Iterable[Node]) -> Dict[int, List[Node]]:
     """
     Groups nodes by their stage_id
     """
-    idxs = {n.stage_id for n in nodes}
+    ids = {n.stage_id for n in nodes}
     stages = OrderedDict()
-    for i in sorted(idxs):
+    for i in sorted(ids):
         stages[i] = []
 
     for n in nodes:
@@ -267,7 +268,7 @@ def get_stages_depth_from_end(graph) -> Dict[int, int]:
 
     distance_dict = {i: longest_depth_length(i) for i in range(num_partitions)}
 
-    for i,v in distance_dict.items():
+    for i, v in distance_dict.items():
         if v < 0:
             warnings.warn(f"Stage {i} was not used in output calculation. distance_dict={distance_dict}")
 
@@ -276,7 +277,7 @@ def get_stages_depth_from_end(graph) -> Dict[int, int]:
         d = {}
         pard = {}
         for x in all_depths:
-            d[x] = [s for s, xx in distance_dict.items() if xx==x]
+            d[x] = [s for s, xx in distance_dict.items() if xx == x]
             if len(d[x]) > 1:
                 pard[x] = d[x]
 

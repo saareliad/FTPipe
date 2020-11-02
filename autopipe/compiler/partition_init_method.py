@@ -2,7 +2,7 @@ import re
 from itertools import chain
 from typing import List, Tuple, Dict
 
-from .utils import sortedPartitionInputs, pretty_format_obj
+from .utils import get_sorted_partition_inputs, pretty_format_obj
 from ..model_profiling import Node
 from ..utils import nested_map
 
@@ -42,7 +42,7 @@ def generate_init_method(nodes: List[Node], class_name: str, layers: List[Node],
     device = f"{dtab}self.device = torch.device(device)"
     move = f"{dtab}self.to(self.device)"
 
-    structure = nested_map(lambda x: 1, [n.req_grad for n in sortedPartitionInputs(nodes)])
+    structure = nested_map(lambda x: 1, [n.req_grad for n in get_sorted_partition_inputs(nodes)])
 
     cfg = f"{dtab}self.input_structure = {pretty_format_obj(structure)}"
 

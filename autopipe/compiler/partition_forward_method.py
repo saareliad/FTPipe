@@ -1,4 +1,5 @@
 import re
+import warnings
 from collections import defaultdict, deque
 from importlib import import_module
 from itertools import chain
@@ -6,7 +7,7 @@ from typing import List, Tuple, Dict, Iterator, Set
 
 import torch
 
-from .utils import sortedPartitionInputs, partitionOutputs
+from .utils import get_sorted_partition_inputs, get_partition_outputs
 from ..model_profiling import used_namespaces, Node, NodeTypes, Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops, arithmetic_ops, logical_ops, conversion_ops, magics, \
     tensor_creation_ops, unary_ops
@@ -14,22 +15,24 @@ from ..utils import inplace_arithmetic_ops, r_arithmetic_ops, arithmetic_ops, lo
 tab = '    '
 dtab = tab + tab
 
-__all__ = ['generate_forward_method']
+
+# __all__ = ['generate_forward_method']
 
 
-# TODO: remove coupling between IO (config) and code generation and create IO somewhere else.
+# TODO: remove coupling between IO (config) and forward code generation
+#  (create the IO somewhere else).
 
 def generate_forward_method(stage_id: int,
                             graph: Graph,
                             partition_nodes: List[Node],
                             model_outputs: List[Node],
-                            partition_fields: Dict[str, str],
+                            partition_fields: Dict[Node, str],
                             stage_depth_from_end: int,  # see TODO above...
                             generate_explicit_del=False,
                             generate_activation_propagation=True,
                             move_tensors=False) -> Tuple[List[str], Dict[str, List]]:
-    """the gateway to generate a forward function of a partition
-    """
+    """Generate a forward method of a partition"""
+
     # function arguments are x0...xn
     # function arguments correspond to sorted input scopes
     # functions outputs are o0,o1,... sorted by their scopes
@@ -37,11 +40,10 @@ def generate_forward_method(stage_id: int,
     # constants are embedded in use site
     # function and layers are allocated temporary only if they have more than 1 use
 
-    inputs = sortedPartitionInputs(partition_nodes)
+    inputs = get_sorted_partition_inputs(partition_nodes)
     enforce_out_of_place_for_partition_inputs(partition_nodes, inputs)
     i = 0
     input_ids = []
-    input_sources = []
     for n in inputs:
         if n.id in graph.input_kw_ids:
             input_ids.append(graph.input_kw_ids[n.id])
@@ -49,10 +51,7 @@ def generate_forward_method(stage_id: int,
             input_ids.append(f"x{i}")
             i += 1
 
-        if n.type is NodeTypes.IN:
-            input_sources.append(-1)
-        else:
-            input_sources.append(n.stage_id)
+    input_sources = get_input_source_stages(inputs)
 
     ready_expressions = dict()
     # partition buffers and params are also ready
@@ -67,11 +66,9 @@ def generate_forward_method(stage_id: int,
     input_scopes = [graph.input_kw_ids.get(node.id, node.scope) for node in inputs]
     ready_expressions.update(zip(inputs, input_ids))
 
-    lines = []
-    lines.append(
-        generateDeclaration(input_ids, partition_fields,
-                            ready_expressions, move_tensors=move_tensors))
-    outputs = partitionOutputs(partition_nodes, model_outputs)
+    lines = [generate_declaration(input_ids, partition_fields,
+                                  ready_expressions, move_tensors=move_tensors)]
+    outputs = get_partition_outputs(partition_nodes, model_outputs)
 
     if generate_activation_propagation:
         # NOTE this just ensures correct code generation for input propagation
@@ -79,23 +76,15 @@ def generate_forward_method(stage_id: int,
         # this is done in the compile_partitioned_model.generate_config_with_input_propagation
         outputs = apply_input_propagation(stage_id, outputs, inputs)
 
-    outputs = sorted(outputs, key=lambda n: n.id)
+    outputs = sorted(outputs, key=lambda node: node.id)
 
-    output_destinations = []
-    for n in outputs:
-        dsts = []
-        if n.id in graph.output_ids:
-            dsts.append(-1)
-        dsts.extend(o.stage_id for o in n.out_edges)
-        dsts = set(dsts)
-        dsts.discard(n.stage_id)
-        output_destinations.append(list(dsts))
+    output_destinations = get_output_destination_stages(graph, outputs)
 
     out_scopes = [graph.input_kw_ids.get(n.id, n.scope) for n in outputs]
-    body = generateBody(outputs,
-                        partition_nodes,
-                        partition_fields,
-                        ready_expressions)
+    body = generate_body(outputs,
+                         partition_nodes,
+                         partition_fields,
+                         ready_expressions)
 
     if generate_explicit_del:
         body = add_del_statements(body)
@@ -125,10 +114,34 @@ def generate_forward_method(stage_id: int,
     return lines, io
 
 
-def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
-                                                                     str],
-                        input_args: Dict[Node, str], move_tensors=False) -> str:
-    """ generates the forward function declaration and the variable map of inputs and layers
+def get_output_destination_stages(graph, outputs):
+    # Get output destinations
+    output_destinations = []
+    for n in outputs:
+        destinations = []
+        if n.id in graph.output_ids:
+            destinations.append(-1)
+        destinations.extend(o.stage_id for o in n.out_edges)
+        destinations = set(destinations)
+        destinations.discard(n.stage_id)
+        output_destinations.append(list(destinations))
+    return output_destinations
+
+
+def get_input_source_stages(inputs):
+    input_sources = []
+    for n in inputs:
+        if n.type is NodeTypes.IN:
+            input_sources.append(-1)
+        else:
+            input_sources.append(n.stage_id)
+    return input_sources
+
+
+def generate_declaration(input_ids: List[str], partition_fields: Dict[Node,
+                                                                      str],
+                         input_args: Dict[Node, str], move_tensors=False) -> str:
+    """Generates the forward function declaration and the variable map of inputs and layers
     """
     lines = [tab + f'def forward(self, *args):\n']
 
@@ -152,11 +165,11 @@ def generateDeclaration(input_ids: List[str], partition_fields: Dict[Node,
     return ''.join(lines)
 
 
-def generateBody(outputs: List[Node],
-                 partition: List[Node],
-                 scope_to_class_field: Dict[str, str],
-                 ready_expressions: Dict[Node, str]) -> List[str]:
-    """generates the forward function body and return statement
+def generate_body(outputs: List[Node],
+                  partition: List[Node],
+                  partition_layer_nodes_to_field_id: Dict[Node, str],
+                  ready_expressions: Dict[Node, str]) -> List[str]:
+    """Generates the forward function body and return statement
     """
     uses = node_uses(partition, set(outputs))
     # do not overwrite the model layers/buffers/parameters
@@ -164,7 +177,7 @@ def generateBody(outputs: List[Node],
         uses[e] = 100000
 
     statements = generate_statements(partition,
-                                     scope_to_class_field,
+                                     partition_layer_nodes_to_field_id,
                                      ready_expressions,
                                      uses)
     return_statement = generate_return_statement(outputs,
@@ -176,10 +189,10 @@ def generateBody(outputs: List[Node],
 
 
 def generate_statements(partition_nodes: List[Node],
-                        partition_layers: Dict[str, str],
+                        partition_layer_nodes_to_field_id: Dict[Node, str],
                         ready_expressions: Dict[Node, str],
                         uses: Dict[Node, int]) -> List[str]:
-    """ generate statements according to topological ordering of the partition
+    """ Generate statements according to topological ordering of the partition
         constants will be inlined, variable names will be reused
     """
     statements = []
@@ -210,7 +223,7 @@ def generate_statements(partition_nodes: List[Node],
                                                      ready_expressions)
 
             statements.append(
-                f"{variable_name} = {partition_layers[node]}({parameter_list})")
+                f"{variable_name} = {partition_layer_nodes_to_field_id[node]}({parameter_list})")
 
         elif node_type is NodeTypes.PRIMITIVE:
             statement = generate_container_construct(ready_expressions,
@@ -223,17 +236,13 @@ def generate_statements(partition_nodes: List[Node],
             namespace, func_name = op_path.split("::")
             # function call
             if namespace in namespaces:
-                # NOTE for cases like torch.zeros() without device arg      
-                # for example partitinoing code like
-                # def f():
-                #  x = torch.arange(10)
-                #  y = x - torch.arange(12)
-                # it those 2 statements are on different stages we will have an error for device mismatch (y was created on cpu, and x was moved to GPU)
+                # NOTE for cases like torch.zeros() without device arg for example partitioning code might have
+                # device mismatch, so we inject the correct device
 
-                inject_device = (namespace == "torch") and (func_name in tensor_creation_ops_names)
+                should_inject_device = (namespace == "torch") and (func_name in tensor_creation_ops_names)
 
                 parameter_list = generate_parameter_list(node.args, node.kwargs,
-                                                         ready_expressions, inject_device=inject_device)
+                                                         ready_expressions, should_inject_device=should_inject_device)
                 statements.append(
                     f"{variable_name} = {namespace}.{func_name}({parameter_list})")
 
@@ -367,7 +376,7 @@ def generate_magic(variable_name, self_arg, func_name, param_list):
     return statement
 
 
-def generate_parameter_list(node_args, node_kwargs, ready_expressions, inject_device=False, string=True):
+def generate_parameter_list(node_args, node_kwargs, ready_expressions, should_inject_device=False, string=True):
     has_device_arg = any(a.value_type is torch.device for a in node_args)
     has_device_arg |= any(a.value_type is torch.device for a in node_kwargs.keys())
     args = [ready_expressions[a] for a in node_args]
@@ -376,8 +385,8 @@ def generate_parameter_list(node_args, node_kwargs, ready_expressions, inject_de
         for k in kws:
             kwargs.append(f"{k}={ready_expressions[a]}")
 
-    if inject_device and (not has_device_arg):
-        kwargs.append("device = self.device")
+    if should_inject_device and (not has_device_arg):
+        kwargs.append("device=self.device")
 
     if string:
         return ", ".join(args + kwargs)
@@ -388,7 +397,7 @@ def generate_return_statement(output_nodes: List[Node], ready_expressions: Dict[
     """ generate the return statement and descriptive comment
     """
     scope_comment = f'\n{dtab}# '.join(map(lambda n: n.scope, output_nodes))
-    comment = f'# returning:\n{dtab}# {scope_comment}'
+    comment = f'# Returning:\n{dtab}# {scope_comment}'
 
     if len(output_nodes) == 1:
         output = output_nodes[0]
@@ -404,7 +413,7 @@ def generate_return_statement(output_nodes: List[Node], ready_expressions: Dict[
 
 def add_del_statements(statements: List[str]) -> Iterator[str]:
     """
-    perform liveness analysis and insert delete variables when they are no longer used
+    perform liveliness analysis and insert delete variables when they are no longer used
     """
     # t1 = 10
     # t2 = t1+10
@@ -475,7 +484,7 @@ def variableNameGenerator() -> Iterator[str]:
     return iter(f())
 
 
-def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_inputs: List[Node]):
+def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_inputs: List[Node], warn=True):
     # the following will cause an error because
     # def forward(self,x0):
     # x0+=1
@@ -496,7 +505,7 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_i
 
         if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
             u = n.in_edges[0]
-            if not ((u.value_type is torch.Tensor) and (u.req_grad) and (u in partition_inputs)):
+            if not ((u.value_type is torch.Tensor) and u.req_grad and u in partition_inputs):
                 continue
             if inplace_tensor_magic:
                 # function is an __imagic__
@@ -507,15 +516,18 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_i
                 # function torch.func_ or Tensor.func_
                 n.scope = n.scope.rsplit("/", maxsplit=1)[0] + f"/{namespace}::{func_name[:-1]}_{idx}"
 
+            if warn:
+                warnings.warn(f"Enforcing out of place for {op_path}")
+
 
 def apply_input_propagation(stage_id: int, outputs: List[Node], inputs: List[Node]) -> Set[Node]:
     for i in inputs:
         if i.type != NodeTypes.IN:
-            dsts = {o.stage_id for o in i.out_edges}
+            destinations = {o.stage_id for o in i.out_edges}
 
             # if there is a later stage that uses the same input
             # we will propagate it from here
-            if stage_id < max(dsts):
+            if stage_id < max(destinations):
                 outputs.append(i)
 
     return set(outputs)

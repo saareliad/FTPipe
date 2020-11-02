@@ -50,10 +50,10 @@ def pretty_format_obj(obj, dict_prefix=dtab) -> str:
     return str(obj)
 
 
-def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
-    '''return a list of all nodes that are input to this partition\n
+def get_sorted_partition_inputs(partition: List[Node]) -> List[Node]:
+    """return a list of all nodes that are input to this partition\n
        sorted by id
-    '''
+    """
     inputs = set()
     for node in partition:
 
@@ -69,16 +69,16 @@ def sortedPartitionInputs(partition: List[Node]) -> List[Node]:
     return sorted(inputs, key=lambda n: n.id)
 
 
-def partitionOutputs(partition: List[Node],
-                     model_outputs: List[Node]) -> List[Node]:
-    ''' return all nodes that are outputs of the partition\n
-    '''
+def get_partition_outputs(partition: List[Node],
+                          model_outputs: List[Node]) -> List[Node]:
+    """ return all nodes that are outputs of the partition\n
+    """
 
-    def isOutput(n):
+    def is_output(n):
         part_output = (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id for o in n.out_edges)
         return part_output or (n in model_outputs)
 
-    return [n for n in partition if isOutput(n)]
+    return [n for n in partition if is_output(n)]
 
 
 def ensure_inputs_are_used(graph: Graph, assert_same_stages=True):
@@ -133,9 +133,9 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph, assert_same_stages=True):
             getitem_node.gpu_id = index_node.gpu_id = tuple_node.gpu_id
 
             after = {getitem_node.stage_id}
-            change= b4 - after
+            change = b4 - after
             if change:
-                for x, b4_id  in  zip([getitem_node, index_node, tuple_node], b4_ids):
+                for x, b4_id in zip([getitem_node, index_node, tuple_node], b4_ids):
                     if b4_id != getitem_node.stage_id:
                         # TODO:should change GPU id.
 

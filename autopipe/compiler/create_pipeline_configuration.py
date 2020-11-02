@@ -4,13 +4,14 @@ from typing import Dict, List, Tuple, Callable
 import torch
 from torch.nn import Module
 
-from autopipe.model_profiling import Graph
 from autopipe.compiler.utils import pretty_format_obj
+from autopipe.model_profiling import Graph
 from autopipe.utils import nested_map, flatten
 
 tab = '    '
 dtab = tab + tab
 GET_STAGES_ON_CPU_NAME = "DEBUG"
+
 
 def create_pipeline_configuration(graph: Graph,
                                   ios: Dict[int,
@@ -19,7 +20,7 @@ def create_pipeline_configuration(graph: Graph,
                                   model_blocks: Dict[str, Module],
                                   batch_dim: int,
                                   generate_activation_propagation: bool) -> Tuple[str, Dict]:
-    """generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
+    """Generates the create_pipeline_configuration method which given a model creates his partitioned counterpart
     """
     # TODO assumption the first input is batched
     batch_size = sorted(graph.inputs, key=lambda n: n.id)[0].tensor_shape[batch_dim]

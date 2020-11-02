@@ -16,54 +16,62 @@ def generate_partition_state_methods() -> str:
     """ generate partition methods state_dict() load_state_dict() named_buffers() and named_parameters()
         our custom implementation guarantees 100% compatibility with the original model same names will be used
     """
-    state_dict = generateStateDictFunction()
-    load_state_dict = generateLoadStateDict()
-    named_parameters = generateNamedParametersFunction()
-    named_buffers = generateNamedBuffersFunction()
+    state_dict = generate_state_dict_method()
+    load_state_dict = generate_load_state_dict_method()
+    named_parameters = generate_named_parameters_method()
+    named_buffers = generate_named_buffers_method()
 
-    cpu, cuda, to = generateCpuCudaToMethods()
+    cpu, cuda, to = generate_cpu_cuda_to_methods()
 
     return "\n".join([state_dict, load_state_dict, named_parameters, named_buffers, cpu, cuda, to]) + "\n\n"
 
 
-def generateStateDictFunction() -> str:
-    '''generates the state_dict function ensuring same keys are used as in the base model
-    '''
-    state_dict_function = ["def state_dict(self,*args,**kwargs):",
-                           f"# we return the state dict of this part as it should be in the original model",
-                           "return state_dict(self,*args,**kwargs)"]
+####################################################################
+# state methods of the partitions -  calling another function
+####################################################################
 
-    return f"{tab}" + f"\n{dtab}".join(state_dict_function)
+def generate_state_dict_method() -> str:
+    """Generates the state_dict method
+        ensuring same keys are used as in the base model
+    """
+    state_dict_method = ["def state_dict(self, *args, **kwargs):",
+                         "# we return the state dict of this part as it should be in the original model",
+                         "return state_dict(self, *args, **kwargs)"]
 
-
-def generateNamedParametersFunction() -> str:
-    ''' generates the named_parameters method ensuring we use the names given to the parametes in the unpartitioned model
-    '''
-    named_parameters_function = ["def named_parameters(self,recurse=True):",
-                                 f"# we return the named parameters of this part as it should be in the original model",
-                                 "return named_parameters(self,recurse=recurse)"]
-    return f"\n{tab}" + f"\n{dtab}".join(named_parameters_function)
+    return f"{tab}" + f"\n{dtab}".join(state_dict_method)
 
 
-def generateNamedBuffersFunction() -> str:
-    ''' generates the named_buffers method ensuring we use the names given to the buffers in the unpartitioned model
-    '''
-    named_buffers_function = ["def named_buffers(self,recurse=True):",
-                              f"# we return the named buffers of this part as it should be in the original model",
-                              "return named_buffers(self,recurse=recurse)"]
-    return f"\n{tab}" + f"\n{dtab}".join(named_buffers_function)
+def generate_named_parameters_method() -> str:
+    """Generates the named_parameters method
+        ensuring we use the names given to the parameters in the un-partitioned model
+    """
+    named_parameters_method = ["def named_parameters(self, recurse=True):",
+                               "# we return the named parameters of this part as it should be in the original model",
+                               "return named_parameters(self, recurse=recurse)"]
+    return f"\n{tab}" + f"\n{dtab}".join(named_parameters_method)
 
 
-def generateLoadStateDict() -> str:
-    '''generates the load_state_dict method ensures that weights will be assigned to thier correct counterparts inside the partition
-    '''
+def generate_named_buffers_method() -> str:
+    """Generates the named_buffers method
+        ensuring we use the names given to the buffers in the un-partitioned model
+    """
+    named_buffers_method = ["def named_buffers(self, recurse=True):",
+                            f"# we return the named buffers of this part as it should be in the original model",
+                            "return named_buffers(self, recurse=recurse)"]
+    return f"\n{tab}" + f"\n{dtab}".join(named_buffers_method)
+
+
+def generate_load_state_dict_method() -> str:
+    """Generates the load_state_dict method
+        ensuring that weights will be assigned to their correct counterparts inside the partition
+    """
     func = ['def load_state_dict(self, state):',
-            "return load_state_dict(self,state)"]
+            "return load_state_dict(self, state)"]
 
     return f"\n{tab}" + f"\n{dtab}".join(func)
 
 
-def generateCpuCudaToMethods() -> Tuple[str, str, str]:
+def generate_cpu_cuda_to_methods() -> Tuple[str, str, str]:
     """generates the cpu cuda and to methods of the partitions
        the generated code keeps track of on which device the partition is placed
 
@@ -72,18 +80,20 @@ def generateCpuCudaToMethods() -> Tuple[str, str, str]:
     """
     cpu = f"\n{tab}def cpu(self):\n{dtab}return cpu(self)\n"
 
-    cuda = [f"{tab}def cuda(self,device=None):",
-            f"return cuda(self,device=device)\n",
+    cuda = [f"{tab}def cuda(self, device=None):",
+            f"return cuda(self, device=device)\n",
             ]
 
     to = [f"{tab}def to(self, *args, **kwargs):",
-          "return to(self,*args,**kwargs)",
+          "return to(self, *args, **kwargs)",
           ]
 
     return cpu, f"\n{dtab}".join(cuda), f"\n{dtab}".join(to)
 
 
+####################################################################
 # state methods of the partitions to be copied to generated file
+####################################################################
 
 def get_state_methods():
     return [state_dict, load_state_dict, named_buffers, named_parameters, cpu, cuda, to]
@@ -128,12 +138,12 @@ def named_parameters(partition, recurse=True):
     lookup = partition.lookup
     for k, v in params:
         if k in lookup:
-            yield (lookup[k], v)
+            yield lookup[k], v
         else:
             assert '.' in k
             split_idx = k.find('.')
             new_k = lookup[k[:split_idx]] + k[split_idx:]
-            yield (new_k, v)
+            yield new_k, v
 
 
 def named_buffers(partition, recurse=True):
@@ -142,12 +152,12 @@ def named_buffers(partition, recurse=True):
     lookup = partition.lookup
     for k, v in params:
         if k in lookup:
-            yield (lookup[k], v)
+            yield lookup[k], v
         else:
             assert '.' in k
             split_idx = k.find('.')
             new_k = lookup[k[:split_idx]] + k[split_idx:]
-            yield (new_k, v)
+            yield new_k, v
 
 
 def cpu(partition):

@@ -1,3 +1,4 @@
+# FIXME: as far as I know, this was never tested normally.
 import inspect
 from collections import deque, defaultdict
 from typing import List, Tuple, Dict
@@ -12,8 +13,8 @@ dtab = tab + tab
 
 
 def create_model_parallel_module(config: Dict) -> str:
-    '''create a modelParallel version of the partition config
-    '''
+    """create a modelParallel version of the partition config
+    """
     n_stages = len(config['stages'])
     partitions = ", ".join(f"partition{i}" for i in range(n_stages))
 
@@ -133,9 +134,9 @@ def pipelined_forward(config: Dict, model_inputs: List[str], activations: Dict[s
     model_outputs = outputs.split(",")
     n_parts = len(statements)
     if use_streams:
-        decleration = f"def pipelined_forward_with_streams(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
+        declaration = f"def pipelined_forward_with_streams(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
     else:
-        decleration = f"def pipelined_forward(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
+        declaration = f"def pipelined_forward(self,{', '.join(model_inputs)}, num_chunks={n_parts}):"
     body, collect_outputs = generate_chunk_inputs_splits_and_aggeragators(config, model_inputs,
                                                                           model_outputs)
 
@@ -211,7 +212,7 @@ def pipelined_forward(config: Dict, model_inputs: List[str], activations: Dict[s
     if use_streams:
         body.append("torch.cuda.current_stream().wait_stream(self.streams[-1][-1])")
 
-    pipelined_forward_function = [decleration] + body + [return_statement(config, activations)]
+    pipelined_forward_function = [declaration] + body + [return_statement(config, activations)]
 
     return f"\n{dtab}".join(pipelined_forward_function)
 
@@ -241,8 +242,8 @@ def simple_forward(model_inputs: List[str], body: List[str], outputs: str) -> st
 
 def forward_statements(config: Dict,
                        model_inputs: List[str], pipelined=False) -> Tuple[List[str], Dict[str, str]]:
-    '''generates the forward nethod of the model parallel version of the config
-    '''
+    """generates the forward method of the model parallel version of the config
+    """
     if pipelined:
         created, delayed_activations, _ = delay(config)
     else:
