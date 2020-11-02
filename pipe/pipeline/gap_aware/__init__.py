@@ -8,4 +8,10 @@ from .adam_gap_aware import AdamGapAware, get_adam_gap_aware_cls
 from .adamw_gap_aware import AdamWGapAware, get_adamw_gap_aware_cls
 from .interface import GapAwareBase
 from .sgd_gap_aware import GapAware, get_sgd_gap_aware_cls
+
+SUPPORTED_GAP_AWARE_POLICIES = {
+    'almost_last_partition', 'all_except_last',
+    'all_except_last_two'
+}
+
 # TODO: adamw

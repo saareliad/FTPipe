@@ -7,29 +7,17 @@ import torch
 
 from pipe.pipeline import SinglePartitionManager
 from pipe.pipeline.statistics import Stats
-from pipe.prepare_pipeline import SmallerLastBatchPolicy
+from pipe.prepare_pipeline import SmallerLastBatchPolicy, DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY
 
 
-# DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
-
-
-def training_loop(args, logger, train_dl, test_dl, is_first_partition,
+def training_loop(args, logger, train_dl, test_dl,
                   is_last_partition, partition: SinglePartitionManager, statistics: Stats, train_dl_len,
                   test_dl_len, samplers):
     # Prepare for loop
-    STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
-                                                   SmallerLastBatchPolicy.ProportionalStep)
+    last_batch_smaller_n_micro_batches_policy = getattr(args, "last_batch_smaller_n_micro_batches_policy",
+                                                        DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY)
 
-    save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps", None)
-    approx_step_per_epoch = train_dl_len // args.step_every
-    if save_checkpoint_every_x_epochs is not None:
-        save_checkpoint_every_x_epochs = save_checkpoint_every_x_epochs // approx_step_per_epoch
-    else:
-        save_checkpoint_every_x_epochs = 1
-
-    assert save_checkpoint_every_x_epochs >= 1
-    print(f"Approximating: An epoch is approx {approx_step_per_epoch} steps.")
-    print(f"Approximating: will save checkpoint every {save_checkpoint_every_x_epochs} epochs, and at the end.")
+    save_checkpoint_every_x_epochs = approximate_checkpoint_every_x_epochs(args, train_dl_len)
 
     epochs = 0
     steps = 0
@@ -39,15 +27,21 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
 
     logger.info(f"flush rate {args.flush_rate}")
     logger.info(f"Running for {args.epochs} epochs and {args.steps} steps")
-    if (args.flush_rate >= 0):
+    if args.flush_rate >= 0:
         raise NotImplementedError()
 
     train_batches_limit = getattr(args, "train_batches_limit", train_dl_len)
     test_batches_limit = getattr(args, "test_batches_limit", test_dl_len)
 
-    if getattr(args, "train_batches_limit", -1) > 0:  # or getattr(args, "test_batches_limit", -1) > 0
+    if getattr(args, "train_batches_limit", -1) > 0:
         warnings.warn(
-            "hard limiting train batches per flush (dev feature): different last batch not supported, messages may get truncated")
+            "(dev feature) hard limiting train batches per flush: "
+            "different last batch not supported, messages may get truncated")
+
+    if getattr(args, "test_batches_limit", -1) > 0:
+        warnings.warn(
+            "(dev feature) hard limiting test batches per flush: "
+            "different last batch not supported, messages may get truncated")
 
     train_batches_limit = train_dl_len if train_batches_limit < 0 else train_batches_limit
     test_batches_limit = test_dl_len if test_batches_limit < 0 else test_batches_limit
@@ -112,79 +106,36 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
         for s in samplers:
             s.set_epoch(epochs)
 
-        if args.steps > 0:
-            steps_left = args.steps - steps
-            # TODO: it can be more fine-grained depends on policy but I leave it for now.
-            batches_left = steps_left * args.step_every
-            train_batches_limit_to_use = min(train_batches_limit, batches_left)
+        (reminder_micro_batches,
+         train_batches_limit_to_use) = get_micro_batches_until_flush(args,
+                                                                     train_batches_limit,
+                                                                     steps,
+                                                                     last_batch_smaller_n_micro_batches_policy,
+                                                                     logger, partition)
 
-            if batches_left < train_batches_limit:
-                # Re-define last batch train shapes.
-                # now, the last batch shapes are not smaller.
-                logger.info(
-                    "batches_left are smaller than dataloader or limit: killing comm_handler.last_batch_train_shapes")
-                partition.comm_handler.last_batch_train_shapes = None
-
-            # handle step every.
-            # if we don't do anything, we will do:
-            # `train_batches_limit` batches
-            # which are (train_batches_limit // args.step_every) steps.
-            # So the reminder is problematic
-            # we can either:
-            # (1) take a smaller step for it (proportional to number of grad accumulations taken).
-            # (2) drop the reminder
-            #
-            # Note: (1) only effects the last batch so there is no problem with staleness.
-
-            reminder_micro_batches = train_batches_limit_to_use % args.step_every
-            if reminder_micro_batches:
-                if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
-                    d_info = {
-                        "steps_left": steps_left,
-                        "batches_left": batches_left,
-                        "original_train_batches_limit": train_batches_limit,
-                        "train_batches_limit_until_flush": train_batches_limit_to_use,
-                        "step_every": args.step_every,
-                        "train_dl_len": train_dl_len
-                    }
-                    logger.info(
-                        f"Got reminder of {reminder_micro_batches} micro batches. Will drop them.")
-                    train_batches_limit_to_use -= reminder_micro_batches
-                    if train_batches_limit_to_use <= 0:
-                        logger.info(
-                            f"breaking early since can't complete a full step with {args.step_every} gradient accumulations.")
-                        break
-                elif STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
-                    # TODO: to fix GPipe MPI, we can do it, but needs to be only for last batch.
-                    # tmp = partition.work_scheduler.step_every
-                    # print("-I- replacing step every for scheduler for last batch")
-                    # partition.work_scheduler.step_every = reminder_micro_batches
-                    logger.info(
-                        f"Got reminder of {reminder_micro_batches} micro batches. Will take proportional {reminder_micro_batches / args.step_every} last step")
-                else:
-                    raise NotImplementedError(
-                        f"Unknown SMALLER_LAST_BATCH_POLICY, {STEP_EVERY_SMALLER_LAST_BATCH_POLICY}")
-        else:
-            train_batches_limit_to_use = train_batches_limit
-
+        if train_batches_limit_to_use <= 0:
+            logger.info(
+                f"breaking early: "
+                f" can't complete a full step with {args.step_every} gradient accumulations.")
+            break
         epoch_start_time = time.time()
 
         # TODO: flush every 1000
         did_train = run_train(train_batches_limit_to_use)
 
-        # if args.steps > 0 and reminder_micro_batches and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
-        #     partition.work_scheduler.step_every = tmp
-
         did_eval = run_eval(test_batches_limit)
 
         epochs += 1
         if did_train:
-            if args.steps > 0 and reminder_micro_batches and STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.DropReminder:
+            floor_steps = args.steps > 0 \
+                          and reminder_micro_batches \
+                          and last_batch_smaller_n_micro_batches_policy == SmallerLastBatchPolicy.DropReminder
+            if floor_steps:
                 steps += math.floor(train_batches_limit_to_use / args.step_every)
             else:
                 steps += math.ceil(train_batches_limit_to_use / args.step_every)
 
-        is_last = (args.epochs > 0 and epochs >= args.epochs) or (args.steps > 0 and steps >= args.steps)
+        is_last = (0 < args.epochs <= epochs) or (0 < args.steps <= steps)
         if is_last or epochs % save_checkpoint_every_x_epochs == 0:
             cp_saver.maybe_save_checkpoint(partition.partition.layers, steps)
 
@@ -227,6 +178,74 @@ def training_loop(args, logger, train_dl, test_dl, is_first_partition,
     return total_epoch_times_list, train_epochs_times_list
 
 
+def get_micro_batches_until_flush(args, train_batches_limit, steps, step_every_smaller_last_batch_policy,
+                                  logger, partition):
+    if args.steps > 0:
+        steps_left = args.steps - steps
+        # TODO: it can be more fine-grained depends on policy but I leave it for now.
+        batches_left = steps_left * args.step_every
+        train_batches_limit_to_use = min(train_batches_limit, batches_left)
+
+        if batches_left < train_batches_limit:
+            # Re-define last batch train shapes.
+            # now, the last batch shapes are not smaller.
+            logger.info(
+                "batches_left are smaller than dataloader or limit: killing comm_handler.last_batch_train_shapes")
+            partition.comm_handler.last_batch_train_shapes = None
+
+        # handle step every.
+        # if we don't do anything, we will do:
+        # `train_batches_limit` batches
+        # which are (train_batches_limit // args.step_every) steps.
+        # So the reminder is problematic
+        # we can either:
+        # (1) take a smaller step for it (proportional to number of grad accumulations taken).
+        # (2) drop the reminder
+        #
+        # Note: (1) only effects the last batch so there is no problem with staleness.
+
+        reminder_micro_batches = train_batches_limit_to_use % args.step_every
+        if reminder_micro_batches:
+            if step_every_smaller_last_batch_policy == SmallerLastBatchPolicy.DropReminder:
+                # d_info = {
+                #     "steps_left": steps_left,
+                #     "batches_left": batches_left,
+                #     "original_train_batches_limit": train_batches_limit,
+                #     "train_batches_limit_until_flush": train_batches_limit_to_use,
+                #     "step_every": args.step_every,
+                #     "train_dl_len": train_dl_len
+                # }
+                logger.info(
+                    f"Got reminder of {reminder_micro_batches} micro batches. Will drop them.")
+                train_batches_limit_to_use -= reminder_micro_batches
+
+            elif step_every_smaller_last_batch_policy == SmallerLastBatchPolicy.ProportionalStep:
+                # TODO: to fix GPipe MPI, we can do it, but needs to be only for last batch.
+                logger.info(
+                    f"Got reminder of {reminder_micro_batches} micro batches. "
+                    f"Will take proportional {reminder_micro_batches / args.step_every} last step")
+            else:
+                raise NotImplementedError(
+                    f"Unknown SMALLER_LAST_BATCH_POLICY, {step_every_smaller_last_batch_policy}")
+    else:
+        train_batches_limit_to_use = train_batches_limit
+        reminder_micro_batches = 0
+    return reminder_micro_batches, train_batches_limit_to_use
+
+
+def approximate_checkpoint_every_x_epochs(args, train_dl_len):
+    save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps", None)
+    approx_step_per_epoch = train_dl_len // args.step_every
+    if save_checkpoint_every_x_epochs is not None:
+        save_checkpoint_every_x_epochs = save_checkpoint_every_x_epochs // approx_step_per_epoch
+    else:
+        save_checkpoint_every_x_epochs = 1
+    assert save_checkpoint_every_x_epochs >= 1
+    print(f"Approximating: An epoch is approx {approx_step_per_epoch} steps.")
+    print(f"Approximating: will save checkpoint every {save_checkpoint_every_x_epochs} epochs, and at the end.")
+    return save_checkpoint_every_x_epochs
+
+
 def should_stop_early(args, valid_loss, logger):
     # skip check if no validation was done in the current epoch
     if valid_loss is None:
@@ -247,8 +266,7 @@ def should_stop_early(args, valid_loss, logger):
         should_stop_early.num_runs += 1
         if should_stop_early.num_runs >= args.patience:
             logger.info(
-                "early stop since valid performance hasn't improved for last {} runs"
-                    .format(args.patience))
+                f"early stop since valid performance hasn't improved for last {args.patience} runs")
             return True
         else:
             return False
@@ -290,5 +308,5 @@ class CheckpointsSaver:
             # We don't want it to kill training if it fails somehow
             with open(metatdata_fn, "w") as f:
                 f.write(str(steps))
-        except Exception as e:
-            warnings.warn(f"Failed to save metadata for checkpoint {metatdata_fn}")
+        except Exception as _:
+            warnings.warn(f"Failed to save metadata for checkpoint {metatdata_fn}, ignoring exception")

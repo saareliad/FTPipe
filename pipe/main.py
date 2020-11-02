@@ -2,9 +2,6 @@ import argparse
 import io
 import itertools
 import os
-
-# Avoid annoying import of tensorflow caused by HF transformers.
-os.environ['USE_TORCH'] = "1"
 import time
 from contextlib import redirect_stdout
 from pprint import pprint
@@ -13,6 +10,8 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
+# Avoid annoying import of tensorflow caused by HF transformers.
+os.environ['USE_TORCH'] = "1"
 from pipe.configs.parse_json_config import parse_json_config
 from pipe.data import add_dataset_argument
 from pipe.eval import get_all_eval_results
@@ -89,7 +88,7 @@ def parse_cli():
         description='PyTorch partition as part of Async Pipeline')
 
     parser.add_argument("--mode",
-                        choices=["mp", "dist", "preproc", "eval"],
+                        choices=["dist", "mp", "preproc", "eval"],
                         default="dist",
                         help="Running mode")
     parse_distributed_cli(parser)
@@ -251,11 +250,11 @@ def parse_mpi_env_vars(args):
 
 def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
                                 stage):
-    def carefull_del(config, name):
-        if name in config:
-            del config[name]
+    def careful_del(x, n):
+        if n in x:
+            del x[n]
 
-    UN_NEEDED_ARGS = ['stage', 'rank', 'local_rank']
+    un_needed_args = ['stage', 'rank', 'local_rank']
 
     if rank == world_size - 1:
         if statistics:
@@ -263,8 +262,8 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
             config = vars(args)
 
             # remove unneeded added args
-            for name in UN_NEEDED_ARGS:
-                carefull_del(config, name)
+            for name in un_needed_args:
+                careful_del(config, name)
 
             save_experiment(args.out_filename, args.out_dir, config, fit_res)
     torch.distributed.barrier()
@@ -289,7 +288,7 @@ def save_distributed_experiment(statistics, args, world_size, rank, local_rank,
     print(f"rank{rank}: save_distributed_experiment - Done")
 
 
-def mp_queue_matrix(args, ack=False, start_method='spawn'):
+def mp_queue_matrix(args, start_method='spawn'):
     """create queues matrix to be shared among precesses"""
     mmp = mp.get_context(start_method)
 
@@ -411,7 +410,7 @@ def main(args, shared_ctx=None):
     # Main Training Loop
     exp_start_time = time.time()
     times_res = training_loop(args, logger, train_dl, test_dl,
-                              is_first_partition, is_last_partition, partition,
+                              is_last_partition, partition,
                               statistics, train_dl_len, test_dl_len, samplers)
     exp_total_time = time.time() - exp_start_time
 
@@ -446,31 +445,6 @@ def start_mutiprocessing():
                        join=True,
                        daemon=False,
                        start_method=start_method)
-
-
-def start_mpi_overlay():
-    args = parse_cli()
-    parse_mpi_env_vars(args)
-    prefix = "_overaly_"
-    for x in ['rank', 'local_rank', 'world_size']:
-        setattr(args, f"{prefix}{x}", getattr(args, x))
-        delattr(args, x)
-
-    args.mpi_overlay_local_ranks = tuple(
-        os.environ['OVERLAY_LOCAL_RANKS'].split(","))
-    print(f"-I- Parsed: OVERLAY_LOCAL_RANKS: {args.mpi_overlay_local_ranks}")
-
-    A = set(args.mpi_overlay_local_ranks)
-
-    raise NotImplementedError("WIP")
-
-    # local vars
-
-    # TODO: quques
-    # TODO: threads
-    # TODO: start_mutiprocessing()
-    # TODO: re-write version for barier.
-    # TODO: distributed save experiment...
 
 
 def start_preproc():
@@ -508,16 +482,13 @@ def start_eval_checkpoint():
     print("-I- Done")
 
 
-if __name__ == "__main__":
+def start():
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
     args = parse_cli()
     if args.mode == "mp":
         print("Running in multiprocessing mode")
         start_mutiprocessing()
-    elif args.mode == 'mpi_overlay':
-        print("Running in mpi overlay mode")
-        start_mpi_overlay()
     elif args.mode == 'preproc':
         print("Running in preproc mode: Preprocessing data...")
         start_preproc()
@@ -527,3 +498,7 @@ if __name__ == "__main__":
     else:
         print("Running in distributed mode")
         start_distributed()
+
+
+if __name__ == "__main__":
+    start()

@@ -1,6 +1,7 @@
 import warnings
 
 from pipe.models import AVAILABLE_MODELS, parse_config
+from pipe.train import approximate_checkpoint_every_x_epochs
 
 
 def infer_all_cps(args) -> int:
@@ -8,7 +9,8 @@ def infer_all_cps(args) -> int:
         n_cps = args.epochs
         if getattr(args, "save_checkpoint_every_x_steps", None) is not None:
             warnings.warn(
-                f"Miss-Estimated number of checkpoints due args.save_checkpoint_every_x_steps={args.save_checkpoint_every_x_steps}")
+                f"Miss-Estimated number of checkpoints "
+                f"due args.save_checkpoint_every_x_steps={args.save_checkpoint_every_x_steps}")
     elif args.steps > 0:
         # TODO: Get train dl length
         # print(f"-I- preprocessing data for rank {rank}/{args.world_size - 1} (word size is {args.world_size})...")
@@ -46,21 +48,9 @@ def infer_all_cps(args) -> int:
             dataset_keywords=dataset_keywords)
         train_dl_len = len(train_dl)
 
-        #### Infer also skipping:
-
-        save_checkpoint_every_x_epochs = getattr(args, "save_checkpoint_every_x_steps", None)
-        approx_step_per_epoch = train_dl_len // args.step_every
-
-        if save_checkpoint_every_x_epochs is not None:
-            save_checkpoint_every_x_epochs = save_checkpoint_every_x_epochs // approx_step_per_epoch
-        else:
-            save_checkpoint_every_x_epochs = 1
-
-        assert save_checkpoint_every_x_epochs >= 1
-        print(f"Approximating: An epoch is approx {approx_step_per_epoch} steps.")
-        print(f"Approximating: saved checkpoint every {save_checkpoint_every_x_epochs} epochs, and at the end.")
-
-        left_steps = args.steps
+        # Infer also skipping:
+        # FIXME: observed inaccuracy... (e.g WiC, save every epoch)
+        save_checkpoint_every_x_epochs = approximate_checkpoint_every_x_epochs(args, train_dl_len)
         left_batches = args.steps * args.step_every
         n = 0
         n_cps = 0
@@ -76,7 +66,6 @@ def infer_all_cps(args) -> int:
 
 
 def get_all_eval_results(args):
-    all_results = {}
     # TODO: currently its semi hardcoded...
     # all_cps = list(range(0, 102 + 1))  # + ["c4"]
     explicit_eval_cp = getattr(args, "explicit_eval_cp", None)
@@ -85,6 +74,7 @@ def get_all_eval_results(args):
         print(f"Got explicit_eval_cp={explicit_eval_cp}. changing out_file_name")
         args.out_filename = explicit_eval_cp + "_" + args.out_filename
     else:
+        # TODO: allow starting from >0.
         all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
     print(f"-I- evaluating {len(all_cps)}: {all_cps}")
     if args.dataset == "t5_tfds":

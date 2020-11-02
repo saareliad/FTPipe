@@ -19,7 +19,7 @@ from pipe.pipeline import dp_sim
 from pipe.pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
 from pipe.pipeline.data_propagation import get_propagator_cls
 from pipe.pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
-                                get_adamw_gap_aware_cls)
+                                     get_adamw_gap_aware_cls, SUPPORTED_GAP_AWARE_POLICIES)
 from pipe.pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
 from pipe.pipeline.statistics import get_statistics  # , Stats
 from pipe.pipeline.training import AVAILABLE_TRAINERS
@@ -28,6 +28,14 @@ from pipe.pipeline.weight_prediction import get_weight_predictor as get_weight_p
 from pipe.pipeline.weight_stashing import WeightStasher
 # TODO: migrate to `register_xxx()` convention
 from pipe.pipeline.work_schedulers import get_work_scheduler
+
+
+class SmallerLastBatchPolicy(Enum):
+    ProportionalStep = auto()
+    DropReminder = auto()
+
+
+DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
 
 # from data import AVAILABLE_DATASETS
@@ -122,7 +130,7 @@ def preproc_lr_scheduler_args(args):
             elif preproc_command == "ratio_from_num_training_steps":
                 num_steps = attr['args']['num_training_steps']
                 given_ratio = attr['args'][arg_name]
-                assert given_ratio >= 0 and given_ratio <= 1
+                assert 0 <= given_ratio <= 1
                 warmup_steps = int(given_ratio * num_steps)
                 attr['args'][arg_name] = warmup_steps
                 print(
@@ -183,7 +191,7 @@ def try_replace_prediction_with_nesterov(args):
         if not tmp.get('nesterov', False):
             pred = getattr(args, 'weight_prediction', None)
 
-            if (pred is not None):
+            if pred is not None:
                 tmp['nesterov'] = True
                 pred['args']['nag_with_predictor'] = False
                 args.nesterov_set_for_last_partition = True
@@ -283,7 +291,10 @@ def get_device_for_rank(args, rank, local_rank):
                     break
             else:
                 raise ValueError(
-                    f"Can't determine device index. rank={rank}, stage_to_device_map={stage_to_device_map}, global_device_id={cuda_device_id},  nnodes={nnodes}, ngpus_per_node={ngpus_per_node}")
+                    f"Can't determine device index. rank={rank}, "
+                    f"stage_to_device_map={stage_to_device_map}, "
+                    f"global_device_id={cuda_device_id},  "
+                    f"nnodes={nnodes}, ngpus_per_node={ngpus_per_node}")
 
         local_device_id = cuda_device_id
     else:
@@ -308,6 +319,12 @@ def get_rank_to_device_map(args):
         rank: get_device_for_rank(args, rank, local_rank)
         for rank, local_rank in zip(range(args.world_size), local_ranks)
     }
+
+
+def test_rank_to_device_map(world_size=8, nnodes=1, cpu=False):
+    from types import SimpleNamespace
+    args = SimpleNamespace(cpu=cpu, world_size=world_size, nnodes=nnodes)
+    print(get_rank_to_device_map(args))
 
 
 def hack_trainer_type_to_gap_aware(args, stage_depth=None):
@@ -350,13 +367,9 @@ def hack_trainer_type_to_gap_aware(args, stage_depth=None):
                 hack()
                 return True
         else:
-            SUPPORTED_POLICIES = {
-                'almost_last_partition', 'all_except_last',
-                'all_except_last_two'
-            }
             raise ValueError(
                 f"Unknown policy for GA {args.gap_aware['policy']}.\
-                             supported policies are {SUPPORTED_POLICIES}")
+                             supported policies are {SUPPORTED_GAP_AWARE_POLICIES}")
     return False
 
 
@@ -400,7 +413,7 @@ def preproc_data(args, cache=None, save_cache=True):
     print(f"Loading partitioned model and dataset...")
 
     if cache is None:
-        handler = models.AVAILABLE_MODELS.get(args.model)
+        handler = pipe.models.AVAILABLE_MODELS.get(args.model)
         if save_cache:
             cache = handler
     else:
@@ -427,7 +440,7 @@ def preproc_data(args, cache=None, save_cache=True):
     pipe_config = parsed_config.pipe_config
     args.num_stages = parsed_config.num_stages
     args.stage = parsed_config.stage_id
-    from data import get_dataloaders
+    from pipe.data import get_dataloaders
     get_dataloaders(
         args,
         pipe_config=pipe_config,
@@ -436,12 +449,12 @@ def preproc_data(args, cache=None, save_cache=True):
     return cache
 
 
-def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
+def prepare_pipeline(args, shared_ctx=None, comm_version=1):
     is_gpipe = "gpipe" == args.work_scheduler.lower()
 
     if args.is_multiprocessing_worker:
         # multiprocessing communication handler
-        COMM_VERSION = 2
+        comm_version = 2
 
     # get work scheduler
 
@@ -454,7 +467,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     # Parse partitioning config and requires args
     # TODO: some easier way to get original model and the config used during partitioning (WIP)
     print(f"Loading partitioned model and dataset...")
-    handler = models.AVAILABLE_MODELS.get(args.model)
+    handler = pipe.models.AVAILABLE_MODELS.get(args.model)
 
     parsed_config = parse_config.PartitioningConfigParser(
         args.model,
@@ -482,10 +495,10 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
                         name_prefix=args.out_filename)
 
     # Comm handler
-    if COMM_VERSION == 1:
+    if comm_version == 1:
         comm_handler = create_comm_handler(args, comm_init_args, device)
         comm_handler.init_process_group()
-    elif COMM_VERSION == 2:
+    elif comm_version == 2:
         # Multiprocessing
         # TODO stage_to_device_map is currently unused, local_rank_to_device_map is used instead.
         # stage_to_device_map will be used when combining MPI overlay
@@ -511,8 +524,8 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
             if isinstance(extra_kw, dict):
                 dataset_keywords.update(extra_kw)
             # delete to save mem, in contains original model
-            del handler
-            gc.collect()
+    del handler
+    gc.collect()
 
     training_tensor_dtypes = parsed_config.training_tensor_dtypes
     eval_tensor_shapes = parsed_config.eval_tensor_shapes
@@ -535,7 +548,7 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
 
     eval_tensor_dtypes = training_tensor_dtypes  # HACK, TODO
     # Get dataloaders needed for this stage
-    from data import get_dataloaders
+    from pipe.data import get_dataloaders
     train_dl, eval_dl, samplers, extra = get_dataloaders(
         args,
         pipe_config=pipe_config,
@@ -564,14 +577,16 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
     else:
         last_batch_eval_shapes = None
 
+    # TODO: refactor and extract this..
     # Get expected training steps:
     if args.epochs > 0 and args.steps < 0:
         steps_per_epoch = train_dl_len // args.step_every
         # TODO: and policy is proportional
         if train_dl_len % args.step_every > 0:
-            STEP_EVERY_SMALLER_LAST_BATCH_POLICY = getattr(args, "STEP_EVERY_SMALLER_LAST_BATCH_POLICY",
-                                                           SmallerLastBatchPolicy.ProportionalStep)
-            if STEP_EVERY_SMALLER_LAST_BATCH_POLICY == SmallerLastBatchPolicy.ProportionalStep:
+            last_batch_smaller_n_micro_batches_policy = getattr(args,
+                                                                "last_batch_smaller_n_micro_batches_policy",
+                                                                DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY)
+            if last_batch_smaller_n_micro_batches_policy == SmallerLastBatchPolicy.ProportionalStep:
                 steps_per_epoch += 1
         args.steps_per_epoch = steps_per_epoch  # used later if preproc lr scheduler from epochs
         expected_training_steps = steps_per_epoch * args.epochs
@@ -696,7 +711,6 @@ def prepare_pipeline(args, shared_ctx=None, COMM_VERSION=1):
         partition.set_gap_aware(gap_aware)
         assert not is_gpipe
     else:
-        gap_aware = None
         trainer = trainer_cls(**trainer_kwds)
 
     if extra:
@@ -823,15 +837,3 @@ def get_optimizer_parameter_groups(args, partition):
         parameters_count = sum(p.numel() for p in optimizer_grouped_parameters)
     print(f"-I- optimized parameters count: {parameters_count}")
     return optimizer_grouped_parameters
-
-
-if __name__ == '__main__':
-    from types import SimpleNamespace
-
-    args = SimpleNamespace(cpu=False, world_size=8, nnodes=1)
-    print(get_rank_to_device_map(args))
-
-
-class SmallerLastBatchPolicy(Enum):
-    ProportionalStep = auto()
-    DropReminder = auto()
