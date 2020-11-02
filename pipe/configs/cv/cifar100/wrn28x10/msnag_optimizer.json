@@ -1,0 +1,19 @@
+{
+    "optimizer": {
+        "type": "sgd1",
+        "args": {
+            "lr": 0.1,
+            "weight_decay": 0.0005,
+            "momentum": 0.9,
+            "nesterov": false
+        }
+    },
+    "nesterov_set_for_last_partition": true,
+    "weight_prediction": {
+        "type": "msnag",
+        "args": {
+            "pred_mem": "clone",
+            "nag_with_predictor": true
+        }
+    }
+}

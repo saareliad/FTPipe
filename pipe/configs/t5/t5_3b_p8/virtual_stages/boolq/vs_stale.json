@@ -1,0 +1,7 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "weight_stashing": false,
+    "work_scheduler": "virtual_stages_1f1b",
+    "supremum_staleness": 13
+}

@@ -1,0 +1,67 @@
+{
+    "logdir": "logs/squad/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir": "results/t5/glue/rte",
+    "auto_file_name": true,
+    "out_filename": "glue_rte_12_epochs",
+    "distributed_backend": "mpi",
+    "model": "t5_3b_tied_lmheads_320_8_8p_bw12_squad1",
+    "dataset": "t5_tfds",
+    "mixture_or_task_name": "glue_rte_v002",
+    "preproc_batch_size": 128,
+    "trainer": {
+        "type": "t5",
+        "args": {
+            "always_calc_grad_norm": false
+        }
+    },
+    "statistics": "squad_loss_per_batch",
+    "bs_train": 4,
+    "bs_test": 4,
+    "num_data_workers": 10,
+    "optimizer": {
+        "type": "adafactor",
+        "args": {
+            "lr": 0.001,
+            "weight_decay": 0,
+	    "scale_parameter": true,
+	    "relative_step": false
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_constant_schedule_with_warmup",
+        "preproc_args": {
+        },
+        "args": {
+            "num_warmup_steps": 200,
+            "last_epoch": -1
+        }
+    },
+    "epochs": -1,
+    "steps": 4200,
+    "seed_from_cmd": true,
+    "bs_train_from_cmd": false,
+    "bs_test_from_cmd": false,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "work_scheduler": "1F1B",
+    "cudnn_benchmark": true,
+    "max_buffers": 1,
+    "step_every": 10,
+    "keep_buffers_alive": false,
+    "train_batches_limit": -1,
+    "log_frequency": 200,
+    "model_name_or_path": "t5-3b",
+    "max_seq_length": 320,
+    "answer_max_seq_length": 8,
+    "do_lower_case": true,
+    "overwrite_cache": false,
+    "dont_drop_last": true,
+    "model_type": "t5",
+    "precomputed_masks": true,
+    "save_checkpoints":  true,
+    "checkpoints_save_name_prefix": "stale_adafactor",
+    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/rte/seq/",
+    "load_model_one_by_one": false
+}

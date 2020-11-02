@@ -1,0 +1,42 @@
+{% set name = "se-msnag2" %}
+{% set ompiVersion = "4.0.3" %}
+{% set ompiVersionShort = "4.0" %}
+{% set cudaVersion = '.'.join(environ.get('CUDA_VERSION', '10.2').split('.')[:2]) %}
+
+package:
+  name: {{ name }}
+  version: {{ ompiVersion }}
+
+source:
+  - url: https://download.open-mpi.org/release/open-mpi/v{{ ompiVersionShort }}/openmpi-{{ ompiVersion }}.tar.gz
+    folder: ompi
+
+build:
+  number: 0
+  noarch: generic
+  string: cuda{{ cudaVersion }}
+
+requirements:
+  build:
+    - ca-certificates
+    - cmake
+    - git
+    - make
+    - zlib
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+  run:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+
+test:
+  commands:
+    - mpiexec --version
+    - orte-info
+
+about:
+  summary: "No free meals until we publish :)"
+
+extra:
+  recipe-maintainers:
+    - saareliad

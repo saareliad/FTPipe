@@ -1,0 +1,73 @@
+{
+    "logdir": "logs/debug/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir":"results/",
+    "auto_file_name": false,
+    "out_filename": "dummy",
+    "distributed_backend": "mpi",
+    "statistics": "lm_theta_dist_grad_norm_loss_per_batch",
+    "model": "gpt2_lm_lowercase",
+    "model_name_or_path": "gpt2",
+    "dataset": "wt2",
+    "trainer": {
+        "type": "lm",
+        "args": {
+            "max_grad_norm": 1,
+            "always_calc_grad_norm": false 
+        }
+    },
+    "bs_train": 4,
+    "train_seq_len": 1024,
+    "test_seq_len": 1024,
+    "valid_seq_len": 1024,
+    "bs_test": 4,
+    "num_data_workers": 10,
+    "optimizer": {
+        "type": "adam",
+        "args": {
+            "lr": 5e-5,
+            "weight_decay": 0.0,
+            "eps": 1e-8
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_linear_schedule_with_warmup",
+        "preproc_args": {
+            "num_training_steps": "epochs_to_steps",
+            "num_warmup_steps": "epochs_to_steps"
+        },
+        "args": {
+            "num_warmup_steps": 1,
+            "num_training_steps":  -1,
+            "last_epoch": -1
+        }
+    },
+    "weight_prediction": {
+        "type": "msnag",
+        "args": {
+            "pred_mem": "clone",
+            "nag_with_predictor": true,
+            "sched_aware": true
+        }
+    },
+    "gap_aware": {
+        "type": "adam",
+        "policy": "all_except_last",
+        "args": {
+        }
+    },
+    "epochs": 3,
+    "steps": -1,
+    "seed": 42,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "weight_stashing": true,
+    "work_scheduler": "1F1B",
+    "cudnn_benchmark": true,
+    "max_buffers": 1,
+    "step_every": 1,
+    "keep_buffers_alive": true,
+    "train_batches_limit":-1,
+    "log_frequency": 1
+}

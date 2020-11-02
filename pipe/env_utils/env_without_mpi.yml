@@ -1,0 +1,30 @@
+name: nompi
+channels:
+  - pytorch
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.8
+  - pytorch=1.6.0
+  - torchvision=0.7.0
+  - scikit-learn # here we start
+  - jupyter
+  - jupyterlab
+  - pandas
+  - tqdm
+  - sympy
+  - networkx
+  - matplotlib
+  - scipy
+  - ipython
+  - numpy
+  - pip
+  - pip:
+    - ptvsd
+    - flake8
+    - autopep8
+    - transformers
+    - yapf
+    - t5
+    - datasets
+    - seaborn

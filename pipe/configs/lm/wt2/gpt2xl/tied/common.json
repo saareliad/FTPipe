@@ -1,0 +1,60 @@
+{
+    "logdir": "logs/debug/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir": "results/lm/gpt2xl/tied/",
+    "statistics": "lm_loss_per_batch",
+    "auto_file_name": true,
+    "out_filename": "tied_wd_wa",
+    "distributed_backend": "mpi",
+    "model": "gpt2_xl_p8_lm_tied",
+    "model_name_or_path": "gpt2-xl",
+    "dataset": "wt2",
+    "trainer": {
+        "type": "lm",
+        "args": {
+            "always_calc_grad_norm": false
+        }
+    },
+    "bs_train": 1,
+    "bs_test": 1,
+    "train_seq_len": 1024,
+    "valid_seq_len": 1024,
+    "test_seq_len": 1024,
+    "num_data_workers": 10,
+    "optimizer": {
+        "type": "adamw",
+        "args": {
+            "lr": 5e-5,
+            "weight_decay": 0.01,
+            "eps": 1e-8
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_linear_schedule_with_warmup",
+        "preproc_args": {
+            "num_training_steps": "epochs_to_steps"
+        },
+        "args": {
+            "num_warmup_steps": 200,
+            "num_training_steps": -1,
+            "last_epoch": -1
+        }
+    },
+    "epochs": 2,
+    "steps": -1,
+    "seed_from_cmd": true,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "work_scheduler": "1F1B",
+    "cudnn_benchmark": true,
+    "max_buffers": 1,
+    "step_every": 1,
+    "train_batches_limit": -1,
+    "dont_drop_last": true,
+    "keep_buffers_alive": false,
+    "log_frequency": 80,
+    "stateless_tied": true,
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 0],
+    "overwrite_cache": false
+}
