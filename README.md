@@ -2,4 +2,5 @@
 
 This repository contains code used for FTPipe paper.
 
-Originally, the development was on two separate repositories. Here we will further merge and further automate FTPipe.
+Originally, the development was on two separate repositories.\
+Here we will further merge and automate FTPipe.
