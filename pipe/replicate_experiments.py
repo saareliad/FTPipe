@@ -1,6 +1,6 @@
 import argparse
 
-from run.helper import run_grid_on_multi_gpu_per_run, RunGridHelper
+from pipe.run.helper import run_grid_on_multi_gpu_per_run, RunGridHelper
 
 ALL_SEEDS = [42, 20202020, 77777777, 314159, 1322019]
 

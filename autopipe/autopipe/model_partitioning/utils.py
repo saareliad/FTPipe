@@ -1,7 +1,8 @@
 from collections import defaultdict
 from typing import Dict, Set, List
 
-from autopipe.model_profiling.control_flow_graph import Graph
+from autopipe.autopipe.model_profiling.control_flow_graph import Graph
+
 
 def re_assign_partition_indices(graph: Graph):
     out_edges = defaultdict(set)

@@ -13,14 +13,14 @@ except ImportError as e:
 import torch
 from transformers import T5Config, T5Tokenizer
 
-from models.normal.NLP_models.modeling_t5 import (
+from autopipe.models.normal.NLP_models.modeling_t5 import (
     T5ForConditionalGeneration, T5Model, get_attention_mask,
     get_inverted_encoder_attention_mask)
-from models.normal.NLP_models.modeling_t5_tied_weights import \
+from autopipe.models.normal.NLP_models.modeling_t5_tied_weights import \
     T5ForConditionalGeneration as TiedT5ForConditionalGeneration
-from models.normal.NLP_models.modeling_t5_tied_weights import \
+from autopipe.models.normal.NLP_models.modeling_t5_tied_weights import \
     T5Model as TiedT5Model
-from autopipe.model_profiling.tracer import (
+from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 from . import register_task
 from .task import Parser, Partitioner

@@ -6,28 +6,28 @@ from typing import Type
 import torch
 from torch.utils.data import DataLoader
 
-import models
-import optimizers.lr_scheduler
+import pipe.models
+import pipe.optimizers.lr_scheduler
 # from data import get_dataloaders  # Commented out because can't install t5 on windows.
-from experiments.experiments import ArgsStasher, auto_file_name
-from misc.filelogger import FileLogger
-from models import parse_config
-from optimizers import AVAILBALE_OPTIMIZERS
-from pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
-from pipeline import TrueWeightsStorage
-from pipeline import dp_sim
-from pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
-from pipeline.data_propagation import get_propagator_cls
-from pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
+from pipe.experiments.experiments import ArgsStasher, auto_file_name
+from pipe.misc.filelogger import FileLogger
+from pipe.models import parse_config
+from pipe.optimizers import AVAILBALE_OPTIMIZERS
+from pipe.pipeline import CommunicationHandlerBase, get_auto_comm_handler_cls
+from pipe.pipeline import TrueWeightsStorage
+from pipe.pipeline import dp_sim
+from pipe.pipeline.communication.multiprocessing import MultiprocessingCommunicationHandler
+from pipe.pipeline.data_propagation import get_propagator_cls
+from pipe.pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
                                 get_adamw_gap_aware_cls)
-from pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
-from pipeline.statistics import get_statistics  # , Stats
-from pipeline.training import AVAILABLE_TRAINERS
-from pipeline.weight_prediction import get_sched_predictor
-from pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
-from pipeline.weight_stashing import WeightStasher
+from pipe.pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
+from pipe.pipeline.statistics import get_statistics  # , Stats
+from pipe.pipeline.training import AVAILABLE_TRAINERS
+from pipe.pipeline.weight_prediction import get_sched_predictor
+from pipe.pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
+from pipe.pipeline.weight_stashing import WeightStasher
 # TODO: migrate to `register_xxx()` convention
-from pipeline.work_schedulers import get_work_scheduler
+from pipe.pipeline.work_schedulers import get_work_scheduler
 
 
 # from data import AVAILABLE_DATASETS
@@ -40,7 +40,7 @@ def get_trainer_cls(args):
 def is_huggingface_transformer(args):
     if getattr(args, "is_huggingface_transformer", False):
         return True
-    return args.model in models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys()
+    return args.model in pipe.models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS.keys()
 
 
 def create_comm_handler(args, comm_init_args,
@@ -135,8 +135,8 @@ def preproc_lr_scheduler_args(args):
 
 def get_lr_scheduler_class(args):
     attr = getattr(args, 'lr_scheduler')
-    if attr['type'] in optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
-        scheduler_cls = getattr(optimizers.lr_scheduler, attr['type'])
+    if attr['type'] in pipe.optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
+        scheduler_cls = getattr(pipe.optimizers.lr_scheduler, attr['type'])
     else:
         scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
     return scheduler_cls

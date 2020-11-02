@@ -5,9 +5,9 @@ import warnings
 
 import torch
 
-from pipeline import SinglePartitionManager
-from pipeline.statistics import Stats
-from prepare_pipeline import SmallerLastBatchPolicy
+from pipe.pipeline import SinglePartitionManager
+from pipe.pipeline.statistics import Stats
+from pipe.prepare_pipeline import SmallerLastBatchPolicy
 
 
 # DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep

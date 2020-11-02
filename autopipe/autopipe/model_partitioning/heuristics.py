@@ -3,7 +3,7 @@ from functools import reduce
 
 import torch
 
-from autopipe.utils import ExecTimes, flatten
+from autopipe.autopipe.utils import ExecTimes, flatten
 from ..model_profiling import Node, NodeTypes
 
 __all__ = ["get_weight_functions"]

@@ -18,7 +18,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     has_fairseq = False
 
-from autopipe.model_profiling.tracer import (
+from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 
 from . import register_task
@@ -134,7 +134,7 @@ class MegatronPartitioner(Partitioner):
         print(f"{args.arch} model size {model_size:.2f}GB")
         return model
 
-    def get_input(self, args, analysis):
+    def get_input(self, args, analysis=False):
         # TODO the token 1 is a special token for padding
         # if padding is present then a special mask is created
         # due to the nature of our tracing it's either always mask or never mask

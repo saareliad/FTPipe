@@ -1,5 +1,6 @@
 import math
 from itertools import chain
+from typing import Type
 
 import numpy as np
 import torch
@@ -219,6 +220,6 @@ class AdamGapAware(GapAwareBase):
         pass
 
 
-def get_adam_gap_aware_cls() -> AdamGapAware:
+def get_adam_gap_aware_cls() -> Type[AdamGapAware]:
     gap_aware_cls = AdamGapAware
     return gap_aware_cls

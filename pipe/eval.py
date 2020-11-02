@@ -1,6 +1,6 @@
 import warnings
 
-from models import AVAILABLE_MODELS, parse_config
+from pipe.models import AVAILABLE_MODELS, parse_config
 
 
 def infer_all_cps(args) -> int:
@@ -39,7 +39,7 @@ def infer_all_cps(args) -> int:
         pipe_config = parsed_config.pipe_config
         args.num_stages = parsed_config.num_stages
         args.stage = parsed_config.stage_id
-        from data import get_dataloaders
+        from pipe.data import get_dataloaders
         train_dl, test_dl, samplers, extra = get_dataloaders(
             args,
             pipe_config=pipe_config,
@@ -88,7 +88,7 @@ def get_all_eval_results(args):
         all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
     print(f"-I- evaluating {len(all_cps)}: {all_cps}")
     if args.dataset == "t5_tfds":
-        from data.t5 import t5_tfds
+        from pipe.data.t5 import t5_tfds
         device = getattr(args, "eval_device", "cpu")
         if not isinstance(device, list):
             all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)

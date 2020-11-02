@@ -4,12 +4,8 @@ from enum import IntEnum
 from itertools import chain
 from typing import Tuple, Optional, Callable, Dict, Iterable, List
 
+import networkx as nx
 from torch import Tensor, nn as nn
-
-try:
-    import networkx as nx
-except ImportError:
-    print("networkx package not found")
 
 
 class NodeTypes(IntEnum):
@@ -149,7 +145,7 @@ class Graph():
                    directed: bool = False,
                    node_weight_function: Optional[NodeWeightFunction] = None,
                    edge_weight_function: Optional[EdgeWeightFunction] = None) -> nx.Graph:
-        '''
+        """
         convert the graph into a weighted networkx graph.\n
         each node will have a scope,partition idx and weight associated with it.\n
         each weight will be weighted\n
@@ -167,7 +163,7 @@ class Graph():
         edge_weight_function:
             an optional weight function for the edges should be a function (Node,Node) to int
             if not given a default value of 1 will be given to all edges
-        '''
+        """
         try:
             import networkx as nx
         except ImportError as e:
@@ -205,7 +201,7 @@ class Graph():
     def build_dot(self,
                   node_weight_function: Optional[NodeWeightFunction] = None,
                   edge_weight_function: Optional[EdgeWeightFunction] = None):
-        '''
+        """
         return a graphviz representation of the graph
         Parameters
         ----------
@@ -213,7 +209,7 @@ class Graph():
             optional function to get node weights
         edge_weight_function:
             optional function to get edge weights
-        '''
+        """
         theme = {
             "background_color": "#FFFFFF",
             "fill_color": "#E8E8E8",
@@ -328,7 +324,7 @@ class Graph():
     def display(self,
                 node_weight_function: Optional[NodeWeightFunction] = None,
                 edge_weight_function: Optional[EdgeWeightFunction] = None):
-        '''
+        """
         display the graph in Jupyter
 
         Parameters
@@ -337,7 +333,7 @@ class Graph():
             optional edge weight function
         node_weight_function:
             optional node weight function
-        '''
+        """
         try:
             from IPython.core.display import display_svg
             display_svg(self.build_dot(node_weight_function=node_weight_function,
@@ -351,7 +347,7 @@ class Graph():
                     directory: str,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None):
-        '''
+        """
         save the rendered graph to a pdf file
 
         Parameters
@@ -360,7 +356,7 @@ class Graph():
             the name of the saved file
         directory:
             directory to store the file in
-        '''
+        """
         dot = self.build_dot(edge_weight_function=edge_weight_function, node_weight_function=node_weight_function)
         dot.format = "pdf"
         import os
@@ -370,7 +366,7 @@ class Graph():
         return self
 
     def serialize(self, path: str):
-        '''
+        """
         serializes the graph to the given path
         can later be restored using Graph.deserialize(path)
 
@@ -378,15 +374,15 @@ class Graph():
         -----------
         path:
             the path to store the graph object file will be called path.graph
-        '''
+        """
 
         with open(path, "wb") as f:
             pickle.dump(self.state(), f)
 
     def state(self):
-        '''
+        """
         returns a dictionary containing the graphs state
-        '''
+        """
         node_states = dict()
         for node in self.nodes:
             state = dict(id=node.id,
@@ -449,14 +445,14 @@ class Graph():
 
     @classmethod
     def deserialize(cls, path: str) -> "Graph":
-        '''
+        """
         deserializes the graph from the path returning a Graph object
 
         Parameters:
         -------------
         path:
         the path to where the graph is stored
-        '''
+        """
 
         with open(path, "rb") as f:
             graph_data = pickle.load(f)
@@ -464,13 +460,13 @@ class Graph():
         return cls(None, None, None, None, None).load_state(graph_data)
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
-        '''
+        """
         creates a graph g with nodes of type CONSTANT 
         or nodes who solely depend on constants are removed
         leaving only inputs layers and params/buffers
 
         returns the created graph and a map between g's indices and self indices
-        '''
+        """
         new_nodes = dict()
         output_ids = []
 
@@ -530,7 +526,6 @@ class Graph():
 
     def __getitem__(self, idx):
         return self._nodes[idx]
-
 
     def __contains__(self, node_id):
         return node_id in self._nodes

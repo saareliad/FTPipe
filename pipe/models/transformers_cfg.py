@@ -40,6 +40,7 @@ MODEL_TYPES = {
 
 def roberta_large_8p_bw11_0_async_mnli_glue():
     return dict(model_type='roberta_glue',
+                # model_name_or_path='roberta-large-mnli',  # to reproduce a pretrained checkpoint on MNLI.
                 model_name_or_path='roberta-large',
                 do_lower_case=False,
                 output_past=False,
@@ -50,16 +51,6 @@ def roberta_large_8p_bw11_0_async_mnli_glue():
                 num_labels=3,
                 finetuning_task='mnli')
 
-
-# NOTE: this is to reprocduce a pretrained checkpoint on MNLI.
-# def roberta_large_8p_bw11_0_mnli_glue():
-#     return dict(model_type='roberta_glue',
-#                 model_name_or_path='roberta-large-mnli',
-#                 do_lower_case=False,
-#                 output_past=False,
-#                 stateless_tied=False,
-#                 num_labels=3,
-#                 finetuning_task='mnli')
 
 def bert_large_uncased_whole_word_masking_8p_bw11_0_async_rte_glue():
     return dict(model_type='bert_glue',
@@ -397,21 +388,6 @@ def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
                 },
                 stateless_tied=True)
 
-
-def t5_small_untied_4p_bw12_squad1():
-    return dict(model_type='t5',
-                model_name_or_path='t5-small',
-                do_lower_case=False,
-                output_past=False,
-                output_attentions=False,
-                output_hidden_states=False,
-                explicitly_set_dict={
-                    "output_only": True,
-                    "output_attentions": False,
-                    "precomputed_masks": False,
-                    "output_hidden_states": False
-                },
-                stateless_tied=False)
 
 
 functions_list = getmembers(

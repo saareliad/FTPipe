@@ -9,8 +9,8 @@ import torch
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
 
-from models.load_pipeline_weights_to_hf import T5HFLoader
-from models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
+from pipe.models.load_pipeline_weights_to_hf import T5HFLoader
+from pipe.models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
 
 def load_huggingface_checkpoint(args, cp_number, spread_across_devices=True, **kwargs):

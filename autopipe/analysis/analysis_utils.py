@@ -5,7 +5,7 @@ from typing import Dict
 import torch
 from torch import Tensor
 from collections import deque
-from autopipe.utils import move_tensors
+from autopipe.autopipe.utils import move_tensors
 
 
 def extra_communication_time_lower_bound(comp_time, comm_time):
@@ -37,7 +37,7 @@ def apply_ratio(upper, lower, ratio):
     return (upper * (1 - ratio)) + (lower * ratio)
 
 
-def convert_to_analysis_format(config: Dict, layers: Dict[str, Tensor], tensors: Dict[str, Tensor]) -> Dict:
+def convert_to_analysis_format(config: Dict, layers: Dict[str, torch.nn.Module], tensors: Dict[str, Tensor]) -> Dict:
     """convert a pipeline configuration to a simpler format used by the analysis module
        this is a conversion to a legacy format which should not be used except for the analysis"""
     analysis_config = dict()

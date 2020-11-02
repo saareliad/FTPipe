@@ -45,6 +45,7 @@ class heapdict(MutableMapping):
         h = self.heap
         while True:
             # calculate the offset of the left child
+            # noinspection PyDeepBugsBinOperator
             l = (i << 1) + 1
             # calculate the offset of the right child
             r = (i + 1) << 1

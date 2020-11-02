@@ -8,10 +8,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
 from transformers import GPT2Config, GPT2Tokenizer
 
-from models.normal import (GPT2LMHeadModel, GPT2Model,
-                           StatelessGPT2LMHeadModel, StatelessGPT2Model)
-from autopipe.model_profiling.tracer import (
+from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
+from autopipe.models.normal import (GPT2LMHeadModel, GPT2Model,
+                                    StatelessGPT2LMHeadModel, StatelessGPT2Model)
 from . import register_task
 from .task import Parser, Partitioner
 

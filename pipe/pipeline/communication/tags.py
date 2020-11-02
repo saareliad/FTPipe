@@ -1,4 +1,4 @@
-from models.simple_partitioning_config import PipelineConfig
+from pipe.models.simple_partitioning_config import PipelineConfig
 
 
 # TODO tags for tensors we send multiple times

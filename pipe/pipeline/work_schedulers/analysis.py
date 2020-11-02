@@ -3,8 +3,8 @@ import re
 from collections import Counter
 from typing import List, Tuple, Dict, Any
 
-from pipeline.work_schedulers import WorkScheduler, GpipeScheduler
-from pipeline.work_schedulers import get_work_scheduler
+from pipe.pipeline.work_schedulers import WorkScheduler, GpipeScheduler
+from pipe.pipeline.work_schedulers import get_work_scheduler
 
 
 def get_fwd_bwd_string_for_stage(stage, scheduler: WorkScheduler, num_stages,

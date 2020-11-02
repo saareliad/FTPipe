@@ -1,10 +1,12 @@
 import os
-from functools import partial
 import shlex
 import subprocess
+from functools import partial
+
 from sklearn.model_selection import ParameterGrid
 
 from .gpu_queue import map_to_limited_gpus, map_to_several_limited_gpus, flexible_map_to_several_limited_gpus
+
 
 class RunGridHelper:
     """
@@ -102,7 +104,6 @@ def run_grid_on_multi_gpu_per_run(COMMAND, param_grid, gpu_list, gpus_per_config
     func = partial(call_function, COMMAND)
     map_to_several_limited_gpus(func, configs, gpus_per_config, len(gpu_list),
                                 CUDA_VISIBLE_DEVICES=gpu_list)
-
 
 
 def infer_number_of_gpus(COMMAND):

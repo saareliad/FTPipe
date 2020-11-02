@@ -4,10 +4,10 @@ from typing import Dict
 import numpy as np
 import torch
 from torch import Tensor
-from pipeline.communication.interface import CommunicationHandlerBase
-from pipeline.communication.common_simple_comm import SimpleCommBase
 
-# from copy import deepcopy
+# from pipe.pipeline.communication.interface import CommunicationHandlerBase
+from pipe.pipeline.communication.common_simple_comm import SimpleCommBase
+
 
 # Conversion Table
 TABLE = {
@@ -44,9 +44,9 @@ class TensorWrapper:
         if isinstance(value, Tensor):
             return value  # NOTE: if we quantize sends change this
         elif value is None:
-            if (dtype:=self.dtypes[name]) is not None:
-
-                warnings.warn(f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead, will send a tensor of zeros")
+            if (dtype := self.dtypes[name]) is not None:
+                warnings.warn(
+                    f"expected to send dtype {self.dtypes[name]} for tensor {name} for got None instead, will send a tensor of zeros")
                 shape = self.comm_handler.tensor_shapes[name]
                 # TODO: there is also hack we can send smaller data
                 return torch.zeros(shape, dtype=dtype)

@@ -2,7 +2,7 @@ import os
 
 import matplotlib.pyplot as plt
 
-from experiments.experiments import load_experiment
+from pipe.experiments.experiments import load_experiment
 from . import plot
 
 

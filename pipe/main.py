@@ -13,16 +13,16 @@ import numpy as np
 import torch
 import torch.multiprocessing as mp
 
-from configs.parse_json_config import parse_json_config
-from data import add_dataset_argument
-from eval import get_all_eval_results
-from experiments import save_experiment, load_experiment_for_update
-from experiments.experiments import auto_file_name
-from models import AVAILABLE_MODELS
-from models.parse_config import get_my_send_recv_ranks
-from pipeline.util import get_world_size
-from prepare_pipeline import prepare_pipeline, preproc_data
-from train import training_loop
+from pipe.configs.parse_json_config import parse_json_config
+from pipe.data import add_dataset_argument
+from pipe.eval import get_all_eval_results
+from pipe.experiments import save_experiment, load_experiment_for_update
+from pipe.experiments.experiments import auto_file_name
+from pipe.models import AVAILABLE_MODELS
+from pipe.models.parse_config import get_my_send_recv_ranks
+from pipe.pipeline.util import get_world_size
+from pipe.prepare_pipeline import prepare_pipeline, preproc_data
+from pipe.train import training_loop
 
 
 # TODO: support multiple servers,

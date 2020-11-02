@@ -1,4 +1,3 @@
-# import torch
 from .interface import BaseOutPutIsLossTrainer
 
 

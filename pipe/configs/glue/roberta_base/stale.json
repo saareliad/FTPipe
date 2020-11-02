@@ -1,6 +1,0 @@
-{
-    "base_config_path": "common.json",
-    "base_config_path_is_relative": true,
-    "weight_stashing": false,
-    "train_batches_limit": -1
-}

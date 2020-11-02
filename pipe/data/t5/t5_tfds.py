@@ -4,9 +4,9 @@ from typing import Dict
 import torch
 from torch.utils.data import TensorDataset
 
-from data.datasets import CommonDatasetHandler, register_dataset
-from data.utils import compute_and_cache
-from experiments.experiments import auto_file_name
+from pipe.data.datasets import CommonDatasetHandler, register_dataset
+from pipe.data.utils import compute_and_cache
+from pipe.experiments.experiments import auto_file_name
 from .preproc import _shift_right, get_attention_mask, get_inverted_encoder_attention_mask
 from .t5_tfds_eval import T5Evaluator
 

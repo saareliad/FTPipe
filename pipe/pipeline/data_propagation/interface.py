@@ -28,6 +28,7 @@ class PipelineDataPropagator(abc.ABC):
         t = propagator.pack_send_context(model_out, *ctx)
         send(t) ...
     """
+
     def __init__(self, *args, **kw):
         pass
 

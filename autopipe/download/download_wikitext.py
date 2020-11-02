@@ -1,6 +1,7 @@
-import requests
 import os
 import zipfile
+
+import requests
 
 
 # DEFAULT_DATA_DIR = os.path.expanduser('~/.pytorch-datasets')

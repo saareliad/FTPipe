@@ -912,6 +912,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         if is_None(self.z_loss):
             self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100)
         else:
+            # TODO: check
             self.lm_loss = nn.CrossEntropyLoss(ignore_index=-100, reduction='none')
 
 
@@ -1020,7 +1021,8 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             loss_fct = self.lm_loss
 
             if is_not_None(self.z_loss):
-                # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
+                # TODO: check
+                # z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
                 a = lm_logits.view(-1, lm_logits.size(-1))[lm_labels.view(-1) != -100]
                 b = lm_labels.view(-1)[lm_labels.view(-1) != -100]
                 loss = loss_fct(a,b).add_(a.logsumexp(1).pow_(2).add_(self.z_loss)).mean()

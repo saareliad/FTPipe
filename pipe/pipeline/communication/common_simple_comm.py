@@ -6,7 +6,7 @@ from collections import OrderedDict
 import torch
 import torch.distributed as dist
 
-from models.simple_partitioning_config import PipelineConfig
+from pipe.models.simple_partitioning_config import PipelineConfig
 from .buffer import make_buff
 from .interface import CommunicationHandlerBase, FuturesHandlerBase
 from .tags import tensor_tags_from_config

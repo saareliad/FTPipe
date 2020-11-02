@@ -7,8 +7,7 @@ from collections import defaultdict
 
 import torch
 
-from models.parse_config import is_shared_parameter
-from models.simple_partitioning_config import PipelineConfig
+from pipe.models.simple_partitioning_config import PipelineConfig
 from .common_simple_comm import SimpleCommBase
 from .interface import FuturesHandlerBase
 
@@ -142,14 +141,17 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
                     send_stage = self.pipe_config.rank_to_stage_idx(sending_rank)
                     recv_stage = self.pipe_config.rank_to_stage_idx(self.rank)
 
-                    send_dist_between_stages  = self.pipe_config.send_depth_between_stages(send_stage=send_stage, recv_stage=recv_stage, is_activations=True)
+                    send_dist_between_stages = self.pipe_config.send_depth_between_stages(send_stage=send_stage,
+                                                                                          recv_stage=recv_stage,
+                                                                                          is_activations=True)
 
                     if send_dist_between_stages > 1:
                         # TODO: check that there is a single taget between stages
                         sent_items_between_stages = self.pipe_config.sent_items_between_stages(send_stage, recv_stage)
                         is_single_tensor_between_stages = len(sent_items_between_stages) == 1
                         if not is_single_tensor_between_stages:
-                            raise NotImplementedError(f"Items: total of {len(sent_items_between_stages)} items are send between stages with patience={send_dist_between_stages} we currently support only 1, such items. {sent_items_between_stages}")
+                            raise NotImplementedError(
+                                f"Items: total of {len(sent_items_between_stages)} items are send between stages with patience={send_dist_between_stages} we currently support only 1, such items. {sent_items_between_stages}")
 
                         required_patience = send_dist_between_stages
                         n_acks_to_send = required_patience

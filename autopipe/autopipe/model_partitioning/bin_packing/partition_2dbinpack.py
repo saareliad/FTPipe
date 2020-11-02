@@ -11,11 +11,11 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
-from autopipe.model_partitioning.bin_packing.heap_dict import heapdict
-from autopipe.model_partitioning.bin_packing.post_process import post_process_partition
-from autopipe.model_partitioning.bin_packing.union_find import UnionFind
-from autopipe.model_partitioning.heuristics import NodeWeightFunction
-from autopipe.model_profiling import Graph, Node
+from autopipe.autopipe.model_partitioning.bin_packing.heap_dict import heapdict
+from autopipe.autopipe.model_partitioning.bin_packing.post_process import post_process_partition
+from autopipe.autopipe.model_partitioning.bin_packing.union_find import UnionFind
+from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
+from autopipe.autopipe.model_profiling import Graph, Node
 
 
 # from ...model_profiling import Graph, Node, NodeWeightFunction

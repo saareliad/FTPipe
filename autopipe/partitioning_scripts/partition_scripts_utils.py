@@ -2,7 +2,7 @@ import os
 import shlex
 import sys
 from shutil import copyfile, rmtree
-from typing import Tuple
+from typing import Tuple, Dict
 
 import torch
 
@@ -14,6 +14,7 @@ def choose_blocks(model, args) -> Tuple[torch.nn.Module]:
         m_superclasses = {c.__name__: c for c in type(m).mro()}
         blocks.update(m_superclasses)
 
+    blocks: Dict[str, torch.nn.Module]
     if args.basic_blocks is None:
         args.basic_blocks = []
     try:
@@ -33,7 +34,7 @@ def record_cmdline(output_file):
         f.write(cmdline.rstrip('\r\n') + '\n' + content)
 
 
-def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/"):
+def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP="/tmp/partitioning_outputs/", remove_tmp=False):
     # TODO: put all hyper parameters here, a dict for each setting we want to try.
     # d1 = dict(basic_blocks=[])
     # ovverride_dicts.append(d1)
@@ -99,4 +100,5 @@ def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP
         raise last_exception
     copyfile(best[0], orig_name + ".py")
     print(f"-I- copied best to {orig_name}.py")
-    # rmtree(TMP)
+    if remove_tmp:
+        rmtree(TMP)

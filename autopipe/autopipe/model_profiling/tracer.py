@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch._overrides import get_overridable_functions
 
-from autopipe.utils import traverse_model
+from autopipe.autopipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
 from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
     tensor_creation_ops
@@ -1371,7 +1371,7 @@ def check_is_valid_graph(nodes):
         if isinstance(node.tensor_shape, torch.Size) or isinstance(node.tensor_dtype, torch.dtype) or issubclass(
                 node.value_type, Tensor):
             # HACK send torch.Size in MPI as tuple
-            if node.value_type is torch.Size:
+            if node.value_type == torch.Size:
                 continue
             if not ((isinstance(node.tensor_shape, torch.Size)) and (isinstance(node.tensor_dtype, torch.dtype)) and (
                     issubclass(node.value_type, Tensor))):

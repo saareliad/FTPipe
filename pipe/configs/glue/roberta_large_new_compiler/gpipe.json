@@ -1,9 +1,0 @@
-{
-    "base_config_path": "common.json",
-    "base_config_path_is_relative": true,
-    "work_scheduler": "GPIPE",
-    "step_every": 32,
-    "train_batches_limit": -1,
-    "bs_train": 1,
-    "bs_test": 32
-}

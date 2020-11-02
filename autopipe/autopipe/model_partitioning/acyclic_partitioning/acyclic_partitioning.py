@@ -11,8 +11,8 @@ import numpy as np
 from torch.nn.modules.module import Module
 from torch.nn.parameter import Parameter
 
-from autopipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
-from autopipe.utils import layerDict, tensorDict
+from autopipe.autopipe.model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
+from autopipe.autopipe.utils import layerDict, tensorDict
 from .data_structures import QuotientGraph, SimpleNode, PriorityQueue, VerticeStageConnections
 from .gpa import coarsening, refine
 

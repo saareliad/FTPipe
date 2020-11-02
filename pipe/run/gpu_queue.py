@@ -1,6 +1,7 @@
-from joblib import Parallel, delayed
-from multiprocessing import Manager
 import os
+from multiprocessing import Manager
+
+from joblib import Parallel, delayed
 
 
 def run_function(func, cfg, q):
@@ -113,5 +114,6 @@ if __name__ == "__main__":
             return configs
 
         map_to_limited_gpus(foo, get_configs(), 4)
+
 
     test_map_to_limited_gpus()

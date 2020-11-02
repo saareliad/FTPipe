@@ -1,4 +1,5 @@
 from itertools import chain
+from typing import Type
 
 import torch
 
@@ -167,6 +168,6 @@ class AdamWGapAware(GapAwareBase):
 
 
 # TODO: add to adam...
-def get_adamw_gap_aware_cls() -> AdamWGapAware:
+def get_adamw_gap_aware_cls() -> Type[AdamWGapAware]:
     gap_aware_cls = AdamWGapAware
     return gap_aware_cls

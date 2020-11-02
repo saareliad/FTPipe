@@ -1,7 +1,7 @@
 import torch
 
-from models.normal import WideResNet, amoebanetd, vgg16_bn
-from models.normal.vision_models import ResNet
+from autopipe.models.normal import WideResNet, amoebanetd, vgg16_bn
+from autopipe.models.normal.vision_models import ResNet
 from . import register_task
 from .task import Parser, Partitioner
 
@@ -109,7 +109,7 @@ class VisionPartioner(Partitioner):
     def batch_dim(self) -> int:
         return 0
 
-    def get_input(self, args, analysis):
+    def get_input(self, args, analysis=False):
         dataset = args.dataset
         assert dataset in DATASETS
         if analysis:
@@ -117,10 +117,13 @@ class VisionPartioner(Partitioner):
         else:
             batch_size = args.partitioning_batch_size
 
+        # TODO: just choose size like we do for seq len
         if dataset == 'cifar10' or dataset == 'cifar100':
             sample = torch.randn(batch_size, 3, 32, 32)
         elif dataset == 'imagenet':
             sample = torch.randn(batch_size, 3, 224, 224)
+        else:
+            raise NotImplementedError()
         return sample
 
 

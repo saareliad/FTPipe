@@ -9,8 +9,8 @@ from typing import List, Dict, Optional, Iterable
 import networkx as nx
 from torch.nn import Module
 
-from autopipe.model_partitioning.utils import re_assign_partition_indices
-from autopipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
+from autopipe.autopipe.model_partitioning.utils import re_assign_partition_indices
+from autopipe.autopipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
 # from .partition_class import Partition
 from .compile_single_machine_model_parallel import create_model_parallel_module

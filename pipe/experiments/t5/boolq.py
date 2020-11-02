@@ -11,8 +11,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-from experiments.analysis.plot import plot_loss
-from experiments.experiments import load_experiment
+from pipe.experiments.analysis.plot import plot_loss
+from pipe.experiments.experiments import load_experiment
 
 
 # plt.rc('font', family='serif')

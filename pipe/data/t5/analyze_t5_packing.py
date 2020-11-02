@@ -3,7 +3,7 @@ from pprint import pprint
 import numpy as np
 import pandas as pd
 
-from data.t5.t5_tfds import like_mtf
+from pipe.data.t5.t5_tfds import like_mtf
 
 
 def density(x):

@@ -8,14 +8,14 @@ from typing import Dict, Optional, Tuple
 
 sys.path.append("../")
 
-from autopipe.model_profiling.control_flow_graph import NodeTypes
-from autopipe import pipe_model, get_weight_functions
-from autopipe.utils import layerDict, tensorDict, move_tensors
+from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
+from autopipe.autopipe import pipe_model, get_weight_functions
+from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
 
-from partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
-from partitioning_scripts.tasks import Partitioner, Parser, get_parser_and_partitioner
-from analysis import run_analysis
-from analysis.analysis_utils import convert_to_analysis_format
+from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
+from autopipe.partitioning_scripts.tasks import Partitioner, Parser, get_parser_and_partitioner
+from autopipe.analysis import run_analysis
+from autopipe.analysis.analysis_utils import convert_to_analysis_format
 
 
 def parse_cli() -> Tuple[Namespace, Dict, Partitioner]:
