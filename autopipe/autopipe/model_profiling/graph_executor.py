@@ -41,6 +41,22 @@ class PostHook(abc.ABC):
         pass
 
 
+def pre_hook_factory(fn) -> PreHook:
+    class FunctionalPreHook(PreHook):
+        def __call__(self, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+    return FunctionalPreHook()
+
+
+def post_hook_factory(fn) -> PostHook:
+    class FunctionalPostHook(PostHook):
+        def __call__(self, *args, **kwargs):
+            return fn(*args, **kwargs)
+
+    return FunctionalPostHook()
+
+
 def execute_graph(model: nn.Module, graph: Graph, model_args=(), model_kwargs=None, pre_hook: Optional[PreHook] = None,
                   post_hook: Optional[PostHook] = None, enforce_out_of_place=True):
     if model_kwargs is None:

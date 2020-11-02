@@ -10,15 +10,16 @@ from .cache_utils import compute_and_cache, compute_and_maybe_cache
 from .compiler import compile_partitioned_model
 from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
-from .model_profiling import Graph, profile_network, GraphProfiler, trace_module, NodeWeightFunction, \
+from .model_profiling import Graph, Node, profile_network, GraphProfiler, trace_module, NodeWeightFunction, \
     EdgeWeightFunction
-from .model_profiling.graph_executor import execute_graph
+from .model_profiling.graph_executor import execute_graph, pre_hook_factory, post_hook_factory
 from .model_profiling.infer_req_grad import infer_req_grad
 from .utils import move_tensors, ExecTimes
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
-__all__ = ['pipe_model', 'trace_module', 'partition_model']
+
+# __all__ = ['pipe_model', 'trace_module', 'partition_model']
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -191,7 +192,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         whether to use the older model based network_profiler
         default False
     profile_ops:
-        weheter to also profile ops when using the GraphProfiler
+        whether to also profile ops when using the GraphProfiler
         default True
     save_memory_mode:
         minimize memory footprint during profiling
@@ -452,8 +453,10 @@ def get_profiles(graph: Graph, model: nn.Module,
         torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter, profile_ops=profile_ops,
                                  force_no_recomp_scopes=force_no_recomp_scopes, save_memory_mode=save_memory_mode)
+        pre_hook = pre_hook_factory(profiler.time_forward)
+        post_hook = post_hook_factory(profiler.time_backward)
         execute_graph(model, graph, model_args=model_args, model_kwargs=model_kwargs,
-                      pre_hook=profiler.time_forward, post_hook=profiler.time_backward, enforce_out_of_place=True)
+                      pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
         print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
         weights = profiler.get_weights()
     elif use_network_profiler:
@@ -476,7 +479,8 @@ def get_profiles(graph: Graph, model: nn.Module,
     return weights
 
 
-def partition_and_match_weights_until_last_partition_is_with_no_recomputation(graph: Graph, weights: FullExecTimes,
+def partition_and_match_weights_until_last_partition_is_with_no_recomputation(graph: Graph,
+                                                                              weights: Dict[Node, FullExecTimes],
                                                                               partitioning_method,
                                                                               partition_profiled_graph_fn):
     allowed_mistakes = 0
