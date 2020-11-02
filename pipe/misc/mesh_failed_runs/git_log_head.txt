@@ -1,0 +1,1 @@
+commit 1c70f92b22159d55d2f57eb5e34dbd78f067799f Author: Adam Roberts <adarob@google.com> Date: Mon Aug 31 11:52:25 2020 -0700 Allow additional gin configs to be passed to MtfModel for parsing after the operative config. PiperOrigin-RevId: 329347298 commit 3effd60e0fb052cd6519c279c7f026ee9f1a0975 Author: Sharan Narang <sharannarang@google.com>

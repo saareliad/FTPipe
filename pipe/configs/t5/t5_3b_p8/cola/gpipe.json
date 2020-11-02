@@ -1,0 +1,10 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "work_scheduler": "GPIPE",
+    "step_every": 8,
+    "bs_train": 32,
+    "bs_test": 32,
+    "checkpoints_save_name_prefix": "gpipe_adafactor",
+    "checkpoints_save_dir": "/nfs_Disk2/saare/checkpoints/t5/3b/cola/"
+}
