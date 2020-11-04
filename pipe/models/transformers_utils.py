@@ -1,4 +1,5 @@
 from enum import Enum, auto
+
 from .transformers_cfg import MODEL_TYPES
 
 

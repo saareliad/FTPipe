@@ -183,7 +183,7 @@ class PipelineConfig:
 
         return stage_depth
 
-    def sent_items_between_stages(self, send_stage, recv_stage, is_activations:bool = True):
+    def sent_items_between_stages(self, send_stage, recv_stage, is_activations: bool = True):
         stage_id = send_stage
         targets = self.d['stages'][stage_id]['outputs'] if is_activations else self.d['stages'][stage_id]['inputs']
 

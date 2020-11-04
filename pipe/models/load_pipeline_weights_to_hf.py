@@ -1,10 +1,12 @@
-import torch
-import re
-import os
 import abc
+import os
+import re
+
+import torch
 from transformers import AutoModel, AutoConfig, AutoTokenizer, T5ForConditionalGeneration
+
+from pipe.models.registery import AVAILABLE_MODELS
 from .transformers_utils import resize_token_embeddings
-from .model_handler import AVAILABLE_MODELS
 
 
 class Loader(abc.ABC):

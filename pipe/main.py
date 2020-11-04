@@ -17,7 +17,7 @@ from pipe.data import add_dataset_argument
 from pipe.eval import get_all_eval_results
 from pipe.experiments import save_experiment, load_experiment_for_update
 from pipe.experiments.experiments import auto_file_name
-from pipe.models import AVAILABLE_MODELS
+from pipe.models.registery import AVAILABLE_MODELS
 from pipe.models.parse_config import get_my_send_recv_ranks
 from pipe.pipeline.util import get_world_size
 from pipe.prepare_pipeline import prepare_pipeline, preproc_data

@@ -4,7 +4,7 @@ from copy import deepcopy
 from itertools import chain
 from pprint import pprint
 
-from .model_handler import AVAILABLE_MODELS
+from pipe.models.registery import AVAILABLE_MODELS
 from .simple_partitioning_config import PipelineConfig
 
 

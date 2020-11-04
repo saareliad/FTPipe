@@ -1,6 +1,7 @@
 import warnings
 
-from pipe.models import AVAILABLE_MODELS, parse_config
+from pipe.models import parse_config
+from pipe.models.registery import AVAILABLE_MODELS
 from pipe.train import approximate_checkpoint_every_x_epochs
 
 

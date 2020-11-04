@@ -1,8 +1,9 @@
-from enum import Enum, auto
 import os
-from .model_handler import CommonModelHandler, register_model
-from .transformers_utils import pretrained_model_config_and_tokenizer
-from .transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS, _register_hardcoded
+from enum import Enum, auto
+
+from pipe.models.registery.model_handler import CommonModelHandler, register_model
+from pipe.models.transformers_cfg import MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
+from pipe.models.transformers_utils import pretrained_model_config_and_tokenizer
 
 
 class GetConfigFrom(Enum):

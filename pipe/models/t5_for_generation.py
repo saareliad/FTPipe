@@ -59,7 +59,7 @@ T5_PRETRAINED_MODEL_ARCHIVE_LIST = [
 ]
 
 
-def decorate_args_and_kwargs_to_deivce(func, self : torch.nn.Module, device):
+def decorate_args_and_kwargs_to_deivce(func, device):
     """Decorate torch.nn.Module forward function by moving all inputs and outputs to device
 
         Note that we cannot easily use `forward_pre_hook` to move tensors around since this type of hooks currently
@@ -935,7 +935,7 @@ class T5Model(T5PreTrainedModel):
         if len(devices) < 2:
             device = devices[0] if devices else None
             if device is not None:
-                self.forward = decorate_args_and_kwargs_to_deivce(func=self.forward, self=self, device=device)
+                self.forward = decorate_args_and_kwargs_to_deivce(func=self.forward, device=device)
                 self.to(device)
                 return
 
@@ -954,12 +954,12 @@ class T5Model(T5PreTrainedModel):
             # block.register_forward_pre_hook(lambda module, input: tuple(t.to(device) for t in input))
             block.to(device)
             block.device = device
-            block.forward = decorate_args_and_kwargs_to_deivce(func=block.forward, self=block, device=device)
+            block.forward = decorate_args_and_kwargs_to_deivce(func=block.forward, device=device)
             modules_to_move.remove(block)
             handled_models.add(block)
             for nm, m in block.named_modules():
                 if m in modules_to_move:
-                    m.forward = decorate_args_and_kwargs_to_deivce(func=m.forward, self=m, device=device)
+                    m.forward = decorate_args_and_kwargs_to_deivce(func=m.forward, device=device)
                     modules_to_move.remove(m)
                     handled_models.add(m)
                 else:
@@ -978,7 +978,7 @@ class T5Model(T5PreTrainedModel):
 
             module.to(device)
             module.device = device
-            module.forward = decorate_args_and_kwargs_to_deivce(func=module.forward, self=module, device=device)
+            module.forward = decorate_args_and_kwargs_to_deivce(func=module.forward, device=device)
 
     def get_block_list(self):
         return list(self.encoder.get_block_list()) + list(self.decoder.get_block_list())
@@ -1158,7 +1158,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
         if len(devices) < 2:
             device = devices[0] if devices else None
             if device is not None:
-                self.forward = decorate_args_and_kwargs_to_deivce(func=self.forward, self=self, device=device)
+                self.forward = decorate_args_and_kwargs_to_deivce(func=self.forward, device=device)
                 self.to(device)
                 return
 
@@ -1177,12 +1177,12 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             # block.register_forward_pre_hook(lambda module, input: tuple(t.to(device) for t in input))
             block.to(device)
             block.device = device
-            block.forward = decorate_args_and_kwargs_to_deivce(func=block.forward, self=block, device=device)
+            block.forward = decorate_args_and_kwargs_to_deivce(func=block.forward, device=device)
             modules_to_move.remove(block)
             handled_models.add(block)
             for nm, m in block.named_modules():
                 if m in modules_to_move:
-                    m.forward = decorate_args_and_kwargs_to_deivce(func=m.forward, self=m, device=device)
+                    m.forward = decorate_args_and_kwargs_to_deivce(func=m.forward, device=device)
                     modules_to_move.remove(m)
                     handled_models.add(m)
                 else:
@@ -1201,7 +1201,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
             module.to(device)
             module.device = device
-            module.forward = decorate_args_and_kwargs_to_deivce(func=module.forward, self=module, device=device)
+            module.forward = decorate_args_and_kwargs_to_deivce(func=module.forward, device=device)
 
     def get_block_list(self):
         return list(self.encoder.get_block_list()) + list(self.decoder.get_block_list())
