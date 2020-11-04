@@ -613,7 +613,8 @@ class TracedLayer(nn.Module):
 
     """
 
-    def __init__(self, module: nn.Module, name, terminal, is_nesting_special_patched=False, nesting_special_patch=None, patch_direct_children=False):
+    def __init__(self, module: nn.Module, name, terminal, is_nesting_special_patched=False, nesting_special_patch=None,
+                 patch_direct_children=False):
         super(TracedLayer, self).__init__()
         self._name = name
         self._module = module
@@ -624,7 +625,6 @@ class TracedLayer(nn.Module):
 
     def forward(self, *args, **kwargs):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
-
 
         global CURRENT_SCOPE
         if CURRENT_SCOPE == "":
@@ -859,13 +859,13 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
                                                              full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
-        to_patch = False
+        patch_direct_children = False
         if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) and not allow_ModuleList_ModuleDict:
             raise TypeError(
                 f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
         elif isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
             warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
-            to_patch=True
+            patch_direct_children = True
         if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
@@ -878,7 +878,6 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
             traced_parent = layers_to_patch[patched_layers_to_scope[parent]]
             traced_parent: TracedLayer
             if traced_parent.patch_direct_children:
-                # to_patch = True
                 is_nesting_special_patched = True
                 nesting_special_patch = traced_parent._name
             else:
@@ -890,9 +889,9 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
                               terminal,
                               is_nesting_special_patched=is_nesting_special_patched,
                               nesting_special_patch=nesting_special_patch,
-                              patch_direct_children=to_patch)
+                              patch_direct_children=patch_direct_children)
 
-        if to_patch:
+        if patch_direct_children:
             layers_to_patch[scope] = wrapper
             patched_layers_to_scope[sub_layer] = scope
 
