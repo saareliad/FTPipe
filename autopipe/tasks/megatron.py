@@ -21,8 +21,8 @@ except (ImportError, ModuleNotFoundError):
 from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 
 # layers that require fixing is / is not None fixing
 # TransformerDecoder also requires ModuleList fix
@@ -102,7 +102,7 @@ class MegatronParser(Parser):
         return partitioning_defaults
 
 
-class MegatronPartitioner(Partitioner):
+class MegatronPartitioner(PartitioningTask):
     def __init__(self, args):
         super().__init__(args)
         if not has_fairseq:

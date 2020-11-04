@@ -17,8 +17,8 @@ from autopipe.models.normal.NLP_models.modeling_bert import BertForQuestionAnswe
 
 logger = logging.getLogger(__name__)
 
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 
 
 def load_and_cache_examples(args,
@@ -177,7 +177,7 @@ class ParsePartitioningOptsSquad(Parser):
         return f"bert_{args.n_partitions}p"
 
 
-class BertPartitioner(Partitioner):
+class BertPartitioner(PartitioningTask):
     def __init__(self, args) -> None:
         super().__init__(args)
         self.tokenizer = BertTokenizer.from_pretrained(args.model_name_or_path,

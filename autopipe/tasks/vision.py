@@ -2,8 +2,8 @@ import torch
 
 from autopipe.models.normal import WideResNet, amoebanetd, vgg16_bn
 from autopipe.models.normal.vision_models import ResNet
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 
 # model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
 _HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"),
@@ -101,7 +101,7 @@ class ParsePartitioningOptsVision(Parser):
         return f"{args.model}_p{args.n_partitions}"
 
 
-class VisionPartioner(Partitioner):
+class VisionPartioner(PartitioningTask):
     def get_model(self, args) -> torch.nn.Module:
         return MODEL_CFG_TO_SAMPLE_MODEL[args.model](**MODEL_CONFIGS[args.model]).train()
 

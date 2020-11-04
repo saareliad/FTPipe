@@ -22,8 +22,8 @@ from autopipe.models.normal.NLP_models.modeling_t5_tied_weights import \
     T5Model as TiedT5Model
 from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 from .transformers_utils import pretrained_model_config_and_tokenizer
 
 # See https://huggingface.co/models
@@ -306,7 +306,7 @@ class ParsePartitioningT5Opts(Parser):
         return output_file
 
 
-class T5Partitioner(Partitioner):
+class T5Partitioner(PartitioningTask):
     def __init__(self, args) -> None:
         super().__init__(args)
 

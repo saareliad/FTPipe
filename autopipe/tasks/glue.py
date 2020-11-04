@@ -13,8 +13,8 @@ from autopipe.autopipe.model_profiling import (register_new_explicit_untraced_fu
                                                register_new_traced_function)
 from autopipe.models.normal.NLP_models.modeling_bert import BertForSequenceClassification, get_extended_attention_mask
 from autopipe.models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 
 logger = logging.getLogger(__name__)
 
@@ -57,11 +57,12 @@ def get_dataset(args, tokenizer, cache_name="glue_ds.pt"):
         flag = False
         try:
             ds = torch.load(cache_name)
-        except Exception as e:
-            print("-I- loading from cache failed, creating new dataset. will not overwrite_cache.")
-            flag = True
-        if not flag:
-            return ds
+            res = ds
+        except Exception as _:
+            print("-I- loading from cache failed. Creating new dataset. will not overwrite_cache.")
+            res = None
+
+        return res
 
     print("-I- creating dataset")
     data_dir = args.data_dir
@@ -199,7 +200,7 @@ class ParsePartitioningOptsGlue(Parser):
         return output_file
 
 
-class GluePartitioner(Partitioner):
+class GluePartitioner(PartitioningTask):
     def __init__(self, args) -> None:
         super().__init__(args)
 
@@ -213,7 +214,7 @@ class GluePartitioner(Partitioner):
     def batch_dim(self) -> int:
         return 0
 
-    def get_input(self, args, analysis):
+    def get_input(self, args, analysis=False):
         return get_sample(args, self.tokenizer, analysis=analysis)
 
     def get_model(self, args) -> torch.nn.Module:

@@ -2,7 +2,7 @@ import math
 import operator
 import os
 import pickle
-from typing import Dict
+from typing import Dict, Any
 
 import torch
 from torch.utils.data import DataLoader, Dataset, RandomSampler
@@ -13,9 +13,8 @@ from autopipe.autopipe.model_profiling.tracer import (
 from autopipe.models.normal.NLP_models.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
 from autopipe.models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2LMHeadModel as StatelessGPT2LMHeadModel
 from autopipe.models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2Model as StatelessGPT2Model
-
-from . import register_task
-from .task import Parser, Partitioner
+from . import register_task, Parser
+from .partitioning_task import PartitioningTask
 
 
 class TextDataset(Dataset):
@@ -148,7 +147,7 @@ class ParsePartitioningOptsLM(Parser):
         return "_".join(s)
 
 
-class GPT2Partitioner(Partitioner):
+class GPT2Partitioner(PartitioningTask):
     def __init__(self, args) -> None:
         super().__init__(args)
         self.tokenizer = GPT2Tokenizer.from_pretrained(args.model_name_or_path,
@@ -180,12 +179,13 @@ class GPT2Partitioner(Partitioner):
             except:
                 print("Failed to replaced tied dummy partition device")
 
-    def update_analysis_kwargs(self, args, config, analysis_kwargs: Dict) -> Dict:
+    def update_analysis_kwargs(self, args, config, analysis_kwargs: Dict) -> Dict[str, Any]:
         stages_on_same_gpu = set()
         if args.lmhead and args.stateless_tied and len(
                 config['stages']) == args.n_partitions + 1:
             stages_on_same_gpu = [{0, args.n_partitions}]
         analysis_kwargs['stages_on_same_gpu'] = stages_on_same_gpu
+        return analysis_kwargs
 
     def register_functions(self):
         register_new_traced_function(math.sqrt, namespace=math)
@@ -221,7 +221,7 @@ class GPT2Partitioner(Partitioner):
 
         return model
 
-    def get_input(self, args, analysis):
+    def get_input(self, args, analysis=False):
         batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
         sampler = RandomSampler(self.ds)
         dl = DataLoader(self.ds,

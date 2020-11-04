@@ -1,4 +1,5 @@
 import os
+import pathlib
 import shlex
 import sys
 from shutil import copyfile, rmtree
@@ -86,7 +87,8 @@ def bruteforce_main(main, main_kwargs=None, override_dicts=None, NUM_RUNS=2, TMP
                 name += f"_{counter}"
 
             name += current_dict_prefix
-            new_path = os.path.join(TMP, name + ".py")
+
+            new_path = pathlib.Path(TMP, os.path.basename(name) + ".py")
             copyfile(orig_name + ".py", new_path)  # Save the last generated file
 
             results[name] = analysis_result

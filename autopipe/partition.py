@@ -1,6 +1,8 @@
 import argparse
 import importlib
 import os
+import pathlib
+import sys
 from argparse import Namespace
 from collections import defaultdict
 from typing import Dict, Optional, Tuple
@@ -11,10 +13,10 @@ from autopipe.autopipe import pipe_model, get_weight_functions
 from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
 from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
 from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
-from autopipe.tasks import Partitioner, Parser, get_parser_and_partitioner
+from autopipe.tasks import PartitioningTask, Parser, get_parser_and_partitioner
 
 
-def parse_cli() -> Tuple[Namespace, Dict, Partitioner]:
+def parse_cli() -> Tuple[Namespace, Dict, PartitioningTask]:
     task_parser = argparse.ArgumentParser(description="partitioning task parser", add_help=False)
     task_parser.add_argument("partitioning_task", help="partitioning task to perform")
     task, rest = task_parser.parse_known_args()
@@ -37,7 +39,7 @@ def parse_cli() -> Tuple[Namespace, Dict, Partitioner]:
     return cmd_args, model_args, partitioner_cls(cmd_args)
 
 
-def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, override_dict: Optional[Dict] = None):
+def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, override_dict: Optional[Dict] = None):
     for i, v in override_dict.items():
         if i in model_args:
             raise ValueError(
@@ -122,7 +124,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: Partitioner, overri
 
     if not cmd_args.no_analysis:
         # load configuration for analysis
-        module_path = cmd_args.output_file.replace("/", ".")
+        if sys.platform == "win32":
+            module_path = cmd_args.output_file.replace('\\', ".")
+        else:
+            module_path = cmd_args.output_file.replace("/", ".")
+
         generated = importlib.import_module(module_path)
         create_pipeline_configuration = generated.create_pipeline_configuration
         config = create_pipeline_configuration(DEBUG=True)
@@ -197,6 +203,9 @@ if __name__ == "__main__":
 
     NUM_RUNS = 1
     TMP = "tmp/"
+    output_dir = os.path.join("models", "partitioned")
+
+    cmd_args.output_file = os.path.join(output_dir, cmd_args.output_file)
 
     main_kwargs = dict(cmd_args=cmd_args, model_args=model_args, partitioner=partitioner)
 
