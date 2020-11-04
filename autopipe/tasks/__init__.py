@@ -30,13 +30,18 @@ def get_parser_and_partitioner(task_name) -> Tuple[Type[Parser], Type[Partitione
 
 # automatically import any Python files in the tasks directory
 # in order to automatically register all available tasks
-tasks_dir = os.path.dirname(__file__)
-for file in os.listdir(tasks_dir):
-    path = os.path.join(tasks_dir, file)
-    if (
-            not file.startswith('_')
-            and not file.startswith('.')
-            and (file.endswith('.py') or os.path.isdir(path))
-    ):
-        task_name = file[:file.find('.py')] if file.endswith('.py') else file
-        importlib.import_module('partitioning_scripts.tasks.' + task_name)
+# tasks_dir = os.path.dirname(__file__)
+
+def import_tasks(tasks_dir=os.path.dirname(__file__)):
+    for file in os.listdir(tasks_dir):
+        path = os.path.join(tasks_dir, file)
+        if (
+                not file.startswith('_')
+                and not file.startswith('.')
+                and (file.endswith('.py') or os.path.isdir(path))
+        ):
+            task_name = file[:file.find('.py')] if file.endswith('.py') else file
+            importlib.import_module('.tasks.' + task_name, package="autopipe")
+
+
+import_tasks()

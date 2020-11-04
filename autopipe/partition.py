@@ -1,21 +1,17 @@
 import argparse
 import importlib
 import os
-import sys
 from argparse import Namespace
 from collections import defaultdict
 from typing import Dict, Optional, Tuple
 
-sys.path.append("../")
-
-from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
-from autopipe.autopipe import pipe_model, get_weight_functions
-from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
-
-from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
-from autopipe.partitioning_scripts.tasks import Partitioner, Parser, get_parser_and_partitioner
 from autopipe.analysis import run_analysis
 from autopipe.analysis.analysis_utils import convert_to_analysis_format
+from autopipe.autopipe import pipe_model, get_weight_functions
+from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
+from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
+from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
+from autopipe.tasks import Partitioner, Parser, get_parser_and_partitioner
 
 
 def parse_cli() -> Tuple[Namespace, Dict, Partitioner]:

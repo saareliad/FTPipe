@@ -5,8 +5,8 @@ from typing import Set
 
 import torch
 
-from autopipe.model_partitioning.utils import re_assign_partition_indices, has_stage_cycles
-from autopipe.model_profiling import Graph, Node, NodeTypes
+from autopipe.autopipe.model_partitioning.utils import re_assign_partition_indices, has_stage_cycles
+from autopipe.autopipe.model_profiling import Graph, Node, NodeTypes
 
 __all__ = ["post_process_partition"]
 
