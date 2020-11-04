@@ -1,3 +1,11 @@
+"""Pipeline partitioning analysis:
+    measuring forward, backward, recomputation (optional) execution times,
+    analyzing communication by given bandwidth
+    and assuming steady state.
+
+    Does not measure optimizer.step()
+    Does not measure many more features (e.g weight prediction and so on)
+"""
 import io
 import sys
 import time
