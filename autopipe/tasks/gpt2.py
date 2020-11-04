@@ -10,9 +10,9 @@ from transformers import GPT2Config, GPT2Tokenizer
 
 from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
-from autopipe.models.normal.NLP_models.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
-from autopipe.models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2LMHeadModel as StatelessGPT2LMHeadModel
-from autopipe.models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2Model as StatelessGPT2Model
+from models.normal.NLP_models.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
+from models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2LMHeadModel as StatelessGPT2LMHeadModel
+from models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2Model as StatelessGPT2Model
 from . import register_task, Parser
 from .partitioning_task import PartitioningTask
 

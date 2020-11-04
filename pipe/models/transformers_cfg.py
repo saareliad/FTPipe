@@ -9,15 +9,16 @@ from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (RobertaConfig, RobertaTokenizer)
 from transformers import (T5Config, T5Tokenizer)
 
-from .normal.NLP_models import (GPT2LMHeadModel, GPT2Model,
-                                StatelessGPT2LMHeadModel)
-from .normal.NLP_models.modeling_bert import BertForQuestionAnswering as BertForQuestionAnsweringNew
-from .normal.NLP_models.modeling_bert import BertForSequenceClassification
-from .normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
+from models.normal.NLP_models.modeling_gpt2 import GPT2LMHeadModel, GPT2Model
+from models.normal.NLP_models.modeling_gpt2_tied_weights import GPT2LMHeadModel as StatelessGPT2LMHeadModel
+
+from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering as BertForQuestionAnsweringNew
+from models.normal.NLP_models.modeling_bert import BertForSequenceClassification
+from models.normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
 # from .normal.NLP_models.modeling_roberta import RobertaForQuestionAnswering
-from .normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
-from .normal.NLP_models.modeling_t5 import T5ForConditionalGeneration
-from .normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as StatelesT5ForConditionalGeneration
+from models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
+from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration
+from models.normal.NLP_models.modeling_t5_tied_weights import T5ForConditionalGeneration as StatelesT5ForConditionalGeneration
 
 # We use this to get cfg_class, model_class, and tokenizer_class
 MODEL_TYPES = {

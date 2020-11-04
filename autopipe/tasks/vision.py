@@ -1,7 +1,7 @@
 import torch
 
-from autopipe.models.normal import WideResNet, amoebanetd, vgg16_bn
-from autopipe.models.normal.vision_models import ResNet
+from models.normal.vision_models import WideResNet, amoebanetd, vgg16_bn
+from models.normal.vision_models import ResNet
 from . import register_task, Parser
 from .partitioning_task import PartitioningTask
 

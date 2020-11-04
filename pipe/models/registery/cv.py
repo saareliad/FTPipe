@@ -1,7 +1,8 @@
+from models.normal.vision_models.ResNet import Bottleneck, ResNet
+from models.normal.vision_models.WideResNet import WideResNet
+from models.normal.vision_models.WideResNet_GN import WideResNet as WideResNet_GN
 from pipe.models.registery.model_handler import CommonModelHandler
 from pipe.models.registery.model_handler import register_model
-from pipe.models.normal import WideResNet, Bottleneck, ResNet
-from pipe.models.normal.WideResNet_GN import WideResNet as WideResNet_GN
 
 
 class ParamDictCVMOdelHandler(CommonModelHandler):

@@ -5,8 +5,7 @@ from typing import Dict
 
 from pipe.models.simple_partitioning_config import PipelineConfig
 
-# TODO:
-_PARTITIONED_MODELS_PACKAGE = "pipe.models.partitioned"
+_PARTITIONED_MODELS_PACKAGE = "models.partitioned"
 
 
 class CommonModelHandler(abc.ABC):

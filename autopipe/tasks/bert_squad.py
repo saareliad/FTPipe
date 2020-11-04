@@ -13,7 +13,7 @@ from transformers import (
 from transformers.data.processors.squad import SquadV1Processor, SquadV2Processor
 
 from autopipe.autopipe.model_profiling import register_new_explicit_untraced_function, register_new_traced_function
-from autopipe.models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
+from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
 
 logger = logging.getLogger(__name__)
 
