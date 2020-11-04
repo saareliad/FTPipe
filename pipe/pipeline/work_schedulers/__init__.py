@@ -1,6 +1,6 @@
 from typing import Optional
 
-from models.simple_partitioning_config import PipelineConfig
+from pipe.models.simple_partitioning_config import PipelineConfig
 from .schedulers import WorkScheduler, SeqScheduler, GpipeScheduler, FBScheduler, PipeDream1F1BScheduler, \
     VirtualStagesFBScheduler, Synchronous1F1BScheduler
 
