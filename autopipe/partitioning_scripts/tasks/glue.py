@@ -11,8 +11,7 @@ from transformers import (AutoConfig, AutoTokenizer, GlueDataset,
 
 from autopipe.autopipe.model_profiling import (register_new_explicit_untraced_function,
                                                register_new_traced_function)
-from autopipe.models.normal import BertForSequenceClassification
-from autopipe.models.normal.NLP_models.modeling_bert import get_extended_attention_mask
+from autopipe.models.normal.NLP_models.modeling_bert import BertForSequenceClassification, get_extended_attention_mask
 from autopipe.models.normal.NLP_models.modeling_roberta import RobertaForSequenceClassification
 from . import register_task
 from .task import Parser, Partitioner

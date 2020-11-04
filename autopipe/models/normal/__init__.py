@@ -7,5 +7,3 @@ from .NLP_models import (BertModel, BertForPreTraining,
                          BertForSequenceClassification,
                          BertForMultipleChoice, BertForTokenClassification,
                          BertForQuestionAnswering)
-
-from .seq2seq import GNMT
