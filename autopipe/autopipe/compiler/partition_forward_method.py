@@ -10,7 +10,7 @@ import torch
 from .utils import get_sorted_partition_inputs, get_partition_outputs
 from ..model_profiling import used_namespaces, Node, NodeTypes, Graph
 from ..utils import inplace_arithmetic_ops, r_arithmetic_ops, arithmetic_ops, logical_ops, conversion_ops, magics, \
-    tensor_creation_ops, unary_ops
+    tensor_creation_ops, tensor_creation_ops_without_device_kw, unary_ops
 
 tab = '    '
 dtab = tab + tab
@@ -203,6 +203,7 @@ def generate_statements(partition_nodes: List[Node],
     # if we have a call for a function like torch.zeros() we need to explicitly add a device
     # arg to ensure it's being created at the right place
     tensor_creation_ops_names = {f.__name__ for f in tensor_creation_ops.keys()}
+    tensor_creation_ops_names_without_device_kw = {f.__name__ for f in tensor_creation_ops_without_device_kw.keys()}
 
     for node in sorted(partition_nodes, key=lambda n: n.id):
         if node in ready_expressions:
@@ -240,6 +241,10 @@ def generate_statements(partition_nodes: List[Node],
                 # device mismatch, so we inject the correct device
 
                 should_inject_device = (namespace == "torch") and (func_name in tensor_creation_ops_names)
+
+                if should_inject_device and (func_name in tensor_creation_ops_names_without_device_kw):
+                    warnings.warn(f"can't inject device for tensor_creation_op: {func_name}, may fail due device problem")
+                    should_inject_device = False
 
                 parameter_list = generate_parameter_list(node.args, node.kwargs,
                                                          ready_expressions, should_inject_device=should_inject_device)

@@ -1,14 +1,17 @@
 import torch
 
-from models.normal.vision_models import WideResNet, amoebanetd, vgg16_bn
 from models.normal.vision_models import ResNet
+from models.normal.vision_models import WideResNet, amoebanetd, vgg16_bn
 from . import register_task, Parser
 from .partitioning_task import PartitioningTask
 
 # model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
 _HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"),
             vit_large_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_large_patch16_224',
+                                       pretrained=True),
+            vit_small_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_small_patch16_224',
                                        pretrained=True)
+
             )
 
 _VGG16_BN = dict(vgg16_bn=dict())

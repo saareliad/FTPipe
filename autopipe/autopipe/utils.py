@@ -304,6 +304,12 @@ tensor_creation_ops = {
     torch.stack: torch
 }
 
+tensor_creation_ops_without_device_kw = {
+    # TODO: maybe more...
+    torch.cat: torch,
+    torch.stack: torch
+}
+
 
 def get_call_site(*ignored_files) -> Optional[str]:
     ignored_files = (__file__,) + ignored_files

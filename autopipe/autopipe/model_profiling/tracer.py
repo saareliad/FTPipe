@@ -1,4 +1,5 @@
 import operator
+import warnings
 from contextlib import contextmanager
 from functools import wraps
 from itertools import chain
@@ -612,19 +613,25 @@ class TracedLayer(nn.Module):
 
     """
 
-    def __init__(self, module: nn.Module, name, terminal):
+    def __init__(self, module: nn.Module, name, terminal, is_nesting_special_patched=False, nesting_special_patch=None, patch_direct_children=False):
         super(TracedLayer, self).__init__()
         self._name = name
         self._module = module
         self._terminal = terminal
+        self._nesting_special_patch = nesting_special_patch
+        self._is_nesting_special_patched = is_nesting_special_patched
+        self.patch_direct_children = patch_direct_children
 
     def forward(self, *args, **kwargs):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
+
 
         global CURRENT_SCOPE
         if CURRENT_SCOPE == "":
             CURRENT_SCOPE = self._name
         else:
+            if self._is_nesting_special_patched:
+                CURRENT_SCOPE += f"/{self._nesting_special_patch}"
             CURRENT_SCOPE += f"/{self._name}"
 
         if self._terminal:
@@ -647,7 +654,11 @@ class TracedLayer(nn.Module):
                 if not isinstance(out, TracedValue):
                     out = record_non_terminal_output(out)
 
+        # Go one scope back.
         CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
+        if self._is_nesting_special_patched:
+            # Go on scope back again.
+            CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
 
         assert isinstance(
             out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"
@@ -839,25 +850,52 @@ def disable_function_tracing():
     TracedFunctions.disable_tracing()
 
 
-def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=()):
+def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_ModuleList_ModuleDict=True):
     layers_dict = dict()
+    layers_to_patch = dict()
+    patched_layers_to_scope = dict()
     for sub_layer, scope, parent, terminal in traverse_model(module, depth=depth,
                                                              basic_blocks=basic_blocks,
                                                              full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
-        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
+        to_patch = False
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) and not allow_ModuleList_ModuleDict:
             raise TypeError(
                 f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
-
+        elif isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
+            warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
+            to_patch=True
         if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
             continue
 
+        if parent not in patched_layers_to_scope:
+            is_nesting_special_patched = False
+            nesting_special_patch = None
+        else:
+            traced_parent = layers_to_patch[patched_layers_to_scope[parent]]
+            traced_parent: TracedLayer
+            if traced_parent.patch_direct_children:
+                # to_patch = True
+                is_nesting_special_patched = True
+                nesting_special_patch = traced_parent._name
+            else:
+                is_nesting_special_patched = False
+                nesting_special_patch = None
+
         wrapper = TracedLayer(sub_layer,
                               scope.rsplit('/', maxsplit=1)[1],
-                              terminal)
+                              terminal,
+                              is_nesting_special_patched=is_nesting_special_patched,
+                              nesting_special_patch=nesting_special_patch,
+                              patch_direct_children=to_patch)
+
+        if to_patch:
+            layers_to_patch[scope] = wrapper
+            patched_layers_to_scope[sub_layer] = scope
+
         parent.add_module(name, wrapper)
         layers_dict[scope] = wrapper
 
