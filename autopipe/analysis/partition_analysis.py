@@ -1,25 +1,24 @@
-import sys
-
-sys.path.append("../")
-import torch
-from collections import deque, defaultdict
-import time
-import numpy as np
-from .ssgd_analysis import run_analysis as ssgd_run_analysis
-from .asgd_analysis import run_analysis as asgd_run_analysis
-
-from pprint import pprint
 import io
-from contextlib import redirect_stdout
+import sys
+import time
 import warnings
-from typing import List, Set, Dict, Union, Any, Optional
-from functools import wraps
+from collections import deque, defaultdict
 from contextlib import contextmanager
+from contextlib import redirect_stdout
+from functools import wraps
+from pprint import pprint
+from typing import List, Set, Dict, Union, Any, Optional
+
+import numpy as np
+import torch
+
 from autopipe.autopipe.utils import flatten, move_tensors, nested_map
-from autopipe.autopipe.model_profiling import NodeTypes
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
                              apply_ratio)
+from .asgd_analysis import run_analysis as asgd_run_analysis
+from .hardware_non_aware import theoretical_analysis
+from .ssgd_analysis import run_analysis as ssgd_run_analysis
 
 
 def rounddict(d: Dict[Any, float], x=2):
@@ -223,13 +222,11 @@ def run_analysis(sample,
     try:
         tuple_seq_no_recom_times = get_seq_no_recomp_no_comm_times()
         seq_success = True
+        expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
+            pipe_times, tuple_seq_no_recom_times)
     except (Exception, RuntimeError) as e:
         print(f"sequential no_recomputation analysis failed: {sys.exc_info()[0]}", str(e))
         seq_success = False
-
-    if seq_success:
-        expected_speedup_compared_to_seq_no_comm = expected_speedup_compared_to_seq(
-            pipe_times, tuple_seq_no_recom_times)
 
     comp_comm_ratio_f = rounddict(comp_comm_ratio_f)
     comp_comm_ratio_b = rounddict(comp_comm_ratio_b)
@@ -400,22 +397,22 @@ def run_analysis(sample,
             n_workers = num_real_stages
             model = sequential_model
             comm_comp_concurrency_ratio = 0.5
-            DROP_BATCH_FOR_ASGD=False
+            DROP_BATCH_FOR_ASGD = False
             asgd_ok = False
-            first_time=True
+            first_time = True
             asgd_div = 1
             asgd_sample = sample
             while not asgd_ok or first_time:
                 if not first_time and DROP_BATCH_FOR_ASGD:
-                    asgd_div*=2
+                    asgd_div *= 2
                     if asgd_div > len(asgd_sample):
                         break
-                    len_to_take = len(asgd_sample)//2
+                    len_to_take = len(asgd_sample) // 2
                     asgd_sample = asgd_sample[:len_to_take]
                 elif not first_time and not DROP_BATCH_FOR_ASGD:
                     break
                 else:
-                    first_time=False
+                    first_time = False
 
                 print(f"Trying ASGD analysis with batch size {len(sample)} per worker")
                 try:
@@ -426,10 +423,10 @@ def run_analysis(sample,
                         bw_GBps=bw_GBps,
                         verbose=verbose,
                         comm_comp_concurrency_ratio=comm_comp_concurrency_ratio)
-                    asgd_ok=True
+                    asgd_ok = True
                     # except Exception as e:
                     if verbose:
-                        if asgd_div>1:
+                        if asgd_div > 1:
                             warnings.warn("ASGD STATS ARE FOR LOWER BATCH, please ignore it")
                         asgd_output = None
                         with io.StringIO() as buf, redirect_stdout(buf):
@@ -453,9 +450,9 @@ def run_analysis(sample,
                     print(f"ASGD analysis failed: {sys.exc_info()[0]}", str(e))
                     asgd_ok = False
 
-    if torch.cuda.is_available():
-        s += f"\nAnalysis max cuda memory used {max_memory_allocated / 1e9:.2f}GB"
-    print(s)
+        if torch.cuda.is_available():
+            s += f"\nAnalysis max cuda memory used {max_memory_allocated / 1e9:.2f}GB"
+        print(s)
 
     # Choose a metric to maximize and return it
     if async_pipeline:
@@ -474,7 +471,8 @@ def run_analysis(sample,
 # TODO: also read req grad requirements, as they don't affect backward send times
 # TODO: calculate Backward send times with differnt links (sending grads)
 # TODO: calculate Forward send times with different links (sending activations)
-# FIXME: setting different_links_between_accelerators=False because some parts were not implemented. will be fixed in next commit.
+# FIXME: setting different_links_between_accelerators=False because
+#  some parts were not implemented. will be fixed.
 def profile_execution(model_inputs,
                       partition_config,
                       n_iters: int,
@@ -482,13 +480,16 @@ def profile_execution(model_inputs,
                       bw_GBps=12,
                       async_pipeline=False,
                       add_comm_times_to_balance=True,
-                      stages_on_same_gpu=[],
+                      stages_on_same_gpu: Optional[List[Set[int]]] = None,
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
     """
     Perform forward/backward passes and measure execution times across n_iters batches
     # TODO: currently its just the same input sample n_iter times, this could be improved.
     """
+    if not stages_on_same_gpu:
+        stages_on_same_gpu = []
+
     n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
@@ -1000,96 +1001,6 @@ def edge_cut(graph):
                 edges.append((n, o))
 
     return edges
-
-
-def theoretical_analysis(graph, recomputation=True, async_pipeline=False):
-    ''' find execution time of partitions based on the model's graph using 2 a sequential assumption and parallel assumption
-        the sequential assumption is that in the partition all operation are linear.
-        the parallel assumption assumes that all computation paths are concurrent.
-    '''
-    n_parts = len(set(n.stage_id for n in graph.nodes))
-    print(f"Theoretical analysis found n_parts={n_parts}")
-    parallel_b = dict()
-    parallel_f = dict()
-
-    tensor_names = set()
-    stage_outputs = defaultdict(list)
-    for n in graph.nodes:
-        if (n.type != NodeTypes.IN) and any(o.stage_id != n.stage_id
-                                            for o in n.out_edges):
-            tensor_names.add(n.scope)
-            stage_outputs[n.stage_id].append(n.scope)
-        elif n in graph.outputs:
-            tensor_names.add(n.scope)
-            stage_outputs[n.stage_id].append(n.scope)
-
-    sequential_f = {i: 0 for i in range(n_parts)}
-    sequential_b = {i: 0 for i in range(n_parts)}
-
-    nodes = dict()
-    for node in graph.nodes:
-        # cache relevant nodes to make fetching them faster
-        if graph.input_kw_ids.get(node.id, node.scope) in tensor_names:
-            nodes[graph.input_kw_ids.get(node.id, node.scope)] = node
-
-        # old way of measuring time as sum of all computation
-        sequential_f[node.stage_id] += extract_time(node.weight, forward=True)
-        sequential_b[node.stage_id] += extract_time(node.weight, forward=False)
-
-    # new way of measuring time as longest path where all paths are concurrent
-    for i in range(n_parts):
-        partition_sepsific_recomputation = recomputation
-        is_last_partition = (i == n_parts - 1)
-        if async_pipeline and is_last_partition:
-            partition_sepsific_recomputation = False
-
-        outputs = [nodes[name] for name in stage_outputs[i]]
-        cache = dict()
-        parallel_f[i] = 0
-        parallel_b[i] = 0
-        for o in outputs:
-            f, b = parallel_execution_analysis(o, i, cache)
-            parallel_f[i] = max(parallel_f[i], f)
-            parallel_b[i] = max(parallel_b[i], b)
-
-        if partition_sepsific_recomputation:
-            sequential_b[i] += sequential_f[i]
-            parallel_b[i] += parallel_f[i]
-
-    return sequential_f, sequential_b, parallel_f, parallel_b
-
-
-def parallel_execution_analysis(node, part_idx, cache):
-    # use cache in order to remember common subpaths
-    if node.scope in cache:
-        return cache[node.scope]
-    elif node.stage_id != part_idx:
-        cache[node.scope] = (0, 0)
-        return 0, 0
-
-    longest_f, longest_b = 0, 0
-
-    for n in node.in_edges:
-        f, b = parallel_execution_analysis(n, part_idx, cache)
-        longest_f = max(f, longest_f)
-        longest_b = max(b, longest_b)
-
-    longest_f += extract_time(node.weight, forward=True)
-    longest_b += extract_time(node.weight, forward=False)
-
-    cache[node.scope] = (longest_f, longest_b)
-
-    return longest_f, longest_b
-
-
-def extract_time(w, forward=False):
-    if hasattr(w, "weight"):
-        w = w.weight
-    if not hasattr(w, "forward_time"):
-        return 0
-    if forward:
-        return w.forward_time
-    return w.backward_time
 
 
 ####################################

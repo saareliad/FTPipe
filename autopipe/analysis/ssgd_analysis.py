@@ -1,14 +1,16 @@
-import sys
-sys.path.append("../")
-import torch
+"""FIXME: DEPRECATED, not accurate, probably incorrect"""
 import math
-from autopipe.autopipe.utils import move_tensors,flatten
-# NOTE: can so simillar anaysis for ZerOs,
+
+import torch
+
+from autopipe.autopipe.utils import move_tensors, flatten
+
+
+# NOTE: can so similar analysis for ZerO(1,2,3),
 # (multiply communication by x1.5 according to what they claim)
 
 
 def run_analysis(sample, model, n_workers, bw_GBps=12, verbose=True):
-
     send_mb = sum([(p.nelement() * p.element_size())
                    for p in model.parameters()]) / 1e6
 
@@ -50,14 +52,15 @@ def cuda_computation_times(model, inputs):
         inputs = (inputs,)
     model.cuda()
     # now we move inputs to GPU
-    inputs = move_tensors(inputs,'cuda')
+    inputs = move_tensors(inputs, 'cuda')
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
 
     torch.cuda.synchronize(device='cuda')
     start.record()
     outputs = model(*inputs)
-    loss = sum((o.norm() for o in filter(lambda t: isinstance(t,torch.Tensor) and t.requires_grad,flatten(outputs))))  # FIXME: just use real loss.
+    loss = sum((o.norm() for o in filter(lambda t: isinstance(t, torch.Tensor) and t.requires_grad,
+                                         flatten(outputs))))  # FIXME: just use real loss.
     loss.backward()
     end.record()
     torch.cuda.synchronize(device='cuda')

@@ -1,10 +1,6 @@
-import sys
-
-sys.path.append("../")
 import torch
+
 from autopipe.autopipe.utils import move_tensors, flatten
-# NOTE: can so similar analysis for ZerOs,
-# (multiply communication by x1.5 according to what they claim)
 from .analysis_utils import (extra_communication_time_lower_bound,
                              upper_utilization_bound, lower_utilization_bound,
                              apply_ratio)

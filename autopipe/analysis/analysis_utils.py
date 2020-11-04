@@ -1,10 +1,9 @@
-import sys
-
-sys.path.append("../")
+from collections import deque
 from typing import Dict
+
 import torch
 from torch import Tensor
-from collections import deque
+
 from autopipe.autopipe.utils import move_tensors
 
 
