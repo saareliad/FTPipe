@@ -1,7 +1,7 @@
 import abc
 import importlib
 import os
-from typing import Dict
+from typing import Dict, Optional
 
 from pipe.models.simple_partitioning_config import PipelineConfig
 
@@ -80,6 +80,11 @@ class CommonModelHandler(abc.ABC):
         return a dict if there is something to return"""
         pass
 
+    def register_generated_instance(self, name: Optional[str] = None):
+        if name is None:
+            name = self.generated_file_name_or_path
+
+        register_model(name=name, handler=self)
 
 AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}
 

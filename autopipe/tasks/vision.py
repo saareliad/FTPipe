@@ -2,6 +2,7 @@ import torch
 
 from models.normal.vision_models import ResNet
 from models.normal.vision_models import WideResNet, amoebanetd, vgg16_bn
+from pipe.models.registery.vit import vit_base_patch16_384_in21k, vit_large_patch32_384_in21k
 from . import register_task, Parser
 from .partitioning_task import PartitioningTask
 
@@ -13,6 +14,11 @@ _HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', mod
                                        pretrained=True)
 
             )
+# TODO: input size and so on.
+_VIT_WITHOUT_HUB = dict(
+    vit_base_patch16_384_in21k=dict(function=vit_base_patch16_384_in21k, pretrained=True, num_classes=1000),
+    vit_large_patch32_384_in21k=dict(function=vit_large_patch32_384_in21k, pretrained=True, num_classes=1000),
+)
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -69,11 +75,16 @@ def _register_model(dict_params, model_cls):
          for k in dict_params.keys()})
 
 
+def delegate_call(function, *args, **kw):
+    return function(*args, **kw)
+
+
 _register_model(_WIDE_RESNETS, WideResNet)
 _register_model(_RESENETS, ResNet.ResNet)
 _register_model(_AMOEBANET_D, amoebanetd)
 _register_model(_VGG16_BN, vgg16_bn)
 _register_model(_HUB, torch.hub.load)
+_register_model(_VIT_WITHOUT_HUB, delegate_call)
 
 DATASETS = ['cifar10', 'cifar100', 'imagenet']
 
