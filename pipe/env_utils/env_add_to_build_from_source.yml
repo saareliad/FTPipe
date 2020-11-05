@@ -20,8 +20,9 @@ dependencies:
     - nlp # TODO: replace with datasets
     - datasets
     - git+https://github.com/networkx/networkx-metis.git  # For partitioning
+    - timm
 
 
 
-prefix: /home_local/saareliad/miniconda3/envs/py38
+#prefix: /home_local/saareliad/miniconda3/envs/py38
 

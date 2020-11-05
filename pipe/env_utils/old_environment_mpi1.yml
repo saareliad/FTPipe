@@ -38,4 +38,4 @@ dependencies:
     - transformers
     - ptvsd
     - t5
-    - nlp
+    - datasets
