@@ -86,8 +86,6 @@ _register_model(_VGG16_BN, vgg16_bn)
 _register_model(_HUB, torch.hub.load)
 _register_model(_VIT_WITHOUT_HUB, delegate_call)
 
-DATASETS = ['cifar10', 'cifar100', 'imagenet', '384']
-
 
 class ParsePartitioningOptsVision(Parser):
     def _add_model_args(self, group):
@@ -96,10 +94,16 @@ class ParsePartitioningOptsVision(Parser):
                            default='wrn_16x4')
 
     def _add_data_args(self, group):
-        group.add_argument('-d',
-                           '--dataset',
-                           choices=DATASETS,
-                           default='cifar10')
+        # DATASETS = ['cifar10', 'cifar100', 'imagenet', '384']
+        # group.add_argument('-d',
+        #                    '--dataset',
+        #                    choices=DATASETS,
+        #                    default='cifar10')
+
+        group.add_argument('--crop',
+                           type=int,
+                           default=32,
+                           help='crop size to use. (e.g: 32 for cifar, 224 for imagenet, 384 for some ViTs')
 
     def _default_values(self):
         return {
@@ -114,9 +118,11 @@ class ParsePartitioningOptsVision(Parser):
     def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model).replace("-", "_")
+        model_str += f"c{args.crop}"
         output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
         if args.async_pipeline:
             output_file += "_async"
+
         m = args.partitioning_method.lower()
         tmp = m if m != "2dbin" else "virtual_stages"
         output_file += f"_{tmp}"
@@ -133,22 +139,12 @@ class VisionPartioner(PartitioningTask):
         return 0
 
     def get_input(self, args, analysis=False):
-        dataset = args.dataset
-        assert dataset in DATASETS
         if analysis:
             batch_size = args.analysis_batch_size
         else:
             batch_size = args.partitioning_batch_size
 
-        # TODO: just choose size like we do for seq len
-        if dataset == 'cifar10' or dataset == 'cifar100':
-            sample = torch.randn(batch_size, 3, 32, 32)
-        elif dataset == 'imagenet':
-            sample = torch.randn(batch_size, 3, 224, 224)
-        elif dataset == '384':
-            sample = torch.randn(batch_size, 3, 384, 384)
-        else:
-            raise NotImplementedError()
+        sample = torch.randn(batch_size, 3, args.crop, args.crop)
         return sample
 
 

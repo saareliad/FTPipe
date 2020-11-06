@@ -213,7 +213,7 @@ class BertPartitioner(PartitioningTask):
 
         return model
 
-    def get_input(self, args, analysis):
+    def get_input(self, args, analysis=False):
         return get_inputs_squad(args, self.tokenizer, analysis=analysis)
 
     def register_functions(self):
