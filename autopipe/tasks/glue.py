@@ -189,6 +189,8 @@ class ParsePartitioningOptsGlue(Parser):
     def _auto_file_name(self, args) -> str:
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model_name_or_path).replace("-", "_")
+        seq_len_str = f"s_{args.max_seq_length}"
+        model_str += seq_len_str
         output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
@@ -196,6 +198,10 @@ class ParsePartitioningOptsGlue(Parser):
 
         output_file += f"_{args.task_name}"
         output_file += "_glue"
+
+        m = args.partitioning_method.lower()
+        tmp = m if m != "2dbin" else "virtual_stages"
+        output_file += f"_{tmp}"
 
         return output_file
 

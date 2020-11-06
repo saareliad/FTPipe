@@ -325,6 +325,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
     def _auto_file_name(self, args) -> str:
         """ provide a file name if args.output_file was not specified"""
+
         return ""
 
     def parse_args(self, args=None, namespace=None) -> Namespace:

@@ -128,23 +128,25 @@ class ParsePartitioningOptsLM(Parser):
         return d
 
     def _auto_file_name(self, args) -> str:
-        s = []
-        s.append(args.output_file)
-        model_name = args.model_name_or_path.replace("-", "_")
-        s.append(model_name)
-        s.append(f"p{args.n_partitions}")
+        bw_str = str(args.bw).replace(".", "_")
+        model_str = str(args.model_name_or_path).replace("-", "_")
+        tied = "tied" if args.stateless_tied else "untied"
+        model_str += f"_{tied}"
         if args.lmhead:
-            s.append("lm")
-            tied = "tied" if args.stateless_tied else "untied"
-            s.append(tied)
+            model_str += "_lmhead"
 
-        if args.bwd_to_fwd_ratio > 0:
-            bwd_to_fwd_ratio = args.bwd_to_fwd_ratio
-            if (int(bwd_to_fwd_ratio)) == bwd_to_fwd_ratio:
-                bwd_to_fwd_ratio = int(bwd_to_fwd_ratio)
-            bwd_to_fwd_ratio = str(bwd_to_fwd_ratio).replace(".", "d")
-            s.append(f"r{bwd_to_fwd_ratio}")
-        return "_".join(s)
+        seq_len_str = f"s_{args.block_size}"
+
+        model_str += seq_len_str
+        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+
+        if args.async_pipeline:
+            output_file += "_async"
+        m = args.partitioning_method.lower()
+        tmp = m if m != "2dbin" else "virtual_stages"
+        output_file += f"_{tmp}"
+
+        return output_file
 
 
 class GPT2Partitioner(PartitioningTask):

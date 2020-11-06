@@ -86,7 +86,7 @@ _register_model(_VGG16_BN, vgg16_bn)
 _register_model(_HUB, torch.hub.load)
 _register_model(_VIT_WITHOUT_HUB, delegate_call)
 
-DATASETS = ['cifar10', 'cifar100', 'imagenet']
+DATASETS = ['cifar10', 'cifar100', 'imagenet', '384']
 
 
 class ParsePartitioningOptsVision(Parser):
@@ -112,7 +112,16 @@ class ParsePartitioningOptsVision(Parser):
         }
 
     def _auto_file_name(self, args) -> str:
-        return f"{args.model}_p{args.n_partitions}"
+        bw_str = str(args.bw).replace(".", "_")
+        model_str = str(args.model).replace("-", "_")
+        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+        if args.async_pipeline:
+            output_file += "_async"
+        m = args.partitioning_method.lower()
+        tmp = m if m != "2dbin" else "virtual_stages"
+        output_file += f"_{tmp}"
+
+        return output_file
 
 
 class VisionPartioner(PartitioningTask):
@@ -136,6 +145,8 @@ class VisionPartioner(PartitioningTask):
             sample = torch.randn(batch_size, 3, 32, 32)
         elif dataset == 'imagenet':
             sample = torch.randn(batch_size, 3, 224, 224)
+        elif dataset == '384':
+            sample = torch.randn(batch_size, 3, 384, 384)
         else:
             raise NotImplementedError()
         return sample
