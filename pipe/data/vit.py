@@ -8,30 +8,6 @@ import torchvision
 from pipe.data import CommonDatasetHandler, register_dataset
 from pipe.data.cv import get_imagenet_just_x_or_y_ds, get_cifar_10_just_x_or_y_ds, get_cifar_100_just_x_or_y_ds
 
-DATASET_PRESETS = {
-    'cifar10': {
-        'train': 'train[:98%]',
-        'test': 'test',
-        'resize': 384,
-        'crop': 384,
-        'total_steps': 10000,
-    },
-    'cifar100': {
-        'train': 'train[:98%]',
-        'test': 'test',
-        'resize': 384,
-        'crop': 384,
-        'total_steps': 10000,
-    },
-    'imagenet2012': {
-        'train': 'train[:99%]',
-        'test': 'validation',
-        'resize': 384,
-        'crop': 384,
-        'total_steps': 20000,
-    },
-}
-
 
 def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_script=False):
     if mode == 'train':
@@ -40,7 +16,7 @@ def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_scr
             torchvision.transforms.RandomCrop(crop_size),
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
-            # Note: replacing:     im = (im - 127.5) / 127.5
+            # Note: replacing:     im = (im - 127.5) / 127.5  of original
             torchvision.transforms.Normalize(mean, std),
         ]
     else:
@@ -144,6 +120,9 @@ class SepCifar100_384_DatasetHandler(CommonDatasetHandler):
 
 # For ImageNet results in Table 2, we fine-tuned at higher resolution:
 # 512 for ViT-L/16 and 518 for ViT-H/14
+
+# TODO: Polyak & Juditsky (1992) averaging with a factor of 0.9999 (Ramachandran et al., 2019; Wang et al., 2020b).
+# TODO: For ImageNet we found it beneficial to additionally apply gradient clipping at global norm 1
 
 register_dataset("cifar10_384", SepCifar10_384_DatasetHandler)
 register_dataset("cifar100_384", SepCifar100_384_DatasetHandler)
