@@ -27,8 +27,8 @@ class SplitLinear(nn.Module):
         weight = other.weight
         bias = other.bias
 
-        t = out_features // n_split
-        if out_features % n_split != 0:
+        t = self.out_features // n_split
+        if self.out_features % n_split != 0:
             raise NotImplementedError()
 
         self.weights = nn.ParameterList(
