@@ -45,9 +45,10 @@ class Net(nn.Module):
     def __init__(self, n, c, n_split=4):
         super(Net, self).__init__()
 
-        self.input_layer = SplitLinear(nn.Linear(n * (n - 1) // 2, 3 * n * (n - 1) // 4), n_split=n_split)
-        self.bn1 = nn.BatchNorm1d(3 * n * (n - 1) // 4)
-        self.h1_layer = nn.Linear(3 * n * (n - 1) // 4, c)
+        dim_1 =  2 + 3 * n * (n - 1) // 4
+        self.input_layer = SplitLinear(nn.Linear(n * (n - 1) // 2, dim_1), n_split=n_split)
+        self.bn1 = nn.BatchNorm1d(dim_1)
+        self.h1_layer = nn.Linear(dim_1, c)
         self.bn2 = nn.BatchNorm1d(c)
         self.h2_layer = nn.Linear(c, c // 20)
         self.bn3 = nn.BatchNorm1d(c // 20)
