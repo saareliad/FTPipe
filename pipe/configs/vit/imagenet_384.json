@@ -1,0 +1,8 @@
+{
+  "base_config_path": "cv.json",
+  "base_config_path_is_relative": true,
+  "data_dir": "/home_local/saareliad/data/imagenet/",
+  "dataset": "imagenet_384",
+  "epochs": -1,
+  "steps": 20000
+}

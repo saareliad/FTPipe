@@ -1,4 +1,5 @@
 import abc
+from typing import Type
 
 import torch
 from torch.utils.data import DistributedSampler
@@ -28,7 +29,7 @@ class CommonDatasetHandler(abc.ABC):
         return dataloader_keywords
 
 
-def register_dataset(name, common_handler: CommonDatasetHandler):
+def register_dataset(name, common_handler: Type[CommonDatasetHandler]):
     AVAILABLE_DATASETS[name] = common_handler
 
 

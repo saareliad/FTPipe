@@ -1,5 +1,6 @@
 import json
 import os
+import warnings
 
 
 def parse_json_config(args, config=None, first=False):
@@ -22,7 +23,7 @@ def parse_json_config(args, config=None, first=False):
     # option to load a base config, reducing code duplication.
     if "base_config_path" in output:
         base_config_path = output.get("base_config_path")
-        is_relative = output.get("base_config_path_is_relative", False)
+        is_relative = output.get("base_config_path_is_relative", True)
         if isinstance(base_config_path, list):
             for i in base_config_path:
                 parse_json_config(args,
@@ -31,6 +32,9 @@ def parse_json_config(args, config=None, first=False):
             parse_json_config(args,
                               config=fix_base_cfg_path(base_config_path,
                                                        is_relative))
+        # NOTE: it can be changed by children:
+        if args.base_config_path != base_config_path:
+            warnings.warn("Config path changed by child")
 
     if not os.path.exists(config):
         raise ValueError(f"Config {config} does not exists")

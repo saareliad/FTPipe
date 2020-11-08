@@ -762,7 +762,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
     propagator = propagator_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
     partition.set_data_propagator(propagator)
 
-    if hasattr(args, "auto_file_name"):
+    if getattr(args, "auto_file_name", True):
         auto_file_name(args)
 
     return (logger, train_dl, eval_dl, is_first_partition, is_last_partition,
