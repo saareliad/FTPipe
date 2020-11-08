@@ -8,16 +8,25 @@ from .partitioning_task import PartitioningTask
 
 # model = torch.hub.load('facebookresearch/WSL-Images', "resnext101_32x48d")
 _HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', model="resnext101_32x48d_wsl"),
-            vit_large_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_large_patch16_224',
-                                       pretrained=True),
-            vit_small_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_small_patch16_224',
-                                       pretrained=True)
-
+            # vit_large_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_large_patch16_224',
+            #                            pretrained=True),
+            # vit_small_patch16_224=dict(github='rwightman/pytorch-image-models', model='vit_small_patch16_224',
+            #                            pretrained=True)
             )
 # TODO: input size and so on.
 _VIT_WITHOUT_HUB = dict(
-    vit_base_patch16_384_in21k=dict(function=vit_base_patch16_384_in21k, pretrained=True, num_classes=1000),
-    vit_large_patch32_384_in21k=dict(function=vit_large_patch32_384_in21k, pretrained=True, num_classes=1000),
+    vit_base_patch16_384_in21k_imagenet_384=dict(function=vit_base_patch16_384_in21k, pretrained=True, num_classes=1000,
+                                                 input_size=(3, 384, 384)),
+    vit_large_patch32_384_in21k_imagenet_384=dict(function=vit_large_patch32_384_in21k, pretrained=True,
+                                                  num_classes=1000, input_size=(3, 384, 384)),
+    vit_large_patch32_384_in21k_imagenet_512=dict(function=vit_large_patch32_384_in21k, pretrained=True,
+                                                  num_classes=1000,
+                                                  input_size=(3, 512, 512)),
+
+    vit_large_patch32_384_in21k_cifar100_384=dict(function=vit_large_patch32_384_in21k, pretrained=True,
+                                                  num_classes=100,
+                                                  input_size=(3, 384, 384)),
+
 )
 
 _VGG16_BN = dict(vgg16_bn=dict())
