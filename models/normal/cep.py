@@ -1,3 +1,4 @@
+import warnings
 from itertools import combinations
 
 import numpy as np
@@ -45,7 +46,11 @@ class Net(nn.Module):
     def __init__(self, n, c, n_split=4):
         super(Net, self).__init__()
 
-        dim_1 =  2 + 3 * n * (n - 1) // 4
+        dim_1 = 2 + 3 * n * (n - 1) // 4
+        if dim_1 % n_split != 0:
+            warnings.warn("changed dim_1")
+            dim_1 -= dim_1 % n_split
+
         self.input_layer = SplitLinear(nn.Linear(n * (n - 1) // 2, dim_1), n_split=n_split)
         self.bn1 = nn.BatchNorm1d(dim_1)
         self.h1_layer = nn.Linear(dim_1, c)

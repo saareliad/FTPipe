@@ -78,7 +78,7 @@ class CEPPartitioningTask(PartitioningTask):
         dataset = Dataset(n=args.N, k=args.K, max_samples_num=args.samples_num)
         batch_size = args.analysis_batch_size if analysis else args.partitioning_batch_size
         loader = DataLoader(dataset, batch_size=batch_size)
-        return next(iter(loader))
+        return next(iter(loader))[0]
 
 
 register_task("cep", CEPParser, CEPPartitioningTask)
