@@ -19,13 +19,13 @@ PRETRAINED_CFGS = {
         'url': vit_large_patch32_384_in21k_link,
         'num_classes': 21843,
         'classifier': 'head',
-        'input_embed': 'patch_embed',
+        'input_embed': 'patch_embed.proj',
         'input_size': (3, 384, 384)},
     "vit_base_patch16_384_in21k": {
         'url': vit_base_patch16_384_in21k_link,
         'num_classes': 21843,
         'classifier': 'head',
-        'input_embed': 'patch_embed',
+        'input_embed': 'patch_embed.proj',
         'input_size': (3, 384, 384)},
 }
 
@@ -62,9 +62,11 @@ def load_pretrained(model, pretrained_cfg, num_classes=1000, input_size=(3, 384,
         # completely discard input embedding for all other differences between pretrained and created model
         del state_dict[input_embed_name + '.weight']
         del state_dict[input_embed_name + '.bias']
+        del state_dict['pos_embed']
         strict = False
         omitted_parameters.append(input_embed_name + '.weight')
         omitted_parameters.append(input_embed_name + '.bias')
+        omitted_parameters.append('pos_embed')
 
     warnings.warn(f"Loading pretrained weights but omitting: {omitted_parameters}")
     model.load_state_dict(state_dict, strict=strict)
@@ -86,7 +88,7 @@ def vit_large_patch32_384_in21k(pretrained=True, num_classes=1000, input_size=(3
 
     """
     model = VisionTransformer(
-        img_size=384, patch_size=32, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
+        img_size=input_size[1], patch_size=32, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         drop_rate=0.1, attn_drop_rate=0.,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), num_classes=num_classes, **kwargs)
 
@@ -111,7 +113,7 @@ def vit_base_patch16_384_in21k(pretrained=True, num_classes=1000, input_size=(3,
 
     """
     model = VisionTransformer(
-        img_size=384, patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
+        img_size=input_size[1], patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         drop_rate=0.1, attn_drop_rate=0.,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), num_classes=num_classes, **kwargs)
 

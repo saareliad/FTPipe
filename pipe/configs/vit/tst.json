@@ -4,26 +4,31 @@
     "vit_large_patch32_384_in21k.json"
   ],
   "base_config_path_is_relative": true,
-  "bs_train": 32,
-  "bs_test": 32,
+  "logdir": "logs/vit/imagenet/",
+  "out_dir": "results/vit/imagenet/",
+  "auto_file_name": true,
+  "out_filename": "tst_vit",
+  "distributed_backend": "mpi",
+  "bs_train": 128,
+  "bs_test": 128,
   "num_data_workers": 10,
   "dont_drop_last": true,
-  "step_every": 1,
+  "step_every": 4,
   "optimizer": {
     "type": "sgd1",
     "args": {
-      "lr": 0.1,
+      "lr": 0.03,
       "weight_decay": 0.0005,
       "momentum": 0.9,
       "nesterov": true
     }
-  }
+  },
   "lr_scheduler": {
     "type": "get_constant_schedule_with_warmup",
     "preproc_args": {
     },
     "args": {
-      "num_warmup_steps": 200,
+      "num_warmup_steps": 500,
       "last_epoch": -1
     }
   },
