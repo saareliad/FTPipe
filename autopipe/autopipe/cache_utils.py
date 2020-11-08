@@ -50,7 +50,7 @@ class PickleCache:
                 pickle.dump(self.v, f)
 
 
-def compute_and_cache(compute_function, cache_name, *args, **kw):
+def compute_and_cache(compute_function, cache_name, *args, _cache_cls_to_use=TorchCache, **kw):
     """
     Compute or load from cache, optionally save results to cache.
     Return computed value
@@ -61,7 +61,7 @@ def compute_and_cache(compute_function, cache_name, *args, **kw):
         # compute_and_cache(lambda: torch.randn(10) * compute_and_cache(lambda: torch.ones(10), "big"), "small")
     """
 
-    with TorchCache(cache_name, overwrite=False) as cache:
+    with _cache_cls_to_use(cache_name, overwrite=False) as cache:
         if not cache.exists:
             cache.v = compute_function(*args, **kw)
     return cache.v

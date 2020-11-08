@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Optional, Union, Tuple
 import torch
 import torch.nn as nn
 
-from .cache_utils import compute_and_cache, compute_and_maybe_cache
+from .cache_utils import compute_and_cache, compute_and_maybe_cache, PickleCache
 from .compiler import compile_partitioned_model
 from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
@@ -32,6 +32,7 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                recomputation: bool = False, partitioning_method: str = "ACYCLIC", METIS_opt: Optional[Dict] = None,
                acyclic_opt: Optional[Dict] = None, binpack_opt: Optional[Dict] = None,
                force_no_recomp_scopes: Optional[Callable[[str], bool]] = None, save_memory_mode: bool = False,
+               trace_on_gpu=False,
                use_graph_profiler: bool = True, use_network_profiler: bool = False, profile_ops: bool = True,
                graph: Optional[Graph] = None,
                async_pipe=False,
@@ -121,7 +122,8 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                             acyclic_opt=acyclic_opt, binpack_opt=binpack_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes, use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler, profile_ops=profile_ops,
-                            save_memory_mode=save_memory_mode, graph=graph, async_pipe=async_pipe,
+                            save_memory_mode=save_memory_mode, trace_on_gpu=trace_on_gpu, graph=graph,
+                            async_pipe=async_pipe,
                             trace_cache_name=trace_cache_name, profiles_cache_name=profiles_cache_name)
 
     compile_partitioned_model(graph,
@@ -144,6 +146,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                     acyclic_opt: Optional[Dict] = None, binpack_opt: Optional[Dict] = None,
                     force_no_recomp_scopes: Optional[Callable[[str], bool]] = None, use_graph_profiler: bool = True,
                     use_network_profiler: bool = False, profile_ops: bool = True, save_memory_mode: bool = False,
+                    trace_on_gpu=False,
                     graph: Optional[Graph] = None, use_virtual_stages: bool = True,
                     async_pipe=False,
                     trace_cache_name=None,
@@ -220,8 +223,11 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                             model, model_args=model_args, model_kwargs=model_kwargs,
                                             use_network_profiler=use_network_profiler,
                                             use_graph_profiler=use_graph_profiler,
-                                            save_memory_mode=save_memory_mode, profile_ops=profile_ops,
+                                            save_memory_mode=save_memory_mode,
+                                            trace_on_gpu=trace_on_gpu,
+                                            profile_ops=profile_ops,
                                             recomputation=recomputation, n_iter=n_iter, max_depth=max_depth,
+                                            _cache_cls_to_use=PickleCache,
                                             basic_blocks=basic_blocks, force_no_recomp_scopes=force_no_recomp_scopes,
                                             trace_cache_name=trace_cache_name)
 
@@ -339,7 +345,9 @@ def build_profiled_graph(model: nn.Module,
                          model_args: tuple = (),
                          model_kwargs: Optional[Dict] = None,
                          use_network_profiler: bool = False, use_graph_profiler: bool = True,
-                         save_memory_mode: bool = False, profile_ops: bool = True, recomputation: bool = False,
+                         save_memory_mode: bool = False,
+                         trace_on_gpu=False,
+                         profile_ops: bool = True, recomputation: bool = False,
                          n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None,
                          force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                          trace_cache_name=None) -> Graph:
@@ -388,7 +396,7 @@ def build_profiled_graph(model: nn.Module,
     """
 
     graph = build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                       basic_blocks, save_memory_mode, res_cache_name=trace_cache_name)
+                                       basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
 
     print("-I- profiling model")
     weights = get_profiles(graph,
@@ -410,13 +418,19 @@ def build_profiled_graph(model: nn.Module,
     return graph
 
 
-def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode,
+def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
                                res_cache_name=None):
     if res_cache_name:
         return compute_and_cache(build_graph_with_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
-                                 basic_blocks, save_memory_mode, res_cache_name=None)
+                                 basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None)
 
     # dev WARNING: can move , model, model_args, model_kwargs to CPU
+    if save_memory_mode:
+        if not trace_on_gpu:
+            model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
+        else:
+            model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cuda')
+
     print("-I- tracing model")
     graph = trace_module(model, args=model_args, kwargs=model_kwargs, depth=max_depth,
                          basic_blocks=basic_blocks)

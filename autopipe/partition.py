@@ -90,6 +90,7 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            acyclic_opt=cmd_args.acyclic_opt, binpack_opt=cmd_args.binpack_opt,
                            force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
                            save_memory_mode=cmd_args.save_memory_mode,
+                           trace_on_gpu=cmd_args.trace_on_gpu,
                            use_graph_profiler=not cmd_args.use_network_profiler,
                            use_network_profiler=cmd_args.use_network_profiler,
                            profile_ops=not cmd_args.disable_op_profiling,

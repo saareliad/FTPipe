@@ -187,6 +187,12 @@ class Parser(argparse.ArgumentParser, ABC):
             help="Save memory during profiling by storing everything on cpu," +
                  " but sending each layer to GPU before the profiling.")
 
+        group.add_argument(
+            "--trace_on_gpu",
+            default=False,
+            action="store_true",
+            help="Used together with save_memory_mode: if true, will trace the model on GPU despite swapping during profiling.")
+
         group.add_argument("--force_no_recomputation_scopes", nargs="*", default=[])
 
         group.add_argument("-c", "--profiles_cache_name", default="", type=str,
