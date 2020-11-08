@@ -238,7 +238,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         # NOTE: very similar thing can be done to partition for heterogeneous accelerators.
 
         graph = build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                           basic_blocks, save_memory_mode, res_cache_name=trace_cache_name)
+                                           basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
 
         weights = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
                                           graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
@@ -427,6 +427,7 @@ def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic
         if not trace_on_gpu:
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
         else:
+            print("-I- tracing on GPU")
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cuda')
 
     print("-I- tracing model")
