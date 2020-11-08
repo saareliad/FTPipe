@@ -1,0 +1,57 @@
+{
+    "logdir": "logs/cep/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir": "results/cep",
+    "auto_file_name": true,
+    "out_filename": "cep",
+    "distributed_backend": "mpi",
+    "model": "cep_netN50_C500_4p_bw12_metis",
+    "stage_to_device_map": [0, 0, 0, 0, 1, 2, 3],
+    "nprocs": 7,
+    "dataset": TODO,
+    "trainer": {
+        "type": "cep",
+        "args": {
+            "always_calc_grad_norm": false
+        }
+    },
+    "statistics": "cv",
+    "step_every": 1,
+    "bs_train": 256,
+    "bs_test": 256,
+    "num_data_workers": 5,
+    "optimizer": {
+        "type": "adafactor",
+        "args": {
+            "lr": 0.001,
+            "weight_decay": 0,
+	    "scale_parameter": true,
+	    "relative_step": false
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_constant_schedule_with_warmup",
+        "preproc_args": {
+        },
+        "args": {
+            "num_warmup_steps": 0,
+            "last_epoch": -1
+        }
+    },
+    "epochs": -1,
+    "steps": TODO,
+    "seed_from_cmd": false,
+    "seed": 42,
+    "bs_train_from_cmd": false,
+    "bs_test_from_cmd": false,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "work_scheduler": "gpipe",
+    "cudnn_benchmark": true,
+    "max_buffers": 1,
+    "keep_buffers_alive": false,
+    "train_batches_limit": -1,
+    "log_frequency": 200,
+    "dont_drop_last": true
+}

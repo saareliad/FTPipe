@@ -8,7 +8,7 @@ from torchvision import transforms
 from torchvision.datasets import CIFAR10, CIFAR100, ImageFolder, DatasetFolder
 from torchvision.datasets.folder import default_loader
 
-from .datasets import CommonDatasetHandler, register_dataset
+from .datasets import CommonDatasetHandler, register_dataset, register_hardcoded_just_xy_dataset
 from .hardcoded_dirs import DEFAULT_DATA_DIR, IMAGENET_ROOT_DIR
 
 DOWNLOAD = False
@@ -417,9 +417,6 @@ class SEP_CIFAR100_DatasetHandler(CommonDatasetHandler):
         NotImplementedError()
 
 
-register_dataset("cifar100", SEP_CIFAR100_DatasetHandler)
-
-
 #############################################################
 # CIFAR 10
 ############################################################
@@ -464,7 +461,6 @@ class SEP_CIFAR10_DatasetHandler(CommonDatasetHandler):
         NotImplementedError()
 
 
-register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)
 
 
 #############################################################
@@ -506,4 +502,10 @@ class SEP_IMAGENET_DatasetHandler(CommonDatasetHandler):
         NotImplementedError()
 
 
+
+register_dataset("cifar10", SEP_CIFAR10_DatasetHandler)
+register_dataset("cifar100", SEP_CIFAR100_DatasetHandler)
 register_dataset("imagenet", SEP_IMAGENET_DatasetHandler)
+register_hardcoded_just_xy_dataset("cifar10")
+register_hardcoded_just_xy_dataset("cifar100")
+register_hardcoded_just_xy_dataset("imagenet")

@@ -8,7 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, RandomSampler, SequentialSampler, DataLoader  # DistributedSampler
 from transformers import PreTrainedTokenizer
 
-from .datasets import CommonDatasetHandler, register_dataset
+from .datasets import CommonDatasetHandler, register_dataset, register_hardcoded_just_xy_dataset
 from .hardcoded_dirs import DEFAULT_DATA_DIR
 
 
@@ -415,9 +415,6 @@ class SEP_WIKITEXT2_DatasetHandler(CommonDatasetHandler):
         return dataloader_keywords
 
 
-register_dataset("wt2", SEP_WIKITEXT2_DatasetHandler)
-
-
 def extract_needed_keywords(**kw):
     # here for backward compatibility
     args = kw['args']
@@ -430,3 +427,7 @@ def extract_needed_keywords(**kw):
              test_seq_len=args.test_seq_len,
              overwrite_cache=overwrite_cache)
     return d
+
+
+register_dataset("wt2", SEP_WIKITEXT2_DatasetHandler)
+register_hardcoded_just_xy_dataset("wt2")

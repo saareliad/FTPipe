@@ -9,11 +9,18 @@ import torch.nn.functional as F
 from models.normal.split_linear import SplitLinear
 
 
+# TODO: later do all in one + register
+# from autopipe.tasks.cep import *
+# from pipe.data.cep import *
+# from pipe.pipeline.training.cep_trainer import *
+
+
 # Dataset for generating graphs on the fly
 class Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, n, k, max_samples_num):
-        'Initialization'
+    def __init__(self, n, k, max_samples_num, just=None):
+        self.just = just
+        # 'Initialization'
         self.samples_num = int(max_samples_num)
         self.n = n
         self.node_list = list(range(n))
@@ -31,14 +38,27 @@ class Dataset(torch.utils.data.Dataset):
         return self.samples_num
 
     def __getitem__(self, index):
-        X = torch.randint(0, 2, (self.n * (self.n - 1) // 2,)) - 0.5
+        if self.just == 'x':
+            X = torch.randint(0, 2, (self.n * (self.n - 1) // 2,)) - 0.5
+            if index % 2 == 0:
+                ch_nodes = np.random.choice(self.node_list, self.k, replace=False)
+                X[[self.edge_dict[c] for c in combinations(ch_nodes, 2)]] = 0.5
+                return X
+            return X
+        elif self.just == 'y':
+            if index % 2 == 0:
+                return torch.tensor([1.0])
+            else:
+                return torch.tensor([0.0])
+        else:
+            # Original, both
+            X = torch.randint(0, 2, (self.n * (self.n - 1) // 2,)) - 0.5
+            if index % 2 == 0:
+                ch_nodes = np.random.choice(self.node_list, self.k, replace=False)
+                X[[self.edge_dict[c] for c in combinations(ch_nodes, 2)]] = 0.5
+                return X, torch.tensor([1.0])
 
-        if index % 2 == 0:
-            ch_nodes = np.random.choice(self.node_list, self.k, replace=False)
-            X[[self.edge_dict[c] for c in combinations(ch_nodes, 2)]] = 0.5
-            return X, torch.tensor([1.0])
-
-        return X, torch.tensor([0.0])
+            return X, torch.tensor([0.0])
 
 
 class Net(nn.Module):
@@ -108,4 +128,4 @@ if __name__ == '__main__':
 
         print(summary(model, input_size=(N * (N - 1) // 2,)))
     except ImportError as e:
-        print("please install torchsummary for additional information")
+        print("please pip install torchsummary for additional information")

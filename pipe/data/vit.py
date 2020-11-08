@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import torchvision
 
-from pipe.data import CommonDatasetHandler, register_dataset
+from pipe.data import CommonDatasetHandler, register_dataset, register_hardcoded_just_xy_dataset
 from pipe.data.cv import get_imagenet_just_x_or_y_ds, get_cifar_10_just_x_or_y_ds, get_cifar_100_just_x_or_y_ds
 
 
@@ -129,3 +129,11 @@ register_dataset("cifar100_384", SepCifar100_384_DatasetHandler)
 register_dataset("imagenet_384", sep_imagenet_handler_factory(resize_size=384, crop_size=384))
 register_dataset("imagenet_512", sep_imagenet_handler_factory(resize_size=512, crop_size=512))
 register_dataset("imagenet_518", sep_imagenet_handler_factory(resize_size=518, crop_size=518))
+
+
+register_hardcoded_just_xy_dataset("cifar10_384")
+register_hardcoded_just_xy_dataset("cifar100_384")
+register_hardcoded_just_xy_dataset("imagenet_384")
+register_hardcoded_just_xy_dataset("imagenet_512")
+register_hardcoded_just_xy_dataset("imagenet_518")
+

@@ -8,7 +8,7 @@
     "model": "t5_small_tied_lmhead_4p_bw12_async_squad1",
     "dataset": "t5_squad",
     "trainer": {
-        "type": "t5_squad",
+        "type": "t5",
         "args": {
             "always_calc_grad_norm": false
         }

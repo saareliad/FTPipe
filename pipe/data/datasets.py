@@ -5,8 +5,9 @@ import torch
 from torch.utils.data import DistributedSampler
 
 AVAILABLE_DATASETS = {
-    #     'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue', "t5_squad"
+    #    e.g 'cifar10', 'cifar100', 'imagenet', 'wt2', 'squad1', 'squad2', 'glue', "t5_squad"
 }
+HARDCODED_JUST_XY = set()  # HACK: used to hardcode this.
 
 
 class CommonDatasetHandler(abc.ABC):
@@ -31,6 +32,10 @@ class CommonDatasetHandler(abc.ABC):
 
 def register_dataset(name, common_handler: Type[CommonDatasetHandler]):
     AVAILABLE_DATASETS[name] = common_handler
+
+
+def register_hardcoded_just_xy_dataset(name):
+    HARDCODED_JUST_XY.add(name)
 
 
 ##################################

@@ -1,3 +1,6 @@
+import warnings
+from typing import Optional, Dict, Any
+
 import torch
 from torch.utils.data import DataLoader
 
@@ -5,6 +8,7 @@ from pipe.models.simple_partitioning_config import PipelineConfig
 from .datasets import (
     AVAILABLE_DATASETS,
     # DICT_DATASET_JUST_XY_FUNC,
+    HARDCODED_JUST_XY,
     MyNewDistributedSampler
 )
 from .hardcoded_dirs import DEFAULT_DATA_DIR
@@ -23,21 +27,32 @@ from .hardcoded_dirs import DEFAULT_DATA_DIR
 
 
 def _is_hardcoded_xy(args):
-    HARDCODED_JUST_XY = {"cifar10", "cifar100", "imagenet", "wt2"}  # HACK: used to hardcode this.
     is_hardcoded_xy = args.dataset in HARDCODED_JUST_XY
     return is_hardcoded_xy
 
 
 def get_just(args, pipe_config=None):
     is_hardcoded_xy = _is_hardcoded_xy(args)
-    if is_hardcoded_xy or pipe_config is None:  # legacy
-        print("-I- using hardcoded xy (to be deprecated)")
-        if args.stage == 0:
-            just = 'x'
-        elif args.stage == args.num_stages - 1:
-            just = 'y'
+    if is_hardcoded_xy:
+
+        if pipe_config is None:  # legacy
+            warnings.warn("using hardcoded xy without pipe config (to be deprecated)")
+            if args.stage == 0:
+                just = 'x'
+            elif args.stage == args.num_stages - 1:
+                just = 'y'
+            else:
+                just = None
         else:
-            just = None
+            # Hardcoded, but smarter: by depth (allows more flexibility)
+            pipe_config: PipelineConfig
+            my_depth = pipe_config.get_depth_for_stage(args.stage)
+            if my_depth == pipe_config.pipeline_depth - 1:
+                just = 'x'
+            elif my_depth == 0:
+                just = 'y'
+            else:
+                just = None
     else:
         pipe_config: PipelineConfig
         inputs_from_dl = pipe_config.get_dataset_inputs_for_stage(args.stage)
@@ -70,11 +85,13 @@ def get_data_dir(args):
 
 
 def get_separate_dls_from_args(args,
-                               pipe_config=None,
-                               dataset_keywords=dict(),
+                               pipe_config: Optional[PipelineConfig] = None,
+                               dataset_keywords: Optional[Dict[str, Any]] = None,
                                verbose=False,
                                # currently unused:
                                shuffle_train=True, ):
+    if dataset_keywords is None:
+        dataset_keywords = dict()
     just = get_just(args, pipe_config=pipe_config)
     if not just and not getattr(args, "load_extra_inputs", False):  # Empty
         return None, None, [], None
