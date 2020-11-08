@@ -2,7 +2,7 @@ import warnings
 from functools import partial
 
 import torch.nn as nn
-from timm.models import VisionTransformer
+from timm.models.vision_transformer import VisionTransformer
 from torch.utils import model_zoo
 
 from .model_handler import CommonModelHandler

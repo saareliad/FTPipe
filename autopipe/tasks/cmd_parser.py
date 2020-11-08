@@ -81,7 +81,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
         group.add_argument("--bwd_to_fwd_ratio",
                            type=float,
-                           default=-1,
+                           default=1,
                            help="bwd to fwd ratio for heuristics")
         group.add_argument(
             "--auto_infer_node_bwd_to_fwd_ratio",
@@ -197,7 +197,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
     # TODO should use sub parsers as those 2 groups are mutaully exclusive
     def _add_METIS_args(self, group):
-        group.add_argument("--metis_attempts", type=int, default=1000,
+        group.add_argument("--metis_attempts", type=int, default=10,
                            help="number of attempts for running the METIS partitioning algorithm")
         group.add_argument("--metis_verbose_on_error", action="store_true", default=False,
                            help="whether to print the cause of the error")
