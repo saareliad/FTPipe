@@ -295,7 +295,7 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
         if n.scope not in recomputation_times:
             recomputation_times[n.scope] = ExecTimes(0, 0)
     weights = {
-        n: FullExecTimes(recomputation_times[n.scope],
+        n.id: FullExecTimes(recomputation_times[n.scope],
                          no_recomputation_times[n.scope])
         for n in graph.nodes
     }
@@ -509,9 +509,9 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
 
         for n in graph.nodes:
             if n.scope in last_partition_scopes:
-                n.weight = weights[n].no_recomputation
+                n.weight = weights[n.id].no_recomputation
             else:
-                n.weight = weights[n].recomputation
+                n.weight = weights[n.id].recomputation
 
         n_runs += 1
 
