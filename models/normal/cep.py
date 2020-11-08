@@ -53,8 +53,8 @@ class Net(nn.Module):
 
     def forward(self, x):
         x = F.leaky_relu(self.bn1(self.input_layer(x)))
-        x = F.leaky_relu(self.bn1(self.h1_layer(x)))
-        x = F.leaky_relu(self.bn1(self.h2_layer(x)))
+        x = F.leaky_relu(self.bn2(self.h1_layer(x)))
+        x = F.leaky_relu(self.bn3(self.h2_layer(x)))
         x = self.output_layer(x)
         return x
 
