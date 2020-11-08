@@ -6,7 +6,7 @@ from typing import Callable, List, Dict, Optional, Union, Tuple
 import torch
 import torch.nn as nn
 
-from .cache_utils import compute_and_cache, compute_and_maybe_cache, PickleCache
+from .cache_utils import compute_and_cache, compute_and_maybe_cache, PickleCache, GraphCache
 from .compiler import compile_partitioned_model
 from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
@@ -17,9 +17,6 @@ from .model_profiling.infer_req_grad import infer_req_grad
 from .utils import move_tensors, ExecTimes
 
 FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
-
-
-# __all__ = ['pipe_model', 'trace_module', 'partition_model']
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -220,14 +217,14 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
     if not async_pipe or not recomputation:
         if graph is None:
             graph = compute_and_maybe_cache(build_profiled_graph, profiles_cache_name,
-                                            model, model_args=model_args, model_kwargs=model_kwargs,
+                                            model, _cache_cls_to_use=GraphCache, model_args=model_args,
+                                            model_kwargs=model_kwargs,
                                             use_network_profiler=use_network_profiler,
                                             use_graph_profiler=use_graph_profiler,
                                             save_memory_mode=save_memory_mode,
                                             trace_on_gpu=trace_on_gpu,
                                             profile_ops=profile_ops,
                                             recomputation=recomputation, n_iter=n_iter, max_depth=max_depth,
-                                            _cache_cls_to_use=PickleCache,
                                             basic_blocks=basic_blocks, force_no_recomp_scopes=force_no_recomp_scopes,
                                             trace_cache_name=trace_cache_name)
 
@@ -419,10 +416,11 @@ def build_profiled_graph(model: nn.Module,
 
 
 def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
-                               res_cache_name=None):
+                               res_cache_name=None) -> Graph:
     if res_cache_name:
         return compute_and_cache(build_graph_with_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
-                                 basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None)
+                                 basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None,
+                                 _cache_cls_to_use=GraphCache)
 
     # dev WARNING: can move , model, model_args, model_kwargs to CPU
     if save_memory_mode:

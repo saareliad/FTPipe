@@ -314,7 +314,7 @@ class TracedValue(object):
 
     ##############################
     # Magic Method delegation
-    # intentionaly explicit
+    # intentionally explicit
     # NOTE if the method requires specific syntax
     # then it should be also added in utils.py
     # and ensure correct code generation in compiler/partition_forward_method.generate_magic
@@ -932,7 +932,7 @@ def duplicate_constants(nodes, output_id):
         if node.type is NodeTypes.CONSTANT and len(node.out_edges) > 1:
             for n_copy, o in enumerate(node.out_edges):
                 copy_node = Node.from_other(node)
-                copy_node.id += (n_copy)
+                copy_node.id += n_copy
                 o.replace_input(node, copy_node)
                 copy_node.out_edges = {o}
                 new_nodes[copy_node.id] = copy_node
