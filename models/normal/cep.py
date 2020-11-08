@@ -13,7 +13,7 @@ class Dataset(torch.utils.data.Dataset):
 
     def __init__(self, n, k, max_samples_num):
         'Initialization'
-        self.samples_num = max_samples_num
+        self.samples_num = int(max_samples_num)
         self.n = n
         self.node_list = list(range(n))
         self.k = k
