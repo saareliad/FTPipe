@@ -21,7 +21,7 @@ from models.normal.cep import Net, Dataset
 class CEPParser(Parser):
     def _add_model_args(self, group):
         group.add_argument("--N", type=int, default=361)
-        group.add_argument("--C", type=int, default=20000)
+        group.add_argument("--C", type=int, default=10000)
 
     def _add_data_args(self, group):
         group.add_argument("--K", type=int, default=18)
@@ -29,7 +29,7 @@ class CEPParser(Parser):
 
     def _default_values(self):
         return {
-            "n_iter": 10,
+            "n_iter": 1,
             "n_partitions": 4,
             "bw": 12,
             "partitioning_batch_size": 1,

@@ -5,6 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from models.normal.split_linear import SplitLinear
+
 
 # Dataset for generating graphs on the fly
 class Dataset(torch.utils.data.Dataset):
@@ -40,8 +42,29 @@ class Dataset(torch.utils.data.Dataset):
 
 class Net(nn.Module):
 
-    def __init__(self, n, c):
+    def __init__(self, n, c, n_split=4):
         super(Net, self).__init__()
+
+        self.input_layer = SplitLinear(nn.Linear(n * (n - 1) // 2, 3 * n * (n - 1) // 4), n_split=n_split)
+        self.bn1 = nn.BatchNorm1d(3 * n * (n - 1) // 4)
+        self.h1_layer = nn.Linear(3 * n * (n - 1) // 4, c)
+        self.bn2 = nn.BatchNorm1d(c)
+        self.h2_layer = nn.Linear(c, c // 20)
+        self.bn3 = nn.BatchNorm1d(c // 20)
+        self.output_layer = nn.Linear(c // 20, 1)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.bn1(self.input_layer(x)))
+        x = F.leaky_relu(self.bn2(self.h1_layer(x)))
+        x = F.leaky_relu(self.bn3(self.h2_layer(x)))
+        x = self.output_layer(x)
+        return x
+
+
+class NetWithoutSplit(nn.Module):
+
+    def __init__(self, n, c):
+        super(NetWithoutSplit, self).__init__()
 
         self.input_layer = nn.Linear(n * (n - 1) // 2, 3 * n * (n - 1) // 4)
         self.bn1 = nn.BatchNorm1d(3 * n * (n - 1) // 4)
@@ -62,7 +85,9 @@ class Net(nn.Module):
 if __name__ == '__main__':
     # N = number of nodes in graph, K = clique size
     # C = constant as defined in the paper, samples_num = arbitrary high number
-    N, K, C, samples_num = 361, 18, 20000, 1e11
+    # N, K, C, samples_num = 361, 18, 20000, 1e11
+    N, K, C, samples_num = 361, 18, 10000, 1e11
+
     # Loss, Optimizers etc..
     loss_func = nn.BCEWithLogitsLoss()
 

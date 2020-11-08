@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 class SplitLinear(nn.Module):
     """ Split Linear layer.
-        by the dimention of out_features
+        by the dimension of out_features
         (For each split, the output will be smaller. Requires stack at the end)
     """
 
@@ -54,7 +54,7 @@ class SplitLinear(nn.Module):
 
 class SplitLinearIn(nn.Module):
     """ Split Linear layer.
-        by the dimention of in_features
+        by the dimension of in_features
         (For each split, the input will be smaller.
         Requires sum and adding bias at the end)
     """
