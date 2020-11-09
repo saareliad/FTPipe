@@ -2,7 +2,8 @@ import torch
 
 from models.normal.vision_models import ResNet
 from models.normal.vision_models import WideResNet, amoebanetd, vgg16_bn
-from pipe.models.registery.vit import vit_base_patch16_384_in21k, vit_large_patch32_384_in21k
+from pipe.models.registery.vit import _VIT_WITHOUT_HUB, \
+    delegate_call
 from . import register_task, Parser
 from .partitioning_task import PartitioningTask
 
@@ -14,20 +15,6 @@ _HUB = dict(resnext101_32x48d_wsl=dict(github='facebookresearch/WSL-Images', mod
             #                            pretrained=True)
             )
 # TODO: input size and so on.
-_VIT_WITHOUT_HUB = dict(
-    vit_base_patch16_384_in21k_imagenet_384=dict(function=vit_base_patch16_384_in21k, pretrained=True, num_classes=1000,
-                                                 input_size=(3, 384, 384)),
-    vit_large_patch32_384_in21k_imagenet_384=dict(function=vit_large_patch32_384_in21k, pretrained=True,
-                                                  num_classes=1000, input_size=(3, 384, 384)),
-    vit_large_patch32_384_in21k_imagenet_512=dict(function=vit_large_patch32_384_in21k, pretrained=True,
-                                                  num_classes=1000,
-                                                  input_size=(3, 512, 512)),
-
-    vit_large_patch32_384_in21k_cifar100_384=dict(function=vit_large_patch32_384_in21k, pretrained=True,
-                                                  num_classes=100,
-                                                  input_size=(3, 384, 384)),
-
-)
 
 _VGG16_BN = dict(vgg16_bn=dict())
 
@@ -82,10 +69,6 @@ def _register_model(dict_params, model_cls):
     MODEL_CFG_TO_SAMPLE_MODEL.update(
         {k: model_cls
          for k in dict_params.keys()})
-
-
-def delegate_call(function, *args, **kw):
-    return function(*args, **kw)
 
 
 _register_model(_WIDE_RESNETS, WideResNet)
