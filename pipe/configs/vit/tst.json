@@ -1,7 +1,7 @@
 {
   "base_config_path": [
-    "cifar100.json",
-    "vit_large_patch32_384_in21k.json"
+    "imagenet_384.json",
+    "vit_large_patch32_384_in21k_imagenet_384c384_8p_bw12_async_acyclic.json"
   ],
   "base_config_path_is_relative": true,
   "logdir": "logs/vit/imagenet/",
