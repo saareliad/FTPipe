@@ -55,7 +55,7 @@ def parse_distributed_cli(parser):
         type=int,
         default=1,
         help="Maximal Number of async recv buffers. "
-             "With 1: it actually means the recv is sync.(default=2 for best performance)."
+             "With 1: it actually means the recv is sync."
     )
 
     parser.add_argument("--keep_buffers_alive",
@@ -63,6 +63,9 @@ def parse_distributed_cli(parser):
                         default=False,
                         help="Keep forward buffers for both train and eval "
                              "instead of dynamically creating them every iteration")
+
+    parser.add_argument("--flush_rate", type=int, default=-1, help="Flush the pipeline after flush_rate batches "
+                                                                   "(default: -1, flush after iteration over dataloader)")
 
 
 def parse_multiprocessing_cli(parser):

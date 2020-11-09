@@ -27,9 +27,10 @@ ExecTimes = collections.namedtuple(
 )
 
 
+# sub_layer, scope, parent, terminal
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
                    basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[
-    Tuple[nn.Module, str, nn.Module]]:
+    Tuple[nn.Module, str, nn.Module, Optional[bool]]]:
     """
     iterate over model layers yielding the layer,layer_scope,encasing_module
     Parameters:
@@ -41,7 +42,7 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
     basic_blocks:
         a list of modules that if encountered will not be broken down
     full:
-        whether to yield only layers specified by the depth and basick_block options or to yield all layers
+        whether to yield only layers specified by the depth and basic_block options or to yield all layers
     """
     if prefix is None:
         prefix = type(module).__name__
