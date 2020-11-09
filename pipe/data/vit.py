@@ -72,12 +72,12 @@ def sep_imagenet_handler_factory(resize_size=384, crop_size=384):
 
         def get_train_ds(self, **kw):
             train_transform, _ = imagenet_transformations(resize_size=resize_size, crop_size=crop_size)
-            return get_imagenet_just_x_or_y_ds(transform=train_transform, **kw)
+            return get_imagenet_just_x_or_y_ds(transform=train_transform, train=True, **kw)
 
         def get_test_ds(self, **kw):
             # For convenience it is given as test, its actually validation
             _, test_transform = imagenet_transformations(resize_size=resize_size, crop_size=crop_size)
-            return get_imagenet_just_x_or_y_ds(transform=test_transform, **kw)
+            return get_imagenet_just_x_or_y_ds(transform=test_transform, train=False, **kw)
 
         def get_validation_ds(self, **kw):
             # For convenience it is given as test, its actually validation
