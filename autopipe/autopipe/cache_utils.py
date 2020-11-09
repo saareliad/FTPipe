@@ -3,7 +3,7 @@ import pickle
 
 import torch
 
-from autopipe.autopipe.model_profiling.control_flow_graph import Graph
+from .model_profiling.control_flow_graph import Graph
 
 
 class TorchCache:
