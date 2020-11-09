@@ -1,6 +1,4 @@
 {
-  "base_config_path": "cv.json",
-  "base_config_path_is_relative": true,
   "data_dir": "/home_local/saareliad/data",
   "dataset": "cifar10_384",
   "epochs": -1,
