@@ -18,17 +18,19 @@
     "type": "sgd1",
     "args": {
       "lr": 0.03,
-      "weight_decay": 0.0005,
+      "weight_decay": 0,
       "momentum": 0.9,
       "nesterov": true
     }
   },
   "lr_scheduler": {
-    "type": "get_constant_schedule_with_warmup",
+    "type": "get_cosine_schedule_with_warmup",
     "preproc_args": {
     },
     "args": {
       "num_warmup_steps": 500,
+      "num_training_steps": 20000,
+      "num_cycles": 0.5,
       "last_epoch": -1
     }
   },
