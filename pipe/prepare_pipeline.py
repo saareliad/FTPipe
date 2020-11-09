@@ -143,8 +143,8 @@ def preproc_lr_scheduler_args(args):
 
 def get_lr_scheduler_class(args):
     attr = getattr(args, 'lr_scheduler')
-    if attr['type'] in pipe.optimizers.lr_scheduler.AVAILABLE_LR_SCHEDULERS:
-        scheduler_cls = getattr(pipe.optimizers.lr_scheduler, attr['type'])
+    if attr['type'] in pipe.optimizers.lr_scheduler.ADDITIONAL_AVAILABLE_LR_SCHEDULERS:
+        scheduler_cls = pipe.optimizers.lr_scheduler.ADDITIONAL_AVAILABLE_LR_SCHEDULERS[attr['type']]
     else:
         scheduler_cls = getattr(torch.optim.lr_scheduler, attr['type'])
     return scheduler_cls
