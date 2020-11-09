@@ -3,7 +3,7 @@
     "type": "cv",
     "args": {
       "always_calc_grad_norm": false
-    },
-    "statistics": "cv"
-  }
+    }
+  },
+  "statistics": "cv"
 }
