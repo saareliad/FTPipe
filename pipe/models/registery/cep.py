@@ -18,4 +18,4 @@ class CEPModelHandler(CommonModelHandler):
         return self.normal_model_instance
 
 
-register_model(name="cep_netN50_C500_4p_bw12_metis", handler=CEPModelHandler)
+register_model(name="cep_netN50_C500_4p_bw12_metis", handler=CEPModelHandler(normal_model_fn=Net(n=50, c=500, n_split=4)))
