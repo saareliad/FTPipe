@@ -1,7 +1,7 @@
-from .interface import BaseOutPutIsLossTrainer
+from .interface import LossIncludedInModelMultiPartitionTrainer
 
 
-class T5Trainer(BaseOutPutIsLossTrainer):
+class T5Trainer(LossIncludedInModelMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
     def __init__(self, *args, loss_multiplier=1, **kw):
@@ -24,16 +24,11 @@ class T5Trainer(BaseOutPutIsLossTrainer):
         #    self.advanced_test_stats(x, example_indices)
 
     def backprop_last_partition(self, x, batch_size):
-        # logits = x[0]
         loss = x
         loss_multiplier = self.loss_multiplier
         if loss_multiplier != 1:
             loss *= loss_multiplier
         return super().backprop_last_partition(loss)
-        # if self.step_every > 1:
-        #     loss /= self.step_every
-        # loss.backward()
-        # return loss
 
     def last_partition_step_and_statistics(self,
                                            x,

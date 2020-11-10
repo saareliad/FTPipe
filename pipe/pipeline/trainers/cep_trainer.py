@@ -1,21 +1,21 @@
 import torch
 
-from .interface import BaseLossTrainer
+from .interface import DataAndLabelsMultiPartitionTrainer
 
 
-# TODO: typehint for statistics. maybe it should actually sit under statistics
+# TODO: should remove register from init after moving
 
-class CVTrainer(BaseLossTrainer):
+class CEPTrainer(DataAndLabelsMultiPartitionTrainer):
     PER_STEP_SCHEDULER = False
 
     def __init__(self, *args, **kw):
-        super().__init__(*args, loss_fn=torch.nn.CrossEntropyLoss(), **kw)
+        super().__init__(*args, loss_fn=torch.nn.BCEWithLogitsLoss(), **kw)
 
     def calc_test_stats(self, x, y, batch_size):
         # print("Called calc_test_stats")
         loss = self.loss_fn(x, y)
         assert (batch_size == len(y))
-        y_pred = torch.argmax(x, 1)
+        y_pred = torch.ge(x, 0.5)
         num_correct = torch.sum(y == y_pred).item()
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
@@ -30,7 +30,7 @@ class CVTrainer(BaseLossTrainer):
         """
 
         assert (batch_size == len(y))
-        y_pred = torch.argmax(x, 1)
+        y_pred = torch.ge(x, 0.5)
         num_correct = torch.sum(y == y_pred).item()
 
         if step:
@@ -38,6 +38,3 @@ class CVTrainer(BaseLossTrainer):
 
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.update_on_batch("acc", num_correct, batch_size)
-
-# TODO: it is also possible to do the entire thing on activation gradients,
-#  avoiding the need to do it over all gradeints.

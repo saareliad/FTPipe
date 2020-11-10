@@ -1,3 +1,5 @@
+from typing import Type
+
 from .cv import CVStats, NormCVstats, CVDistanceNorm, CVDistance
 from .glue import GlueStats, NormGluestats, GlueDistanceNorm, GlueDistance
 from .interface import Stats
@@ -12,7 +14,7 @@ from .squad import SquadStats, NormSquadstats, SquadDistanceNorm, SquadDistance
 AVAILBALE_STATS = {}
 
 
-def register_statistics(name: str, stats_cls: Stats):
+def register_statistics(name: str, stats_cls: Type[Stats]):
     AVAILBALE_STATS[name] = stats_cls
     AVAILBALE_STATS[name + "_loss_per_batch"] = stats_cls
 

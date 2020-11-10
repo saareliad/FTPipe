@@ -22,7 +22,8 @@ from pipe.pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_c
                                      get_adamw_gap_aware_cls, SUPPORTED_GAP_AWARE_POLICIES)
 from pipe.pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
 from pipe.pipeline.statistics import get_statistics  # , Stats
-from pipe.pipeline.training import AVAILABLE_TRAINERS
+from pipe.pipeline.trainers import get_trainer_cls
+from pipe.pipeline.trainers.gap_aware_trainer import GapAwareTrainerMixin
 from pipe.pipeline.weight_prediction import get_sched_predictor
 from pipe.pipeline.weight_prediction import get_weight_predictor as get_weight_predictor_partial
 from pipe.pipeline.weight_stashing import WeightStasher
@@ -39,10 +40,6 @@ DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.Proportion
 
 
 # from data import AVAILABLE_DATASETS
-
-def get_trainer_cls(args):
-    trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])
-    return trainer_cls
 
 
 def is_huggingface_transformer(args):
@@ -705,7 +702,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
                         step_every=args.step_every)
     trainer_kwds.update(args.trainer['args'])
     # NOTE: With hack_trainer_type_to_gap_aware  we modified trainer type if needed.
-    if getattr(trainer_cls, "HAS_GAP_AWARE", False):
+    if issubclass(trainer_cls, GapAwareTrainerMixin) or getattr(trainer_cls, "HAS_GAP_AWARE", False):
         gap_aware = get_gap_aware(args, optimizer)
         trainer = trainer_cls(gap_aware, **trainer_kwds)
         partition.set_gap_aware(gap_aware)

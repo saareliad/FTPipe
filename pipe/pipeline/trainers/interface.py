@@ -10,7 +10,7 @@ from .utils import calc_norm
 from ..statistics.interface import Stats
 
 
-class AnyTrainer(abc.ABC):
+class LastPartitionTrainer(abc.ABC):
     @abc.abstractmethod
     def backprop_last_partition(self, *args, **kw):
         pass
@@ -28,7 +28,10 @@ class AnyTrainer(abc.ABC):
         pass
 
 
-class SupervisedLossIncludedTrainer(AnyTrainer):
+class LossIncludedLastPartitionTrainer(LastPartitionTrainer):
+    def __init__(self, step_every):
+        self.step_every = step_every
+
     def backprop_last_partition(self, loss, *args, **kw):
         if self.step_every > 1:
             loss /= self.step_every
@@ -36,8 +39,8 @@ class SupervisedLossIncludedTrainer(AnyTrainer):
         return loss
 
 
-class SupervisedTrainer(AnyTrainer):
-    # added *args just to make it a true subtype.
+class DataAndLabelsLastPartitionTrainer(LastPartitionTrainer):
+    """Adding x,y to represents (data,labels)."""
 
     @abc.abstractmethod
     def backprop_last_partition(self, x, y, *args, **kw):
@@ -46,7 +49,7 @@ class SupervisedTrainer(AnyTrainer):
     @abc.abstractmethod
     def last_partition_step_and_statistics(self, x, y, *args, **kw):
         """
-        Usually used for the last partiton (or any other partiton were x,y are needed)
+        Usually used for the last partition (or any other partition were x,y are needed)
         to calculate loss, gradients and do training steps
 
         We currently assume its the last partition for simplicity
@@ -54,10 +57,10 @@ class SupervisedTrainer(AnyTrainer):
         pass
 
 
-class PartitionedTrainer(AnyTrainer):
-    # def __init__(self, optimizer, statistics):
-    #     self.optimizer = optimizer
-    #     self.statistics = statistics
+class MultiPartitionTrainer(LastPartitionTrainer):
+    def __init__(self, optimizer: Optimizer, statistics: Stats):
+        self.optimizer = optimizer
+        self.statistics = statistics
 
     @abc.abstractmethod
     def non_last_partition_step(self, *args, **kw):
@@ -89,33 +92,16 @@ class PartitionedTrainer(AnyTrainer):
             self.statistics.update_on_batch(gap_name, gap, 1)
 
 
-class PartitionedSupervisedTrainer(PartitionedTrainer, SupervisedTrainer):
-    pass
-
-
-class PartitionedSupervisedLossIncludedTrainer(PartitionedTrainer,
-                                               SupervisedLossIncludedTrainer):
-    pass
-
-
-class GradNormStepper:
+class GradNormStepperMixin(MultiPartitionTrainer):
     PER_STEP_SCHEDULER = False
 
-    # def __init__(
-    #         self,
-    #         model,
-    #         optimizer,
-    #         scheduler,
-    #         statistics,
-    #         max_grad_norm=None,
-    #         always_calc_grad_norm=False,
-    # ):
-    #     self.optimizer = optimizer
-    #     self.scheduler = scheduler
-    #     self.model = model
-    #     self.max_grad_norm = max_grad_norm
-    #     self.always_calc_grad_norm = always_calc_grad_norm
-    #     self.statistics = statistics
+    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm, always_calc_grad_norm):
+        super().__init__(optimizer, statistics)
+        self.always_calc_grad_norm = always_calc_grad_norm
+        self.model = model
+        self.max_grad_norm = max_grad_norm
+        self.scheduler = scheduler
+
     def non_last_partition_step(self, old_lrs=None):
         self.step_on_computed_grads(old_lrs=old_lrs)
 
@@ -152,7 +138,7 @@ class GradNormStepper:
             self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
 
-class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
+class DataAndLabelsMultiPartitionTrainer(GradNormStepperMixin, DataAndLabelsLastPartitionTrainer):
     """Trainer assuming loss is calculated *outside* the model """
 
     def __init__(self,
@@ -165,20 +151,14 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
                  loss_fn=torch.nn.CrossEntropyLoss(),
                  cuda=True,
                  step_every=1):
+        GradNormStepperMixin.__init__(self, model, optimizer, scheduler, statistics, max_grad_norm, always_calc_grad_norm)
+        DataAndLabelsLastPartitionTrainer.__init__(self)
 
         self.loss_fn = loss_fn
-        if cuda:
+        if cuda and hasattr(self.loss_fn, "cuda"):
             self.loss_fn = self.loss_fn.cuda()
 
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.model = model
-        self.max_grad_norm = max_grad_norm
-        self.always_calc_grad_norm = always_calc_grad_norm
         self.step_every = step_every
-
-        # Stats
-        self.statistics = statistics
 
     def backprop_last_partition(self, x, y, *args):
         loss = self.loss_fn(x, y)
@@ -188,8 +168,8 @@ class BaseLossTrainer(GradNormStepper, PartitionedSupervisedTrainer):
         return loss
 
 
-class BaseOutPutIsLossTrainer(GradNormStepper,
-                              PartitionedSupervisedLossIncludedTrainer):
+class LossIncludedInModelMultiPartitionTrainer(GradNormStepperMixin,
+                                               LossIncludedLastPartitionTrainer):
     """Trainer assuming loss is calculated *inside* the model """
 
     def __init__(self,
@@ -200,12 +180,5 @@ class BaseOutPutIsLossTrainer(GradNormStepper,
                  max_grad_norm=None,
                  always_calc_grad_norm=False,
                  step_every=1):
-        self.optimizer = optimizer
-        self.scheduler = scheduler
-        self.model = model
-        self.max_grad_norm = max_grad_norm
-        self.always_calc_grad_norm = always_calc_grad_norm
-        self.step_every = step_every
-
-        # Stats
-        self.statistics = statistics
+        GradNormStepperMixin.__init__(self, model, optimizer, scheduler, statistics, max_grad_norm, always_calc_grad_norm)
+        LossIncludedLastPartitionTrainer.__init__(self, step_every)

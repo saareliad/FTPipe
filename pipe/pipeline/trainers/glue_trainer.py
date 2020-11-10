@@ -1,8 +1,10 @@
-from .interface import BaseOutPutIsLossTrainer
+from .interface import LossIncludedInModelMultiPartitionTrainer
+
+# HACK we lazily use LossIncludedInModelMultiPartitionTrainer
+from ..statistics import GlueStats
 
 
-# HACK we layzyly use BaseOutPutIsLossTrainer
-class GlueTrainer(BaseOutPutIsLossTrainer):
+class GlueTrainer(LossIncludedInModelMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
     def __init__(self, *args, **kw):
@@ -21,19 +23,14 @@ class GlueTrainer(BaseOutPutIsLossTrainer):
             batch_size=None):
         # NOTE: we include loss for dev, huggingface does not
         loss = self.loss_fn(x, labels)
+        self.statistics: GlueStats
         self.statistics.update_on_batch("loss", loss.item(), batch_size)
         self.statistics.predictions.append(x.detach())
         self.statistics.label_ids.append(labels.detach())
 
     def backprop_last_partition(self, x, labels, batch_size):
-        # logits = x[0]
         loss = self.loss_fn(x, labels)  # FIXME...
-        # print(loss)
         return super().backprop_last_partition(loss)
-        # if self.step_every > 1:
-        #     loss /= self.step_every
-        # loss.backward()
-        # return loss
 
     def last_partition_step_and_statistics(self,
                                            x,

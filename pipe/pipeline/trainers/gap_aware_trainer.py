@@ -1,11 +1,15 @@
-from .interface import PartitionedTrainer
+from typing import Type, Union
+
+from .interface import LossIncludedInModelMultiPartitionTrainer, DataAndLabelsMultiPartitionTrainer
+
+PipelineSupportedTrainerWithoutGapAware = Union[
+    Type[LossIncludedInModelMultiPartitionTrainer], Type[DataAndLabelsMultiPartitionTrainer]]
 
 
-class GapAwareTrainerBase(PartitionedTrainer):
+class GapAwareTrainerMixin:
     HAS_GAP_AWARE = True
 
     def __init__(self, gap_aware, scheduler=None):
-        super().__init__()
         self.gap_aware = gap_aware
 
         # Patch to update max_lr.
@@ -19,8 +23,8 @@ class GapAwareTrainerBase(PartitionedTrainer):
          """
         # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
-        # NOTE: runing statistics shoud record the step size per parameter and step count
-        # if they are not already recored otherwise.
+        # NOTE: if they are not already record otherwise,
+        # running statistics should record the step size per parameter and step count
         ga.update_running_stats()  # NOTE: SGD, like paper's implementation
         if delay:
             if real_theta:
@@ -37,11 +41,10 @@ class GapAwareTrainerBase(PartitionedTrainer):
         # NOTE: SGD, like paper's implementation
 
 
-def gap_aware_trainer_factory(trainer_cls):
-    class GapAwareCreatedTrainer(trainer_cls, GapAwareTrainerBase):
+def gap_aware_trainer_factory(trainer_cls: Type[PipelineSupportedTrainerWithoutGapAware]):
+    class GapAwareCreatedTrainer(trainer_cls, GapAwareTrainerMixin):
         def __init__(self, gap_aware, scheduler=None, **kw):
-            # super(GapAwareCVTrainer, self).__init__(**kw)
             trainer_cls.__init__(self, scheduler=scheduler, **kw)
-            GapAwareTrainerBase.__init__(self, gap_aware, scheduler=scheduler)
+            GapAwareTrainerMixin.__init__(self, gap_aware, scheduler=scheduler)
 
     return GapAwareCreatedTrainer

@@ -15,7 +15,8 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
-from .training.interface import PartitionedTrainer  # , GradNormStepper
+from .trainers import PipelineSupportedTrainerType
+from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
 from .true_weights_storage import TrueWeightsStorage
 from .weight_prediction.interface import WeightPredictor
 from .weight_stashing import WeightStasher, CachePolicy
@@ -121,7 +122,7 @@ class SinglePartitionManager:
         # Hints,May be set later.
         # self.dl_iter = None
         self.data_propagator: PipelineDataPropagator
-        self.trainer: PartitionedTrainer
+        self.trainer: MultiPartitionTrainer
         self.weight_predictor: WeightPredictor
         self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
@@ -216,8 +217,8 @@ class SinglePartitionManager:
 
         return old_lrs, new_lrs
 
-    def should_do_step(self, batch_idx):
-        # Returns: bool, old_lrs to restore if needed
+    def is_last_micro_batch(self, batch_idx) -> bool:
+        """Simply return if a this is the last micro batch"""
         se = self.step_every
         do_step = (batch_idx % se) == (se - 1)
         return do_step
@@ -225,7 +226,7 @@ class SinglePartitionManager:
     def set_data_propagator(self, data_propagator: PipelineDataPropagator):
         self.data_propagator = data_propagator
 
-    def set_trainer(self, trainer: PartitionedTrainer):
+    def set_trainer(self, trainer: PipelineSupportedTrainerType):
         self.trainer = trainer
 
     def set_dataloader(self,
@@ -440,7 +441,7 @@ class SinglePartitionManager:
 
             # NOTE: for last partition- batch idx is the same as num backwards.
             old_lrs = None
-            do_step = self.should_do_step(batch_idx)
+            do_step = self.is_last_micro_batch(batch_idx)
             # Backprop
             last_due_end = batch_idx + 1 == num_batches
             if (not do_step) and last_due_end:
@@ -470,7 +471,6 @@ class SinglePartitionManager:
             self.true_weights_storage.restore_if_needed()  # check=False
 
             if hasattr(trainer, "grad_norm"):
-                # trainer: GradNormStepper
                 trainer.grad_norm()
 
             # Step
@@ -517,7 +517,7 @@ class SinglePartitionManager:
 
         # Allow skipping steps (Gradient aggregation)
         old_lrs = None
-        do_step = self.should_do_step(batch_idx)
+        do_step = self.is_last_micro_batch(batch_idx)
         # also do step for the last. (but with smaller LR)
         if not do_step and last_due_end:
             do_step = True
@@ -543,9 +543,8 @@ class SinglePartitionManager:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
 
-            # if isinstance(trainer, GradNormStepper):
+            # if isinstance(trainer, GradNormStepperMixin):
             if hasattr(trainer, "grad_norm"):
-                # trainer: GradNormStepper
                 trainer.grad_norm()
 
             # TODO: allow access to real theta just for statistics
@@ -571,20 +570,13 @@ class SinglePartitionManager:
             if self.gap_aware:
                 # Get delay and modify gradients.
                 if self.step_every > 1:
-                    raise NotImplementedError()
-                    # TODO:
-                    # NOTE: used to try the following, it did not work.
-                    #     # Take the maximal delay
-                    #     mb = self.get_micro_batch(batch_idx)
-                    #     delay = max([
-                    #         self.delay_at_batch.pop(batch_idx - i)
-                    #         for i in range(0, mb + 1)
-                    #     ])
+                    raise NotImplementedError() # TODO:
+
                 delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
-                # TODO: return the gap.
-                # TODO: handle grad clip here instead of in step.
+                # TODO: return the total gap for statistics.
+                # NOTE: can handle grad clip here instead of in step.
                 trainer.apply_gap_aware(real_theta=real_theta,
                                         delay=delay,
                                         stashed_theta=stashed_theta)
@@ -614,7 +606,7 @@ class SinglePartitionManager:
         # I don't care too much about the formula, there is probably a nice one.
         # FIXME: for step_every > roundtrip. <----------------
         return sum(
-            [self.should_do_step(x) for x in range(done_bwds, done_fwds)])
+            [self.is_last_micro_batch(x) for x in range(done_bwds, done_fwds)])
 
     def run_forward_until_flush(self, num_batches):
         """
@@ -856,7 +848,7 @@ class GPipePartitionManager(SinglePartitionManager):
             partition.get_grad(batch_idx), batch_idx)
 
         if hasattr(trainer, "grad_norm"):
-            # trainer: GradNormStepper
+            # trainer: GradNormStepperMixin
             trainer.grad_norm()
 
         if change_lr:
@@ -925,9 +917,9 @@ class GPipePartitionManager(SinglePartitionManager):
             else:
                 old_lrs = None
 
-            # if isinstance(trainer, GradNormStepper):
+            # if isinstance(trainer, GradNormStepperMixin):
             if hasattr(trainer, "grad_norm"):
-                # trainer: GradNormStepper
+                # trainer: GradNormStepperMixin
                 trainer.grad_norm()
 
             # Do the actual step.

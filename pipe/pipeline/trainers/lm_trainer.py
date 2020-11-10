@@ -1,10 +1,10 @@
-from .interface import BaseOutPutIsLossTrainer
+from .interface import LossIncludedInModelMultiPartitionTrainer
 
 
 # TODO: typehint for statistics. maybe it should actually sit under statistics
 
 
-class LMTrainer(BaseOutPutIsLossTrainer):
+class LMTrainer(LossIncludedInModelMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
     def __init__(self, *args, **kw):

@@ -2,7 +2,7 @@
 import torch.nn.functional as F
 from transformers.data.processors.squad import SquadResult
 
-from .interface import BaseOutPutIsLossTrainer
+from .interface import LossIncludedInModelMultiPartitionTrainer
 
 
 def SQUAD_loss(logits, start_positions, end_positions):
@@ -31,7 +31,7 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-class SquadTrainer(BaseOutPutIsLossTrainer):
+class SquadTrainer(LossIncludedInModelMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
     def __init__(self, *args, **kw):
