@@ -170,6 +170,7 @@ def generate_imports(layer_classes: Dict[str, Module]) -> List[str]:
                     ''])
     unique_classes = set(layer_classes.values())
 
+    imports.append("from typing import Type")
     for cls in unique_classes:
         imports.append(
             f'from {inspect.getmodule(cls).__name__} import {cls.__name__}')
