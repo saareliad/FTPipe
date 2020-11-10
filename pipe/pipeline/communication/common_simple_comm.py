@@ -167,15 +167,16 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
                 if not isinstance(dtype, torch.dtype):
-                    if isinstance(dtype, torch.Size) and shape is None:
-                        # HACK: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
-                        # we expect shape to be torch.Size() because it will be converted to tensor.
-                        raise NotImplementedError()
+                    if issubclass(dtype, (list,tuple)):
+                        if shape is not None:
+                            # HACK: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
+                            dtype = torch.int64  # torch.tensor([1,3,3]).dtype
+                        else:
+                            raise NotImplementedError("we expect shape for torch.Size() since it will be converted to tensor")
                     else:
                         _tmp = torch.tensor(dtype())
                         dtype = _tmp.dtype
                         shape = _tmp.shape
-                        # shape = torch.Size()
                 if len(ranks) > 1:
                     print(
                         f"-V- creating double buffers for {tensor_name} which is sent/received to/from multiple ranks: {ranks}"
@@ -287,7 +288,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         # FIXME used to avoid this clone
         # FIXME used to avoid this clone
         # TODO: this clone can happen in another stream
-        x = [v.clone() for v in x]
+        x = [v.clone() if isinstance(v, torch.Tensor) else v for v in x]
 
         # pre-Start the next fwd Irecv:
         # TODO: decide if this is the best place to do it
