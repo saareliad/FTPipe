@@ -8,7 +8,7 @@
     "model": "cep_netN50_C500_4p_bw12_metis",
     "stage_to_device_map": [0, 0, 0, 0, 1, 2, 3],
     "nprocs": 7,
-    "dataset": TODO,
+    "dataset": "cep",
     "trainer": {
         "type": "cep",
         "args": {
@@ -21,12 +21,10 @@
     "bs_test": 256,
     "num_data_workers": 5,
     "optimizer": {
-        "type": "adafactor",
+        "type": "adamw",
         "args": {
             "lr": 0.001,
-            "weight_decay": 0,
-	    "scale_parameter": true,
-	    "relative_step": false
+            "weight_decay": 1e-2,
         }
     },
     "lr_scheduler": {
@@ -39,7 +37,7 @@
         }
     },
     "epochs": -1,
-    "steps": TODO,
+    "steps": 10000,
     "seed_from_cmd": false,
     "seed": 42,
     "bs_train_from_cmd": false,
@@ -53,5 +51,6 @@
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
-    "dont_drop_last": true
+    "dont_drop_last": true,
+    "test_batches_limit":-1
 }
