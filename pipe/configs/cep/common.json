@@ -58,5 +58,5 @@
     "train_batches_limit": -1,
     "log_frequency": 200,
     "dont_drop_last": true,
-    "test_batches_limit":-1
+    "test_batches_limit": 0
 }
