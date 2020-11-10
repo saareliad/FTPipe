@@ -6,8 +6,8 @@
     "out_filename": "cep",
     "distributed_backend": "mpi",
     "model": "cep_netN50_C500_4p_bw12_metis",
-    "stage_to_device_map": [0, 0, 0, 0, 1, 2, 3],
-    "nprocs": 7,
+    "stage_to_device_map": [0, 1, 2, 3],
+    "nprocs": 4,
     "shuffle_train": false,
     "cep_dataset_kwargs": {
         "n": 50,
