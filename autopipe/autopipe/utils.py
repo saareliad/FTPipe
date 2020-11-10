@@ -6,7 +6,7 @@ import re
 from contextlib import contextmanager
 from itertools import chain
 from typing import Iterator, Optional, \
-    Tuple, OrderedDict, Dict
+    Tuple, OrderedDict, Dict, Type
 
 import torch
 import torch.nn as nn
@@ -29,7 +29,7 @@ ExecTimes = collections.namedtuple(
 
 # sub_layer, scope, parent, terminal
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[
+                   basic_blocks: Tuple[Type[nn.Module]] = (), full: bool = False) -> Iterator[
     Tuple[nn.Module, str, nn.Module, Optional[bool]]]:
     """
     iterate over model layers yielding the layer,layer_scope,encasing_module

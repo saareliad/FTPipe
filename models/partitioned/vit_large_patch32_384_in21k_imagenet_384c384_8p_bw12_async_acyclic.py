@@ -7,7 +7,7 @@ import torch
 from torch import Tensor
 import torch.nn as nn
 from itertools import chain
-from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict
+from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict, Type
 import collections
 
 from torch.nn.modules.linear import Linear
@@ -2573,7 +2573,7 @@ class Partition7(nn.Module):
 
 
 def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
-                   basic_blocks: Tuple[nn.Module] = (), full: bool = False) -> Iterator[
+                   basic_blocks: Tuple[Type[nn.Module]] = (), full: bool = False) -> Iterator[
     Tuple[nn.Module, str, nn.Module]]:
     """
     iterate over model layers yielding the layer,layer_scope,encasing_module

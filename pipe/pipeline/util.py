@@ -83,34 +83,24 @@ def _unflatten(xs, structure):
     if isinstance(structure, torch.Size):
         # torch.Size is subclass of tuple which is stupid
         return xs[0], 1
-
-    if not isinstance(structure, (list, tuple, set, dict)):
-        return xs[0], 1
-
-    if isinstance(structure, (list, tuple, set)):
+    elif isinstance(structure, (list, tuple, set)):
         offset = 0
         elements = []
         for s in structure:
             e, n = _unflatten(xs[offset:], s)
             elements.append(e)
             offset += n
-
         return type(structure)(elements), offset
-
-    assert isinstance(structure, dict)
-    offset = 0
-    elements = dict()
-    for k, v in sorted(structure.items(), key=lambda t: t[0]):
-        e, n = _unflatten(xs[offset:], v)
-        elements[k] = e
-        offset += n
-
-    return elements, offset
-
-
-# def expand_like(val, structure):
-#     return unflatten([val for _ in flatten(structure)], structure)
-
+    elif isinstance(structure, dict):
+        offset = 0
+        elements = dict()
+        for k, v in sorted(structure.items(), key=lambda t: t[0]):
+            e, n = _unflatten(xs[offset:], v)
+            elements[k] = e
+            offset += n
+        return elements, offset
+    else:
+        return xs[0], 1
 
 def detach_tensors(ts):
     def detach_if_tensor(t):
