@@ -63,6 +63,9 @@ class MyNewDistributedSampler(DistributedSampler):
         if self.shuffle:
             indices = torch.randperm(len(self.dataset), generator=g).tolist()
         else:
+            if self.num_replicas == 1 and self.rank == 0:
+                return iter(range(len(self.dataset)))
+
             indices = list(range(len(self.dataset)))
 
         # add extra samples to make it evenly divisible

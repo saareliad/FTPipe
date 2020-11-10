@@ -24,6 +24,7 @@ def get_dataloaders(args,
             pipe_config=pipe_config,
             verbose=False,
             dataset_keywords=dataset_keywords,
+            shuffle_train=getattr(args, "shuffle_train", True)
         )
     else:
         raise NotImplementedError("now deprecated")
