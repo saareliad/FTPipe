@@ -8,6 +8,11 @@
     "model": "cep_netN50_C500_4p_bw12_metis",
     "stage_to_device_map": [0, 0, 0, 0, 1, 2, 3],
     "nprocs": 7,
+    "cep_dataset_kwargs": {
+        "n": 50,
+        "k": 11,
+        "max_samples_num": 1e11
+    },
     "dataset": "cep",
     "trainer": {
         "type": "cep",
