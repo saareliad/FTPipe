@@ -23,6 +23,7 @@ def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_scr
         transform = [
             # usage of crop_size here is intentional
             torchvision.transforms.Resize(crop_size),
+            torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean, std),
         ]
 
