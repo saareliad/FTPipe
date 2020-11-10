@@ -1,6 +1,6 @@
 from typing import Type, Dict, Union
 
-from .cv_trainer import CVTrainer
+from .cv_trainer import CVTrainer, CVTrainerPerStep
 from .gap_aware_trainer import gap_aware_trainer_factory, GapAwareTrainerMixin
 from .glue_trainer import GlueTrainer
 from .interface import LastPartitionTrainer, LossIncludedInModelMultiPartitionTrainer, \
@@ -22,12 +22,12 @@ def register_trainer(name, trainer_cls: Type[PipelineSupportedTrainerType]):
 
 
 register_trainer("cv", CVTrainer)
+register_trainer("cv_per_step_lr_scheduler", CVTrainerPerStep)
 register_trainer("lm", LMTrainer)
 register_trainer("squad", SquadTrainer)
 register_trainer("glue", GlueTrainer)
 register_trainer("t5", T5Trainer)
 register_trainer("cep", CEPTrainer)  # TODO: this is planed to be outside
-
 
 def get_trainer_cls(args) -> Type[PipelineSupportedTrainerType]:
     trainer_cls = AVAILABLE_TRAINERS.get(args.trainer['type'])

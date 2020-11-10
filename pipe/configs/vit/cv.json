@@ -1,6 +1,6 @@
 {
   "trainer": {
-    "type": "cv",
+    "type": "cv_per_step_lr_scheduler",
     "args": {
       "always_calc_grad_norm": false
     }
