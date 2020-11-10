@@ -1,4 +1,5 @@
 import types
+import warnings
 
 import torch
 
@@ -21,10 +22,14 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
         self.len_inputs_from_dl = len(inputs_from_dl)
 
         num_total_inputs = len(pcs['inputs'])
-        if self.len_inputs_from_dl == num_total_inputs and not is_first_partition:
+        is_depth_first_stage_by_depth = pipe_config.get_depth_for_stage(stage_id) == pipe_config.pipeline_depth - 1
+        if self.len_inputs_from_dl == num_total_inputs and not is_depth_first_stage_by_depth:  # is_first_partition:
             raise NotImplementedError(
                 f"a non-first stage ({stage_id}) got all {num_total_inputs} inputs from dataloder, we currently assume it does not happen"
             )
+
+        if is_depth_first_stage_by_depth and not is_first_partition:
+            warnings.warn("experimentaly allowing is_depth_first_stage_by_depth and not is_first_partition")
 
         # Determine unpack_cls
         if is_last_partition:
