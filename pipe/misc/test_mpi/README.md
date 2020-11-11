@@ -13,4 +13,4 @@ mpirun --hostfile nodes.txt --map-by node -np 2 python pytorch_distributed.py
 ```
 testing for ninja4 and ninja2 (in this order)
 
-TODO: paly with init to make it work (did not work OOTB)
+TODO: play with init to make it work (did not work OOTB)
