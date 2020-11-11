@@ -156,7 +156,7 @@ class DatasetFolderJustX(DatasetFolder):
         Returns:
             sample
         """
-        path, target = self.samples[index]
+        path, _ = self.samples[index]
         sample = self.loader(path)
         if self.transform is not None:
             sample = self.transform(sample)
@@ -478,7 +478,7 @@ def get_imagenet_just_x_or_y_ds(transform, train, **kw):
         ds_X = ImageFolderJustX(data_dir, transform=transform)
         return ds_X
     elif just == 'y':
-        ds_Y = ImageFolderJustY(data_dir, transform=transform)
+        ds_Y = ImageFolderJustY(data_dir, transform=transform, target_transform=None)
         return ds_Y
     else:
         raise ValueError(f"'just' should be in x,y. Got {just} instead.")

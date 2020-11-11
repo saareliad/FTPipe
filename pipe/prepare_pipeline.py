@@ -774,7 +774,11 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
             eval_dl.dataset)
         # TODO: support replicated
 
-        last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        if args.steps < 0 or args.steps >= (train_dataset_len // args.bs_train):
+            last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        else:
+            last_batch_diff_train = 0
+        
         last_batch_diff_eval = eval_dataset_len % args.bs_test if not eval_dl.drop_last else 0
         d = dict(train_dataset_len=train_dataset_len, eval_dataset_len=eval_dataset_len,
                  train_dl_len=train_dl_len, eval_dl_len=eval_dl_len,

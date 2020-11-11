@@ -23,3 +23,10 @@ class CEPModelHandler(CommonModelHandler):
 register_model(name="cep_netN50_C500_4p_bw12_metis",
                handler=CEPModelHandler(normal_model_fn=functools.partial(register_cep_model, n=50, c=500, n_split=4),
                                        generated_file_name_or_path="cep_netN50_C500_4p_bw12_metis"))
+
+
+
+
+register_model(name="cep_netN50_C20000_4p_bw12_metis",
+               handler=CEPModelHandler(normal_model_fn=functools.partial(register_cep_model, n=50, c=20000, n_split=4),
+                                       generated_file_name_or_path="cep_netN50_C20000_4p_bw12_metis"))

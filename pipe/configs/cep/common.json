@@ -5,15 +5,17 @@
     "auto_file_name": true,
     "out_filename": "cep",
     "distributed_backend": "mpi",
-    "model": "cep_netN50_C500_4p_bw12_metis",
-    "stage_to_device_map": [0, 1, 2, 3],
-    "nprocs": 4,
+    "model": "cep_netN50_C20000_4p_bw12_metis",
+    "stage_to_device_map": [0, 0, 0, 0, 1, 2, 3],
+    "nprocs": 7,
     "shuffle_train": false,
     "cep_dataset_kwargs": {
         "n": 50,
         "k": 11,
-        "max_samples_num": 1e11
+        "max_samples_num": 5120000
     },
+    "epochs": 240,
+    "steps": -1,
     "dataset": "cep",
     "trainer": {
         "type": "cep",
@@ -22,9 +24,9 @@
         }
     },
     "statistics": "cv",
-    "step_every": 1,
-    "bs_train": 256,
-    "bs_test": 256,
+    "step_every": 16,
+    "bs_train": 32,
+    "bs_test": 32,
     "num_data_workers": 5,
     "optimizer": {
         "type": "adamw",
@@ -42,8 +44,6 @@
             "last_epoch": -1
         }
     },
-    "epochs": -1,
-    "steps": 10000,
     "seed_from_cmd": false,
     "seed": 42,
     "bs_train_from_cmd": false,
@@ -58,5 +58,10 @@
     "train_batches_limit": -1,
     "log_frequency": 200,
     "dont_drop_last": true,
-    "test_batches_limit": 0
+    "test_batches_limit": 0,
+    "save_checkpoints":  true,
+    "checkpoints_save_name_prefix": "cep",
+    "checkpoints_save_dir": "/nfs_Disk2/cep/smaller/",
+    "load_model_one_by_one": false,
+    "save_checkpoint_every_x_steps": 300000
 }

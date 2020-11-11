@@ -1,6 +1,7 @@
 import logging
 import types
 import warnings
+import os
 
 import torch
 from torch import Tensor
@@ -22,7 +23,7 @@ from .weight_prediction.interface import WeightPredictor
 from .weight_stashing import WeightStasher, CachePolicy
 from .work_schedulers import WorkScheduler
 
-DEBUG_FAKE_DRAW = False
+DEBUG_FAKE_DRAW = os.environ.get("DEBUG_FAKE_DRAW", False)
 
 
 # TODO: multiprocessing: problem when sharing weights (sending nn.Parameters),

@@ -12,8 +12,8 @@ from pipe.data.cv import get_imagenet_just_x_or_y_ds, get_cifar_10_just_x_or_y_d
 def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_script=False):
     if mode == 'train':
         transform = [
-            torchvision.transforms.Resize(resize_size),
-            torchvision.transforms.RandomCrop(crop_size),
+            torchvision.transforms.Resize((resize_size,resize_size)),
+            torchvision.transforms.RandomCrop((crop_size,crop_size)),
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
             # Note: replacing:     im = (im - 127.5) / 127.5  of original
@@ -22,7 +22,7 @@ def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_scr
     else:
         transform = [
             # usage of crop_size here is intentional
-            torchvision.transforms.Resize(crop_size),
+            torchvision.transforms.Resize((crop_size,crop_size)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean, std),
         ]

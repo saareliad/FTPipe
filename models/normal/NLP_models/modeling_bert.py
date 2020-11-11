@@ -31,7 +31,7 @@ from torch import nn
 from transformers.modeling_utils import prune_linear_layer
 from transformers.configuration_bert import BertConfig
 from transformers.file_utils import add_start_docstrings
-from transformers.activations import gelu, swish, gelu_new
+from transformers.activations import gelu, gelu_new
 
 from .utils import PreTrainedModel
 
@@ -67,7 +67,7 @@ def mish(x):
     return x * torch.tanh(nn.functional.softplus(x))
 
 
-ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "swish": swish, "gelu_new": gelu_new, "mish": mish}
+ACT2FN = {"gelu": gelu, "relu": torch.nn.functional.relu, "gelu_new": gelu_new, "mish": mish}
 
 
 def is_None(a):

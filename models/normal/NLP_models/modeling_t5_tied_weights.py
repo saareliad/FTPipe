@@ -20,7 +20,7 @@ import logging
 
 import torch
 from torch import nn
-from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_callable
+from transformers.file_utils import add_start_docstrings  # , add_start_docstrings_to_callable
 
 
 logger = logging.getLogger(__name__)
@@ -194,7 +194,7 @@ class T5Model(T5PreTrainedModel):
         for layer, heads in heads_to_prune.items():
             self.encoder.layer[layer].attention.prune_heads(heads)
 
-    @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
     def forward(
         self,
         input_ids,
@@ -309,7 +309,7 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
     def get_decoder(self):
         return self.decoder
 
-    @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
+    # @add_start_docstrings_to_callable(T5_INPUTS_DOCSTRING)
     def forward(
         self,
         input_ids,
