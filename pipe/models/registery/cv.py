@@ -11,10 +11,8 @@ class ParamDictCVMOdelHandler(CommonModelHandler):
         self.dict_params = dict_params
         self.model_class = model_class
 
-    def get_normal_model_instance(self, *args, **kw):
-        if self.normal_model_instance is None:
-            self.normal_model_instance = self.model_class(**self.dict_params)
-        return self.normal_model_instance
+    def _get_normal_model_instance(self, *args, **kw):
+        return self.model_class(**self.dict_params)
 
     def get_loader(self, *args, **kw):
         raise NotImplementedError()

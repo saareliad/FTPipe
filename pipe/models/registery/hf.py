@@ -24,7 +24,7 @@ class HFModelHandler(CommonModelHandler):
         self.tokenizer = None
         self.config = None
 
-    def get_normal_model_instance(self, *args, **kw):
+    def _get_normal_model_instance(self, *args, **kw):
         if self.normal_model_instance is None:
             cfg = self.get_pipeline_transformer_config()
             model, tokenizer, config = pretrained_model_config_and_tokenizer(**cfg)

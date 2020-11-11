@@ -14,10 +14,8 @@ class CEPModelHandler(CommonModelHandler):
         super().__init__(*args, **kw)
         self.normal_model_fn = normal_model_fn
 
-    def get_normal_model_instance(self, *args, **kwargs):
-        if self.normal_model_instance is None:
-            self.normal_model_instance = self.normal_model_fn(*args, **kwargs)
-        return self.normal_model_instance
+    def _get_normal_model_instance(self, *args, **kwargs):
+        return self.normal_model_fn(*args, **kwargs)
 
 
 register_model(name="cep_netN50_C500_4p_bw12_metis",

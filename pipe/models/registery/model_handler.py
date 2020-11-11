@@ -17,11 +17,13 @@ class CommonModelHandler(abc.ABC):
         self.pipe_config = None
 
     @abc.abstractmethod
-    def get_normal_model_instance(self, *args, **kw):
-        # if self.normal_model_instance is None:
-        #     self.normal_model_instance = self.get_normal_model_instance()
-        # return  self.normal_model_instance
+    def _get_normal_model_instance(self, *args, **kw):
         raise NotImplementedError()
+
+    def get_normal_model_instance(self, *args, **kw):
+        if self.normal_model_instance is None:
+            self.normal_model_instance = self._get_normal_model_instance(*args, **kw)
+        return self.normal_model_instance
 
     def get_generated_module(self):
         if self.generated is None:
@@ -85,6 +87,7 @@ class CommonModelHandler(abc.ABC):
             name = self.generated_file_name_or_path
 
         register_model(name=name, handler=self)
+
 
 AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}
 
