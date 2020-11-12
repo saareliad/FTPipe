@@ -1,7 +1,8 @@
 import abc
 import importlib
 import os
-from typing import Dict, Optional
+import warnings
+from typing import Dict
 
 from pipe.models.simple_partitioning_config import PipelineConfig
 
@@ -86,6 +87,9 @@ class CommonModelHandler(abc.ABC):
         self.generated_file_name_or_path = generated_file_name_or_path
         register_model(generated_file_name_or_path=generated_file_name_or_path, handler=self)
 
+    def set_partitioned_models_package(self, partitioned_models_package):
+        self.partitioned_models_package = partitioned_models_package
+
 
 AVAILABLE_MODELS: Dict[str, CommonModelHandler] = {}
 
@@ -106,3 +110,33 @@ def load_module(full_path: str):
 # TODO: register normal model by function.
 # create handler class (see examples in dir)
 # register the handler.
+
+NORMAL_MODEL_ENTRY_POINTS = {}
+NORMAL_MODEL_ENTRY_POINTS_HANDLERS = {}
+
+
+def register_normal_model_by_function(fn):
+    # Register ad normal model
+    model_name = fn.__name__
+    NORMAL_MODEL_ENTRY_POINTS[model_name] = fn
+
+    # create entry point handler
+    class EntryPointFunctionModelHandler(CommonModelHandler):
+        def __init__(self, normal_model_fn, *args, **kw):
+            super().__init__(*args, **kw)
+            self.normal_model_fn = normal_model_fn
+
+        def _get_normal_model_instance(self, *args, **kwargs):
+            return self.normal_model_fn(*args, **kwargs)
+    handler = EntryPointFunctionModelHandler(normal_model_fn=fn)
+    if model_name in NORMAL_MODEL_ENTRY_POINTS_HANDLERS:
+        warnings.warn(f"model_name {model_name} already exisits in NORMAL_MODEL_ENTRY_POINTS_HANDLERS")
+    NORMAL_MODEL_ENTRY_POINTS_HANDLERS[model_name] = handler
+
+
+def normal_model_entry_point(model_name):
+    return NORMAL_MODEL_ENTRY_POINTS[model_name]
+
+
+def normal_model_entry_point_handler(model_name):
+    return NORMAL_MODEL_ENTRY_POINTS_HANDLERS[model_name]
