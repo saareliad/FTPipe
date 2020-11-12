@@ -15,6 +15,7 @@
   "num_data_workers": 10,
   "dont_drop_last": true,
   "step_every": 16,
+  "log_frequency": 2000,
   "optimizer": {
     "type": "sgd1",
     "args": {
