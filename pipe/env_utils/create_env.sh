@@ -1,5 +1,4 @@
 # TODO: I never ran this script as is, I just copy, paste ran functions from it manually...
-
 # Make sure you have prerequisites, e,g:
 #
 # sudo apt-get install -y --no-install-recommends \
@@ -21,22 +20,22 @@ conda_stuff() {
 }
 
 new_env() {
-  # conda create -y -n pt python=3.8 numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses cython
-  # conda activate pt
-  # conda install -y -c pytorch magma-cuda102
+   conda create -y -n pt python=3.8 numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses cython
+   conda activate pt
+   conda install -y -c pytorch magma-cuda102
 
-    conda create -y -n py38 python=3.8
-    conda activate py38
-    conda install -y numpy
-    conda install -y pyyaml
-    conda install -y scipy
-    conda install -y ipython
-    conda install -y mkl
-    conda install -y mkl-include
-    conda install -y ninja
-    conda install -y cython
-    conda install -y -c pytorch magma-cuda102
-    conda install -y cffi
+#    conda create -y -n py38 python=3.8
+#    conda activate py38
+#    conda install -y numpy
+#    conda install -y pyyaml
+#    conda install -y scipy
+#    conda install -y ipython
+#    conda install -y mkl
+#    conda install -y mkl-include
+#    conda install -y ninja
+#    conda install -y cython
+#    conda install -y -c pytorch magma-cuda102
+#    conda install -y cffi
 }
 
 avx2pillow_torchvision() {
@@ -59,7 +58,19 @@ cuda_awre_openmpi() {
     # --disable-mca-dso
 #    export MXM_HOME=/opt/mellanox/mxm
 
-    ./configure --with-cuda --without-ucx --enable-mpi-thread-multiple --with-mxm=/opt/mellanox/mxm --with-openib --with-knem=/opt/knem-1.1.4.90mlnx1
+    ./configure --with-cuda \
+                --disable-dependency-tracking \
+                --disable-mpi-fortran
+
+
+#    ./configure --with-cuda \
+#                --disable-dependency-tracking \
+#                --disable-mpi-fortran \
+#                --with-knem=/opt/knem-1.1.4.90mlnx1 \
+#                --with-verbs \
+#                --enable-mpi-thread-multiple \
+#                --with-libfabric
+#                --without-ucx --enable-mpi-thread-multiple --with-mxm=/opt/mellanox/mxm --with-openib --with-knem=/opt/knem-1.1.4.90mlnx1
     make -j 40
     sudo make install -j 40
     sudo ldconfig
@@ -69,10 +80,7 @@ pytorch_sources() {
     # NOTE: The recursive is important
     git clone --recursive https://github.com/pytorch/pytorch
     cd pytorch || exit 1
-    # Added required version (not checked the line below)
-
     git checkout --recurse-submodules v1.6.0
-
     # if you are updating an existing checkout
     git submodule sync
     git submodule update --init --recursive
@@ -92,12 +100,13 @@ pytorch_install() {
     # 	('Turing', '7.5+PTX'),
     # ])
     # NOTE: must avoid conda env polution.
+    #    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
+
     export TORCH_CUDA_ARCH_LIST="7.5+PTX"
     export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
     export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
     export BUILD_TEST=0
     export USE_IBVERBS=0
-#    export CFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0 $CFLAGS"
     python setup.py install
 }
 
