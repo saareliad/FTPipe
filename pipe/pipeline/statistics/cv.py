@@ -48,8 +48,8 @@ class NormCVstats(CVStats):
         self.add_statistic(
             name="grad_norm",
             meter=AverageMeter(),
-            per_batch=False,
-            per_epoch=True,  # FIXME
+            per_batch=True,  # FIXME, its per step
+            per_epoch=False,  # FIXME
             train=True,
             test=False)
 

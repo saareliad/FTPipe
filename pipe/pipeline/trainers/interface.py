@@ -95,7 +95,7 @@ class MultiPartitionTrainer(LastPartitionTrainer):
 class GradNormStepperMixin(MultiPartitionTrainer):
     PER_STEP_SCHEDULER = False
 
-    def __init__(self, model, optimizer, scheduler, statistics, max_grad_norm, always_calc_grad_norm):
+    def __init__(self, model, optimizer, scheduler, statistics: Stats, max_grad_norm, always_calc_grad_norm):
         super().__init__(optimizer, statistics)
         self.always_calc_grad_norm = always_calc_grad_norm
         self.model = model
@@ -106,6 +106,7 @@ class GradNormStepperMixin(MultiPartitionTrainer):
         self.step_on_computed_grads(old_lrs=old_lrs)
 
     def step_on_computed_grads(self, old_lrs=None):
+        self.grad_norm()
         self.optimizer.step()
 
         # self.optimizer.zero_grad()
@@ -134,7 +135,7 @@ class GradNormStepperMixin(MultiPartitionTrainer):
             with torch.no_grad():
                 max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
 
-        if max_grad_norm:
+        if max_grad_norm and self.statistics.has_statistic("grad_norm"):
             self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
 
 

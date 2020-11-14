@@ -471,9 +471,6 @@ class SinglePartitionManager:
 
             self.true_weights_storage.restore_if_needed()  # check=False
 
-            if hasattr(trainer, "grad_norm"):
-                trainer.grad_norm()
-
             # Step
             trainer.last_partition_step_and_statistics(x,
                                                        *ctx,
@@ -543,10 +540,6 @@ class SinglePartitionManager:
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
-
-            # if isinstance(trainer, GradNormStepperMixin):
-            if hasattr(trainer, "grad_norm"):
-                trainer.grad_norm()
 
             # TODO: allow access to real theta just for statistics
             if weight_stasher:
@@ -848,10 +841,6 @@ class GPipePartitionManager(SinglePartitionManager):
         request_objects = self.comm_handler.send_gradients(
             partition.get_grad(batch_idx), batch_idx)
 
-        if hasattr(trainer, "grad_norm"):
-            # trainer: GradNormStepperMixin
-            trainer.grad_norm()
-
         if change_lr:
             # Scale down the learning rate, and then restore.
             old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
@@ -917,11 +906,6 @@ class GPipePartitionManager(SinglePartitionManager):
                 old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
             else:
                 old_lrs = None
-
-            # if isinstance(trainer, GradNormStepperMixin):
-            if hasattr(trainer, "grad_norm"):
-                # trainer: GradNormStepperMixin
-                trainer.grad_norm()
 
             # Do the actual step.
             trainer.non_last_partition_step(old_lrs)
