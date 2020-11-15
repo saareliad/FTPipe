@@ -136,7 +136,7 @@ class GradNormStepperMixin(MultiPartitionTrainer):
                 max_grad_norm = calc_norm(self.model.parameters(), norm_type=2)
 
         if max_grad_norm and self.statistics.has_statistic("grad_norm"):
-            self.statistics.update_on_batch("grad_norm", max_grad_norm, 1)
+            self.statistics.update_on_batch("grad_norm", max_grad_norm.item(), 1)
 
 
 class DataAndLabelsMultiPartitionTrainer(GradNormStepperMixin, DataAndLabelsLastPartitionTrainer):
