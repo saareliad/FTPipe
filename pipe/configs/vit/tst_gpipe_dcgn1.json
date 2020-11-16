@@ -1,0 +1,44 @@
+{
+  "base_config_path": [
+    "cv_dcgn1.json",
+    "imagenet_384.json",
+    "vit_large_patch32_384_in21k_imagenet_384c384_8p_bw12_gpipe_acyclic.json"
+  ],
+  "base_config_path_is_relative": true,
+  "logdir": "logs/vit/imagenet/",
+  "out_dir": "results/vit/imagenet/",
+  "auto_file_name": true,
+  "out_filename": "tst_vit_dcgn1",
+  "distributed_backend": "mpi",
+  "bs_train": 4,
+  "bs_test": 128,
+  "num_data_workers": 10,
+  "dont_drop_last": true,
+  "step_every": 128,
+  "log_frequency": 200000,
+  "optimizer": {
+    "type": "sgd1",
+    "args": {
+      "lr": 0.03,
+      "weight_decay": 0,
+      "momentum": 0.9,
+      "nesterov": true
+    }
+  },
+  "lr_scheduler": {
+    "type": "get_cosine_schedule_with_warmup",
+    "preproc_args": {
+    },
+    "args": {
+      "num_warmup_steps": 500,
+      "num_training_steps": 20000,
+      "num_cycles": 0.5,
+      "last_epoch": -1
+    }
+  },
+  "weight_stashing": false,
+  "work_scheduler": "gpipe",
+  "cudnn_benchmark": true,
+  "seed_from_cmd": false,
+  "seed": 42
+}
