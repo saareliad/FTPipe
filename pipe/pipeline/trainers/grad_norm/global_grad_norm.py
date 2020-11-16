@@ -29,7 +29,7 @@ def global_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizati
             my_total_norm: torch.Tensor
             my_total_norm.to(torch.float32)
             # TODO: ignore replicas
-            dist.all_reduce(my_total_norm, op=dist.reduce_op.SUM)
+            dist.all_reduce(my_total_norm, op=dist.ReduceOp.SUM)
             total_norm = my_total_norm
             # proceed:
             if total_norm and self.statistics.has_statistic("grad_norm"):
