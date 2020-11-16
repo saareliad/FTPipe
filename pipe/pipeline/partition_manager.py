@@ -16,7 +16,7 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
-from pipe.pipeline.trainers.statistics.utils import try_record_real_gap_from_current
+from .trainers.statistics.gap import try_record_real_gap_from_current
 from .trainers import PipelineSupportedTrainerType
 from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
 from .true_weights_storage import TrueWeightsStorage
