@@ -21,7 +21,7 @@ from pipe.pipeline.data_propagation import get_propagator_cls
 from pipe.pipeline.gap_aware import (get_sgd_gap_aware_cls, get_adam_gap_aware_cls,
                                      get_adamw_gap_aware_cls, SUPPORTED_GAP_AWARE_POLICIES)
 from pipe.pipeline.partition_manager import (SinglePartitionManager, GPipePartitionManager)
-from pipe.pipeline.statistics import get_statistics  # , Stats
+from pipe.pipeline.trainers.statistics import get_statistics  # , Stats
 from pipe.pipeline.trainers import get_trainer_cls
 from pipe.pipeline.trainers.gap_aware_trainer import GapAwareTrainerMixin
 from pipe.pipeline.weight_prediction import get_sched_predictor

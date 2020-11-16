@@ -1,0 +1,35 @@
+from typing import Type
+
+import torch
+from torch.nn.utils import clip_grad_norm_
+
+from pipe.pipeline.trainers.interface import ScheduledOptimizationStepMultiPartitionTrainer
+from pipe.pipeline.trainers.utils import calc_local_total_norm
+
+
+def local_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizationStepMultiPartitionTrainer]):
+    class GradNormMixedTrainer(trainer_cls):
+        def __init__(self, *args, max_grad_norm=None, always_calc_grad_norm=False, **kw):
+            super().__init__(*args, **kw)
+            self.always_calc_grad_norm = always_calc_grad_norm
+            self.max_grad_norm = max_grad_norm
+
+        def step_on_computed_grads(self, old_lrs=None):
+            self._grad_norm()
+            return super().step_on_computed_grads(old_lrs=old_lrs)
+
+        def _grad_norm(self):
+            total_norm = None
+            if self.max_grad_norm:
+                with torch.no_grad():
+                    total_norm = clip_grad_norm_(self.model.parameters(),
+                                                 self.max_grad_norm,
+                                                 norm_type=2)
+            elif self.always_calc_grad_norm:
+                with torch.no_grad():
+                    total_norm = calc_local_total_norm(self.model.parameters(), norm_type=2)
+
+            if total_norm and self.statistics.has_statistic("grad_norm"):
+                self.statistics.update_on_batch("grad_norm", total_norm.item(), 1)
+
+    return GradNormMixedTrainer

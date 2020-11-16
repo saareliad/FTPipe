@@ -1,8 +1,6 @@
 import abc
 from types import SimpleNamespace
-from typing import Dict
-
-from .utils import fit_res_to_dict
+from typing import Dict, NamedTuple
 
 
 # TODO: support for every X batches
@@ -131,7 +129,7 @@ class Stats(abc.ABC):
         self.pipeline_per_stage_statistics.append(name)
 
     def get_stats(self, stage_id) -> Dict:
-        fit_res = fit_res_to_dict(self.fit_res)
+        fit_res = _fit_res_to_dict(self.fit_res)
         for name in reversed(self.pipeline_per_stage_statistics):
             new_name = f"p{stage_id}_{name}"
             old_name = name
@@ -140,3 +138,13 @@ class Stats(abc.ABC):
 
     def get_metric_for_early_stop(self):
         return None
+
+
+def _fit_res_to_dict(fit_res) -> Dict:
+    if isinstance(fit_res, NamedTuple):
+        fit_res = fit_res._asdict()
+    elif isinstance(fit_res, SimpleNamespace):
+        fit_res = fit_res.__dict__
+    # elif isinstance(fit_res, dict)
+    #     pass
+    return fit_res

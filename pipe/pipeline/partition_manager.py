@@ -16,6 +16,7 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
+from pipe.pipeline.trainers.statistics.utils import try_record_real_gap_from_current
 from .trainers import PipelineSupportedTrainerType
 from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
 from .true_weights_storage import TrueWeightsStorage
@@ -547,14 +548,13 @@ class SinglePartitionManager:
                     stashed_theta = weight_stasher.pop_stashed_buff(batch_idx)
                     # FIXME: the whole idea of recording the gap from here is not good.
                     pre_computed_gap = 0 if stashed_theta is None else None
-                    trainer.try_record_real_gap_from_current(
-                        stashed_theta, pre_computed_gap=pre_computed_gap)
+                    try_record_real_gap_from_current(trainer.statistics, trainer.optimizer, stashed_theta, pre_computed_gap=pre_computed_gap)
                     real_theta = None
                 else:
                     real_theta = self.true_weights_storage.get_true_weights()
                     # FIXME: the whole idea of recording the gap from here is not good.
                     # TODO: we can get the gap for free from gap aware sometimes.
-                    trainer.try_record_real_gap_from_current(real_theta)
+                    try_record_real_gap_from_current(trainer.statistics, trainer.optimizer, real_theta)
                     stashed_theta = None
             else:
                 real_theta = None

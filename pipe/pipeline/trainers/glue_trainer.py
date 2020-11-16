@@ -1,19 +1,28 @@
-from .interface import LossIncludedInModelMultiPartitionTrainer
+from torch.nn import Module
+from torch.optim import Optimizer
 
-# HACK we lazily use LossIncludedInModelMultiPartitionTrainer
-from ..statistics import GlueStats
+from .interface import ScheduledOptimizationStepMultiPartitionTrainer
+from pipe.pipeline.trainers.statistics import GlueStats, Stats
 
 
-class GlueTrainer(LossIncludedInModelMultiPartitionTrainer):
+class GlueTrainer(ScheduledOptimizationStepMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
-        # NOTE: set by dataset
+    def __init__(self, model: Module,
+                 optimizer: Optimizer,
+                 scheduler,
+                 statistics: Stats,
+                 step_every=1):
+        super().__init__(model,
+                         optimizer,
+                         scheduler,
+                         statistics)
+        # HACK: set by dataset.
         self.features = None
-        self.num_labels = None  # HACK: set by dataset.
-
+        self.num_labels = None
         self.loss_fn = None
+
+        self.step_every = step_every
 
     def calc_test_stats(
             self,
@@ -30,7 +39,10 @@ class GlueTrainer(LossIncludedInModelMultiPartitionTrainer):
 
     def backprop_last_partition(self, x, labels, batch_size):
         loss = self.loss_fn(x, labels)  # FIXME...
-        return super().backprop_last_partition(loss)
+        if self.step_every > 1:
+            loss /= self.step_every
+        loss.backward()
+        return loss
 
     def last_partition_step_and_statistics(self,
                                            x,

@@ -14,7 +14,6 @@
     "trainer": {
         "type": "t5",
         "args": {
-            "always_calc_grad_norm": false
         }
     },
     "statistics": "squad_loss_per_batch",

@@ -12,7 +12,6 @@
     "trainer": {
         "type": "lm",
         "args": {
-            "always_calc_grad_norm": false
         }
     },
     "bs_train": 1,

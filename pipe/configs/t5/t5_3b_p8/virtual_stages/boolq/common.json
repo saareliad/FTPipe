@@ -14,7 +14,6 @@
     "trainer": {
         "type": "t5",
         "args": {
-            "always_calc_grad_norm": false,
             "loss_multiplier": 2.59
         }
     },

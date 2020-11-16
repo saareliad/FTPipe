@@ -764,7 +764,7 @@ def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):
 
 
 if __name__ == '__main__':
-    from autopipe import build_profiled_graph
+    from autopipe.autopipe import build_profiled_graph
     import torch
     from torch.nn import Sequential, Linear
 

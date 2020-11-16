@@ -13,7 +13,6 @@
     "trainer": {
         "type": "cv",
         "args": {
-            "always_calc_grad_norm": false 
         }
     },
 

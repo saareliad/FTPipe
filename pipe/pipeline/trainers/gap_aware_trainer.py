@@ -1,9 +1,8 @@
-from typing import Type, Union
+from typing import Type
 
-from .interface import LossIncludedInModelMultiPartitionTrainer, DataAndLabelsMultiPartitionTrainer
+from .interface import ScheduledOptimizationStepMultiPartitionTrainer
 
-PipelineSupportedTrainerWithoutGapAware = Union[
-    Type[LossIncludedInModelMultiPartitionTrainer], Type[DataAndLabelsMultiPartitionTrainer]]
+PipelineSupportedTrainerWithoutGapAware = ScheduledOptimizationStepMultiPartitionTrainer
 
 
 class GapAwareTrainerMixin:

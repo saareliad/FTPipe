@@ -25,6 +25,7 @@ def create_pipeline_configuration(graph: Graph,
     # TODO assumption the first input is batched
     batch_size = sorted(graph.inputs, key=lambda n: n.id)[0].tensor_shape[batch_dim]
 
+    # FIXME:
     def is_batched(shape):
         def f(s):
             return (s is not None) and (len(s) > (batch_dim + 1)) and (s[batch_dim] == batch_size)

@@ -1,8 +1,11 @@
 # TODO: typehint for statistics. maybe it should actually sit under statistics
 import torch.nn.functional as F
+from torch.nn import Module
+from torch.optim import Optimizer
 from transformers.data.processors.squad import SquadResult
 
-from .interface import LossIncludedInModelMultiPartitionTrainer
+from .interface import ScheduledOptimizationStepMultiPartitionTrainer
+from pipe.pipeline.trainers.statistics import Stats
 
 
 def SQUAD_loss(logits, start_positions, end_positions):
@@ -31,11 +34,16 @@ def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
 
-class SquadTrainer(LossIncludedInModelMultiPartitionTrainer):
+class SquadTrainer(ScheduledOptimizationStepMultiPartitionTrainer):
     PER_STEP_SCHEDULER = True
 
-    def __init__(self, *args, **kw):
-        super().__init__(*args, **kw)
+    def __init__(self, model: Module,
+                 optimizer: Optimizer,
+                 scheduler,
+                 statistics: Stats,
+                 step_every=1):
+        super().__init__(model, optimizer, scheduler, statistics)
+        self.step_every = step_every
         # NOTE: set by dataset
         self.features = None
 
@@ -96,11 +104,10 @@ class SquadTrainer(LossIncludedInModelMultiPartitionTrainer):
                                 batch_size):
         # logits = x[0]
         loss = SQUAD_loss(x, start_positions, end_positions)  # FIXME...
-        return super().backprop_last_partition(loss)
-        # if self.step_every > 1:
-        #     loss /= self.step_every
-        # loss.backward()
-        # return loss
+        if self.step_every > 1:
+            loss /= self.step_every
+        loss.backward()
+        return loss
 
     def last_partition_step_and_statistics(self,
                                            x,

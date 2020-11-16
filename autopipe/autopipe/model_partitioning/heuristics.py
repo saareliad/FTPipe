@@ -11,7 +11,7 @@ __all__ = ["get_weight_functions"]
 
 def get_weight_functions(args, verbose=True):
     # (1) get classes
-    # (2) get keyrowrds, parse special arguments
+    # (2) get keywords, parse special arguments
     # (3) create and return instance
 
     MULT_FACTOR = args.weight_mult_factor
@@ -33,7 +33,7 @@ def get_weight_functions(args, verbose=True):
 
 
 class NodeWeightFunction():
-    def __init__(self, bwd_to_fwd_ratio=-1, MULT_FACTOR=1000):
+    def __init__(self, bwd_to_fwd_ratio=-1, MULT_FACTOR=1e4):
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
 
@@ -63,7 +63,7 @@ class EdgeWeightFunction():
     def __call__(self, u: Node, v: Node):
         if u.type is NodeTypes.CONSTANT or u.value_type in [torch.Size, torch.device, torch.dtype, int, bool, float,
                                                             str]:
-            # no constant or scalars on boundries
+            # no constant or scalars on boundaries
             # no double penalties so we do not multiply by MULT_FACTOR
             w = self.penalty
         else:
@@ -90,7 +90,7 @@ class EdgeWeightFunction():
 
             # NOTE (1): we traverse every edge twice,
             # NOTE (2): If we have bwd to fwd ratio, than have to normalize by it.
-            # so for ratio 1 we have to multipy by 2
+            # so for ratio 1 we have to multiply by 2
             if self.ratio < 0:
                 # Just backward
                 mult_factor = 1
@@ -122,33 +122,3 @@ class NodeWeightFunctionWithRatioAutoInfer():
         if bwd_plus_fwd == 0:
             return 0
         return self.MULT_FACTOR * (bwd * bwd + fwd * fwd) / bwd_plus_fwd
-
-
-#################
-# "Thumb rules"
-################
-
-
-def async_pipe_bwd_to_fwd_ratio_thumb_rules(args):
-    """Thumb_rules for global bwd_to_fwd_ratio.
-        These may not be accurate all the time."""
-    L = args.n_partitions
-    hacky_tied = getattr(args, "stateless_tied", False)
-    is_async_pipeline = args.async_pipeline
-    recomputation = not args.no_recomputation
-
-    # Deliberatliy wastful, to go over all options
-    if recomputation and is_async_pipeline and not hacky_tied:
-        # all stages recomputing accept last
-        # assuming stages are about equal
-        return (3 * (L - 1) + 2) / L
-
-    if recomputation and is_async_pipeline and hacky_tied:
-        # depends on how big is the embedding.
-        return 3
-
-    if recomputation and not is_async_pipeline:
-        return 3
-
-    if not recomputation:
-        return 2

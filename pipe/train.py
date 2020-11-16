@@ -6,7 +6,7 @@ import warnings
 import torch
 
 from pipe.pipeline import SinglePartitionManager
-from pipe.pipeline.statistics import Stats
+from pipe.pipeline.trainers.statistics import Stats
 from pipe.prepare_pipeline import SmallerLastBatchPolicy, DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY
 
 

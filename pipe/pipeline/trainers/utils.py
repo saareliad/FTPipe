@@ -2,7 +2,7 @@ import torch
 from torch._six import inf
 
 
-def calc_norm(parameters, norm_type=2):
+def calc_local_total_norm(parameters, norm_type=2):
     """ Exactly like clip_grad_norm_, but without the clip.
         # See https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/clip_grad.py
      """
@@ -18,4 +18,4 @@ def calc_norm(parameters, norm_type=2):
     # if clip_coef < 1:
     #     for p in parameters:
     #         p.grad.detach().mul_(clip_coef)
-    return total_norm.item()
+    return total_norm

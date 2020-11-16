@@ -4,11 +4,11 @@
     "out_filename": "wrn_16x4_p4_msnag_clone_ga_no_wd",
     "distributed_backend": "mpi",
     "data_propagator": "auto",
-    "statistics": "cv",
+    "statistics": "cv_grad_norm",
     "model": "wrn_16x4_p4",
     "dataset": "cifar10",
     "trainer": {
-        "type": "cv",
+        "type": "cv_grad_norm",
         "args": {
             "max_grad_norm": 0.25,
             "always_calc_grad_norm": true
