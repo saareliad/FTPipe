@@ -1,20 +1,20 @@
 {
   "base_config_path": [
-    "cv_dcgn1.json",
+    "cv_dcgn_global.json",
     "imagenet_384.json",
     "vit_large_patch32_384_in21k_imagenet_384c384_8p_bw12_gpipe_acyclic.json"
   ],
   "base_config_path_is_relative": true,
-  "logdir": "logs/vit/imagenet/",
+  "logdir": "logs/vit/imagenet/global/",
   "out_dir": "results/vit/imagenet/",
   "auto_file_name": true,
-  "out_filename": "tst_vit_dcgn1",
+  "out_filename": "tst_vit_dcgn_global",
   "distributed_backend": "mpi",
-  "bs_train": 4,
+  "bs_train": 32,
   "bs_test": 128,
   "num_data_workers": 10,
   "dont_drop_last": true,
-  "step_every": 128,
+  "step_every": 16,
   "log_frequency": 200000,
   "optimizer": {
     "type": "sgd1",

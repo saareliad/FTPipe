@@ -1,0 +1,10 @@
+{
+  "trainer": {
+    "type": "cv_per_step_lr_scheduler_global_grad_norm",
+    "args": {
+      "always_calc_grad_norm": false,
+      "max_grad_norm": 1.0
+    }
+  },
+  "statistics": "cv_grad_norm"
+}
