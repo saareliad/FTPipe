@@ -4,7 +4,7 @@ import torch
 import torch.distributed as dist
 
 from pipe.pipeline.trainers.interface import ScheduledOptimizationStepMultiPartitionTrainer
-from pipe.pipeline.trainers.utils import calc_local_total_norm
+from pipe.pipeline.trainers.utils import calc_local_total_norm_wo_sqrt
 
 
 def global_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizationStepMultiPartitionTrainer]):
@@ -23,14 +23,14 @@ def global_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizati
             if not (self.max_grad_norm or self.always_calc_grad_norm):
                 return
             with torch.no_grad():
-                my_total_norm = calc_local_total_norm(self.model.parameters(), norm_type=2)
+                my_total_norm = calc_local_total_norm_wo_sqrt(self.model.parameters(), norm_type=2)
             if not isinstance(my_total_norm, torch.Tensor):
                 my_total_norm = torch.tensor(0, dtype=torch.float32)
             my_total_norm: torch.Tensor
             my_total_norm.to(torch.float32)
             # TODO: ignore replicas
             dist.all_reduce(my_total_norm, op=dist.ReduceOp.SUM)
-            total_norm = my_total_norm
+            total_norm = torch.sqrt(my_total_norm)
             # proceed:
             if total_norm and self.statistics.has_statistic("grad_norm"):
                 self.statistics.update_on_batch("grad_norm", total_norm.item(), 1)
