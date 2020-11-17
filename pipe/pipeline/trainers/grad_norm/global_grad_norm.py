@@ -27,13 +27,17 @@ def global_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizati
             if not isinstance(my_total_norm, torch.Tensor):
                 my_total_norm = torch.tensor(0, dtype=torch.float32)
             my_total_norm: torch.Tensor
+            my_total_local_norm = my_total_norm.item()
             my_total_norm.to(torch.float32)
             # TODO: ignore replicas
             dist.all_reduce(my_total_norm, op=dist.ReduceOp.SUM)
             total_norm = torch.sqrt(my_total_norm)
             # proceed:
-            if total_norm and self.statistics.has_statistic("grad_norm"):
+            if total_norm and self.statistics.has_statistic("grad_norm") and dist.get_rank() == 0:
                 self.statistics.update_on_batch("grad_norm", total_norm.item(), 1)
+
+            if my_total_local_norm and self.statistics.has_statistic("local_grad_norm"):
+                self.statistics.update_on_batch("local_grad_norm", my_total_local_norm, 1)
 
             # Now, do the actual clip.
             if self.max_grad_norm:

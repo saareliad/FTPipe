@@ -24,9 +24,12 @@ class TorchCache:
     def __exit__(self, type, value, traceback):
         if not self.exists or self.overwrite:
             print(f"saving to cache: {self.cache_name}")
-            assert self.v is not None, "You should enter a value"
-            torch.save(self.v, self.cache_name)
-
+            exception_happened = type is not None
+            if not exception_happened:
+                assert self.v is not None, "You should enter a value"
+                torch.save(self.v, self.cache_name)
+            else:
+                print("exception_happened")
 
 class PickleCache:
     def __init__(self, cache_name, overwrite=False):
@@ -47,9 +50,14 @@ class PickleCache:
     def __exit__(self, type, value, traceback):
         if not self.exists or self.overwrite:
             print(f"saving to cache: {self.cache_name}")
-            assert self.v is not None, "You should enter a value"
-            with open(self.cache_name, "wb") as f:
-                pickle.dump(self.v, f)
+
+            exception_happened = type is not None
+            if not exception_happened:
+                assert self.v is not None, "You should enter a value"
+                with open(self.cache_name, "wb") as f:
+                    pickle.dump(self.v, f)
+            else:
+                print("exception_happened")
 
 
 class GraphCache:
@@ -70,9 +78,13 @@ class GraphCache:
     def __exit__(self, type, value, traceback):
         if not self.exists or self.overwrite:
             print(f"saving to cache: {self.cache_name}")
-            assert self.v is not None, "You should enter a value"
-            assert isinstance(self.v, Graph)
-            self.v.serialize(self.cache_name)
+            exception_happened = type is not None
+            if not exception_happened:
+                assert self.v is not None, "You should enter a value"
+                assert isinstance(self.v, Graph)
+                self.v.serialize(self.cache_name)
+            else:
+                print("exception_happened")
 
 
 def compute_and_cache(compute_function, cache_name, *args, _cache_cls_to_use=TorchCache, **kw):

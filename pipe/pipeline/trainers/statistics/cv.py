@@ -53,6 +53,14 @@ class NormCVstats(CVStats):
             train=True,
             test=False)
 
+        self.add_statistic(
+            name="local_grad_norm",
+            meter=AverageMeter(),
+            per_batch=True,  # FIXME, its per step
+            per_epoch=False,  # FIXME
+            train=True,
+            test=False)
+
         self.register_pipeline_per_stage_statistic("grad_norm")
 
 
