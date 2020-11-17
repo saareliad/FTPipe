@@ -7,6 +7,18 @@ import torchvision
 
 from pipe.data import CommonDatasetHandler, register_dataset, register_hardcoded_just_xy_dataset
 from pipe.data.cv import get_imagenet_just_x_or_y_ds, get_cifar_10_just_x_or_y_ds, get_cifar_100_just_x_or_y_ds
+#
+# IMAGENET_DEFAULT_MEAN = [0.485, 0.456, 0.406]
+# IMAGENET_DEFAULT_STD = [0.229, 0.224, 0.225]
+
+IMAGENET_DEFAULT_MEAN = [0.5, 0.5, 0.5]
+IMAGENET_DEFAULT_STD = [0.5, 0.5, 0.5]
+
+CIFAR100_DEFAULT_MEAN = [0.5071, 0.4867, 0.4408]
+CIFAR100_DEFAULT_STD = [0.2675, 0.2565, 0.2761]
+CIFAR10_DEFAULT_MEAN = [0.49139968, 0.48215841, 0.44653091]
+CIFAR10_DEFAULT_STD = [0.24703223, 0.24348513, 0.26158784]
+
 
 
 def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_script=False):
@@ -37,8 +49,8 @@ def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_scr
 
 
 def cifar10_transformations(jit_script=False, resize_size=384, crop_size=384):
-    mean = np.array([0.49139968, 0.48215841, 0.44653091])
-    std = np.array([0.24703223, 0.24348513, 0.26158784])
+    mean = np.array(CIFAR10_DEFAULT_MEAN)
+    std = np.array(CIFAR10_DEFAULT_STD)
     train_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size,
                                           mode='train', jit_script=jit_script)
     test_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size, mode='test',
@@ -47,8 +59,8 @@ def cifar10_transformations(jit_script=False, resize_size=384, crop_size=384):
 
 
 def cifar100_transformations(jit_script=False, resize_size=384, crop_size=384):
-    mean = np.array([0.5071, 0.4867, 0.4408])
-    std = np.array([0.2675, 0.2565, 0.2761])
+    mean = np.array(CIFAR100_DEFAULT_MEAN)
+    std = np.array(CIFAR100_DEFAULT_STD)
     train_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size,
                                           mode='train', jit_script=jit_script)
     test_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size, mode='test',
@@ -57,8 +69,9 @@ def cifar100_transformations(jit_script=False, resize_size=384, crop_size=384):
 
 
 def imagenet_transformations(jit_script=False, resize_size=384, crop_size=384):
-    mean = [0.485, 0.456, 0.406]
-    std = [0.229, 0.224, 0.225]
+    mean = IMAGENET_DEFAULT_MEAN
+    std = IMAGENET_DEFAULT_STD
+
     train_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size,
                                           mode='train', jit_script=jit_script)
     test_transform = get_transformations(mean=mean, std=std, crop_size=crop_size, resize_size=resize_size, mode='test',
