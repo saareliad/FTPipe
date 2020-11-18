@@ -47,7 +47,7 @@ def get_just(args, pipe_config=None):
             # Hardcoded, but smarter: by depth (allows more flexibility)
             pipe_config: PipelineConfig
             my_depth = pipe_config.get_depth_for_stage(args.stage)
-            if my_depth == pipe_config.pipeline_depth - 1:
+            if my_depth > 0 and pipe_config.get_dataset_inputs_for_stage(args.stage):
                 just = 'x'
             elif my_depth == 0:
                 just = 'y'
@@ -59,6 +59,7 @@ def get_just(args, pipe_config=None):
         just = inputs_from_dl
         print(f"stage{args.stage}: inferred inputs from config: {just}")
 
+    # TODO: we need another case, where the label was not used during partitioning (e.g the loss is not included in the model) but is still given to the last partition.
     return just
 
 
