@@ -82,12 +82,15 @@ class PipelineConfig:
                                batch_size: int,
                                my_rank: int,
                                for_replicated: bool = True,
-                               device='cpu'):
+                               device='cpu') -> torch.nn.Module:
         stage_id = self.rank_to_stage_idx(my_rank)
         self.change_batch(batch_size=batch_size, for_replicated=for_replicated)
+        return self.realize_stage(layers, tensors, stage_id, device=device)
+
+    def realize_stage(self, layers: Dict[str, Tensor],
+                      tensors: Dict[str, Tensor], stage_id: int, device='cpu') -> torch.nn.Module:
         d = self.d
         stage_cls = d['stages'][stage_id]['stage_cls']
-        # note it has device arg it a design problem...
         return stage_cls(layers, tensors, device=device)
 
     def get_inputs_req_grad_for_stage(self, stage_id: int) -> Dict[str, bool]:
@@ -131,6 +134,12 @@ class PipelineConfig:
             i for i in pcs['inputs'] if i in self.d['model_inputs']
         ]
         return inputs_from_dl
+
+    def is_first_forward_stage(self, stage_id: int) -> bool:
+        return self.get_depth_for_stage(stage_id) == self.pipeline_depth - 1
+
+    def is_last_forward_stage(self, stage_id: int) -> bool:
+        return self.get_depth_for_stage(stage_id) == 0
 
     def get_depth_for_stage(self, my_stage_id: int) -> int:
         stage = self.d['stages'][my_stage_id]
@@ -179,7 +188,8 @@ class PipelineConfig:
 
             stage_depth = distance_dict[my_stage_id]
 
-            # raise NotImplementedError()
+            # And update:
+            stage['stage_depth'] = stage_depth
 
         return stage_depth
 

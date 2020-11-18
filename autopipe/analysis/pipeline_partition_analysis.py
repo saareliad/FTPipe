@@ -7,6 +7,7 @@
     Does not measure many more features (e.g weight prediction and so on)
 """
 import io
+import itertools
 import sys
 import time
 import warnings
@@ -19,11 +20,12 @@ from typing import List, Set, Dict, Union, Any, Optional
 
 import numpy as np
 import torch
+from tqdm import tqdm
 
 from autopipe.autopipe.utils import flatten, move_tensors, nested_map
 from .analysis_utils import (extra_communication_time_lower_bound,
                              extra_communication_time_upper_bound,
-                             apply_ratio)
+                             apply_ratio, AnalysisPipelineConfig, add_dicts)
 from .asgd_analysis import run_analysis as asgd_run_analysis
 from .hardware_non_aware import theoretical_analysis
 from .ssgd_analysis import run_analysis as ssgd_run_analysis
@@ -35,7 +37,7 @@ def rounddict(d: Dict[Any, float], x=2):
 
 def run_analysis(sample,
                  graph,
-                 config,
+                 config: AnalysisPipelineConfig,
                  n_iter,
                  recomputation=True,
                  bw_GBps=12,
@@ -43,28 +45,25 @@ def run_analysis(sample,
                  async_pipeline=False,
                  add_comm_times_to_balance=True,
                  sequential_model=None,
-                 stages_on_same_gpu: Optional[List[Set[int]]] = None):
+                 stages_on_same_gpu: Optional[List[Set[int]]] = None,
+                 PRINT_THEORETICAL=False,
+                 PRINT_MIN_MAX_BALANCE=False,
+                 PRINT_VAR_STD=False,
+                 UTILIZATION_SLOWDOWN_SPEEDUP=True,
+                 PRINT_1F1B=True,
+                 DO_THEORETICAL=False,
+                 TRY_SSGD_ANALYSIS=False,
+                 TRY_ASGD_ANALYSIS=True,
+                 ):
     if not stages_on_same_gpu:
         stages_on_same_gpu = list()
     # kwarg input
     if isinstance(sample, dict):
-        sample = tuple([sample[i] for i in config['model inputs']])
+        sample = tuple([sample[i] for i in config.model_inputs()])
     elif not isinstance(sample, tuple):
         sample = (sample,)
 
     # NOTE: setting add_comm_times_to_balance, is for only debug porpuses
-
-    PRINT_THEORETICAL = False
-    PRINT_MIN_MAX_BALANCE = False
-
-    PRINT_VAR_STD = False
-
-    UTILIZATION_SLOWDOWN_SPEEDUP = True
-    PRINT_1F1B = True
-    DO_THEORETICAL = False
-
-    TRY_SSGD_ANALYSIS = False
-    TRY_ASGD_ANALYSIS = True
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
@@ -120,13 +119,6 @@ def run_analysis(sample,
     if torch.cuda.is_available():
         max_memory_allocated = torch.cuda.max_memory_allocated()
 
-    def add_dicts(d1, d2):
-        d = {}
-        for (i1, v1), (i2, v2) in zip(d1.items(), d2.items()):
-            assert i1 == i2
-            d[i1] = v1 + v2
-        return d
-
     def get_seq_no_recomp_no_comm_times():
         try:
             seq_times = profile_execution(
@@ -158,7 +150,7 @@ def run_analysis(sample,
                                                        val) in newd.items())
         return communication_volume
 
-    n_partitions = sum(1 for k in config if isinstance(k, int))
+    n_partitions = config.n_stages
     num_real_stages = n_partitions - num_dummy_stages
 
     pipeline_representation_stage_to_device_map = list()
@@ -482,13 +474,13 @@ def run_analysis(sample,
 # FIXME: setting different_links_between_accelerators=False because
 #  some parts were not implemented. will be fixed.
 def profile_execution(model_inputs,
-                      partition_config,
+                      partition_config: AnalysisPipelineConfig,
                       n_iters: int,
                       recomputation=True,
                       bw_GBps=12,
                       async_pipeline=False,
                       add_comm_times_to_balance=True,
-                      stages_on_same_gpu: Optional[List[Set[int]]] = None,
+                      stages_on_same_gpu: Optional[Dict[int ,Set[int]]] = None,
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
     """
@@ -496,9 +488,9 @@ def profile_execution(model_inputs,
     # TODO: currently its just the same input sample n_iter times, this could be improved.
     """
     if not stages_on_same_gpu:
-        stages_on_same_gpu = []
+        stages_on_same_gpu = dict()
+    n_partitions = partition_config.n_stages
 
-    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
     f_times = {i: [] for i in range(n_partitions)}
     b_times = {i: [] for i in range(n_partitions)}
 
@@ -513,21 +505,20 @@ def profile_execution(model_inputs,
     # Return warnings so we can print
     warnings_list = []
 
-    # TODO: tqdm?
-    for current_iteration_num in range(n_iters):
-        parts = deque(range(n_partitions))
+    for current_iteration_num in tqdm(range(n_iters), "Profile"):
         activations = {}
-        assert len(partition_config['model inputs']) == len(model_inputs)
-        for i, t in zip(partition_config['model inputs'], model_inputs):
+        assert len(partition_config.model_inputs()) == len(model_inputs)
+        for name, t in zip(partition_config.model_inputs(), model_inputs):
             # save activations on CPU in order to save GPU memory
-            activations[i] = move_tensors(t, 'cpu')
+            activations[name] = move_tensors(t, 'cpu')
 
-        # TODO: make it just a forward pass, then do a backward pass. (Will allow handling nested tuples)
+        # TODO: make it just a forward pass, then do a backward pass.
         # perform one run of the partitions
+        parts = deque(range(n_partitions))
         while len(parts) > 0:
-            idx = parts.popleft()
+            stage_id = parts.popleft()
             if stages_on_same_gpu:
-                my_gpu_set = stages_on_same_gpu[idx]
+                my_gpu_set = stages_on_same_gpu[stage_id]
                 if my_gpu_set:
                     pass
                     # TODO: use it do zero communication,
@@ -536,140 +527,110 @@ def profile_execution(model_inputs,
                 my_gpu_set = {}
 
             # For async pipeline, do no use recomputation on last partition
-            is_last_partition = (len(parts) == 0)
-            is_first_partition = (idx == 0)
+            is_last_partition = partition_config.is_last_forward_stage(stage_id)
+            is_first_partition = partition_config.is_first_forward_stage(stage_id)
             partition_specific_recomputation = recomputation
             if async_pipeline and is_last_partition:
                 partition_specific_recomputation = False
 
             # partition_specific_inputs_requires_grad
-            inputs_requires_grad = not is_first_partition
+
+            inputs_requires_grad = partition_config.get_inputs_req_grad_for_stage_tuple(stage_id)
 
             if all(tensor in activations
-                   for tensor in partition_config[idx]['inputs']):
+                   for tensor in partition_config.get_all_stage_inputs(stage_id)):
                 inputs = []
                 inputs_rcv_from_stage = []
                 in_size_mb = 0
 
-                for tensor in partition_config[idx]['inputs']:
-                    recv_from = []
-                    # cehck if same config
-                    for ii in partition_config:
-                        if not isinstance(ii, int):
-                            continue
-                        if tensor in partition_config[ii]['outputs']:
-                            recv_from.append(ii)
-                            break
-                    if not recv_from:
-                        assert tensor in partition_config['model inputs']
-                        is_same_gpu = False
-                        sender_stage_id = None
-                    else:
-                        assert (len(recv_from) == 1)
-                        sender_stage_id = recv_from[0]
-                        is_same_gpu = sender_stage_id in my_gpu_set
-
+                for tensor, tensor_input_info in partition_config.get_all_stage_inputs(stage_id).items():
                     t = activations[tensor]
+                    sender_stage_id = tensor_input_info['created_by']
+                    if sender_stage_id == -1:
+                        assert tensor in partition_config.model_inputs()
+                    else:
+                        is_same_gpu = sender_stage_id in my_gpu_set
+                        if not is_same_gpu:
+                            # TODO: ratio analysis for different stages inside the same GPU
+                            in_size_mb += tensor_sizes(t)
+
+                    # TODO: it can also be false
                     # shared weights support
                     if tensor in is_parameter:
                         t.requires_grad_()
+
                     inputs.append(t)
                     inputs_rcv_from_stage.append(sender_stage_id)
 
-                    # TODO: analysis for differnt GPUs
-                    if not is_same_gpu:
-                        in_size_mb += tensor_sizes(t)
-
-                # input statistics
                 in_size_mb /= 1e6
 
                 # Calculate Forward recv time
                 if different_links_between_accelerators:
+
+                    # e.g p2p nvlinks without nvswitch
                     recv_sizes_by_gpu = defaultdict(float)
                     for t, sender_stage_id in zip(inputs,
                                                   inputs_rcv_from_stage):
-                        if sender_stage_id is None:
+                        if sender_stage_id == -1:
                             continue
                         is_same_gpu = sender_stage_id in my_gpu_set
                         if is_same_gpu:
                             continue
 
-                        recv_sizes_by_gpu[sender_stage_id] += (
-                                tensor_sizes(t) / 1e6)
+                        for together in stages_on_same_gpu:
+                            if len(together) > 0:
+                                raise NotImplementedError()
+                        sender_gpu_id = sender_stage_id  # TODO:
 
-                    max_recv_time = 0
-                    for s, size in recv_sizes_by_gpu.items():
-                        # TODO: currently assuming same bandwidth
-                        t = size / bw_GBps
-                        max_recv_time = max(max_recv_time, t)
+                        recv_sizes_by_gpu[sender_gpu_id] += (tensor_sizes(t) / 1e6)
 
+                    max_recv_time = max(list(recv_sizes_by_gpu.values()) + [0]) / bw_GBps
                     recv_time = max_recv_time
                 else:
+                    # same link for all communications (e.g pci switch)
                     recv_time = in_size_mb / bw_GBps
 
-                # TODO: calculate Backward send times with different links (sending grads)
-                # TODO: calculate Forward send times with different links (sending activations)
+                # TODO: calculate Backward send times (sending grads)
+                # TODO: calculate Forward send times (sending activations)
 
                 # Compute times measurement
-                with force_out_of_place(partition_config[idx]['model']):
+                model = partition_config.stage_to_model[stage_id]
+                with force_out_of_place(model):
                     if torch.cuda.is_available():
                         f_time, b_time, outputs = cuda_time(
-                            partition_config[idx]['model'],
+                            model,
                             inputs,
                             recomputation=partition_specific_recomputation,
                             inputs_requires_grad=inputs_requires_grad)
                     else:
                         f_time, b_time, outputs = cpu_time(
-                            partition_config[idx]['model'],
+                            model,
                             inputs,
                             recomputation=partition_specific_recomputation,
                             inputs_requires_grad=inputs_requires_grad)
 
                 # output statistics
+
+                if len(partition_config.get_all_stage_outputs(stage_id)) != len(outputs):
+                    raise RuntimeError()
+
                 out_size_mb = 0
-                send_time = 0
-
-                # NOTE it's possible we record a tuple
-                # in that case we have only one output in the config but multiple in the model
-                if len(partition_config[idx]['outputs']) != len(outputs):
-                    assert len(partition_config[idx]['outputs']) == 1
-
-                    outputs = (outputs,)
-
-                # outputs
-                # stage_outputs = outputs
-                stage_outputs_sent_to = []
-
-                for o, t in zip(partition_config[idx]['outputs'], outputs):
+                for (o, o_info), t in zip(partition_config.get_all_stage_outputs(stage_id).items(), outputs):
                     # TODO: figure out where this is sent too.
-                    sent_to = []
-                    for ii in partition_config:
-                        if not isinstance(ii, int):
-                            continue
-                        if o in partition_config[ii]['inputs']:
-                            sent_to.append(ii)
+                    sent_to = o_info['used_by']
 
-                    stage_outputs_sent_to.append(sent_to)
-
-                    if len(sent_to) > 1:
+                    if len(sent_to) > 1 and o_info['req_grad']:
                         if current_iteration_num == 0:
                             warning = f"tensor {o} sent to more than 1 target. Inaccurate (backward) communication time analysis"
                             warnings_list.append(warning)
                             warnings.warn(warning)
 
-                    sent_to_same_gpu = False
-                    for ii in sent_to:
-                        # Multiple sends?
-                        if ii in my_gpu_set:
-                            sent_to_same_gpu = True
-
                     # Check and warn if contiguous
-                    if current_iteration_num == 0 and isinstance(
-                            t, torch.Tensor):
+                    if current_iteration_num == 0 and isinstance(t, torch.Tensor):
                         if not t.is_contiguous():
-                            warnining = f"Partition{idx} output:{o} is not contiguous!"
-                            warnings.warn(warnining)
-                            warnings_list.append(warnining)
+                            warning = f"Partition{stage_id} output:{o} is not contiguous!"
+                            warnings.warn(warning)
+                            warnings_list.append(warning)
 
                     # save activation on CPU in order to save GPU memory
                     if isinstance(t, torch.nn.Parameter):
@@ -677,17 +638,35 @@ def profile_execution(model_inputs,
                         is_parameter.add(o)
 
                     activations[o] = move_and_detach(t, 'cpu')
-                    # TODO: figure out where this is sent too.
                     t_mb = (tensor_sizes(t)) / 1e6
-                    if not sent_to_same_gpu:
-                        out_size_mb += t_mb  # This is relevant for buffer, maybe
+                    sent_to_same_gpu = (ii in my_gpu_set for ii in sent_to)
 
-                # Caluclate forward (activations) send time
+                    for target_stage_id, target_is_on_same_gpu in zip(sent_to, sent_to_same_gpu):
+                        if not target_is_on_same_gpu:
+                            out_size_mb += t_mb  # This is relevant for buffer, maybe
+
+                # Calculate forward (activations) send time
                 if different_links_between_accelerators:
-                    raise NotImplementedError()  # TODO
+                    volume_to_gpu = defaultdict(int)
+                    target_stage_ids = [info['used_by'] for info in
+                                        partition_config.get_all_stage_outputs(stage_id).values()]
+                    for target_stage_id, t in zip(target_stage_ids, outputs):
+                        target_is_on_same_gpu = target_stage_id in my_gpu_set
+
+                        for together in stages_on_same_gpu:
+                            if len(together) > 0:
+                                raise NotImplementedError()
+                        target_gpu_id = target_stage_id  # TODO
+                        t_mb = (tensor_sizes(t)) / 1e6
+
+                        if not target_is_on_same_gpu:
+                            volume_to_gpu[target_gpu_id] += t_mb
+
+                    send_time = max(list(volume_to_gpu.values()) + [0]) / bw_GBps
                 else:
                     send_time = out_size_mb / bw_GBps
 
+                # also del t
                 del outputs
 
                 if is_last_partition:
@@ -700,13 +679,13 @@ def profile_execution(model_inputs,
                     "send time": send_time,  # ms"
                 }
 
-                communication_stats[idx] = stats
+                communication_stats[stage_id] = stats
 
                 # Adding communication time to balance:
                 # time = time + comm_send
 
-                nocommf_times[idx].append(f_time)
-                nocommb_times[idx].append(b_time)
+                nocommf_times[stage_id].append(f_time)
+                nocommb_times[stage_id].append(b_time)
 
                 # TODO: calculate backward (gradients) send times
 
@@ -745,17 +724,18 @@ def profile_execution(model_inputs,
                             b_time += extra_bwd_send_time
 
                 # TODO: can check nans
-                f_times[idx].append(f_time)
-                b_times[idx].append(b_time)
+                f_times[stage_id].append(f_time)
+                b_times[stage_id].append(b_time)
 
             else:
-                parts.append(idx)
+                parts.append(stage_id)
 
     # calculate mean and variance
     return mean_var(f_times), mean_var(b_times), communication_stats, mean_var(
         nocommf_times)[0], mean_var(nocommb_times)[0], warnings_list
 
 
+# FIXME: force out of place just for the first operation...
 @contextmanager
 def force_out_of_place(model: torch.nn.Module):
     state = dict()
@@ -802,7 +782,7 @@ def cuda_time(partition,
                            recomputation=recomputation,
                            inputs_requires_grad=inputs_requires_grad)
 
-    # Delete gradeinets to save space
+    # Delete gradients to save space
     for p in partition.parameters():
         p.grad = None
 
@@ -827,16 +807,22 @@ def tensor_sizes(ts):
     def f(t):
         if isinstance(t, torch.Tensor):
             return t.nelement() * t.element_size()
-        return 1
+        return 1  # good enough approximation
 
     return sum(map(f, flatten(ts)))
 
 
 def set_req_grad(ts, inputs_requires_grad):
+    if isinstance(inputs_requires_grad, bool):
+        it = itertools.cycle([inputs_requires_grad])
+    elif isinstance(inputs_requires_grad, (tuple, list)):
+        it = iter(inputs_requires_grad)
+    else:
+        raise NotImplementedError()
+
     def f(t):
         if isinstance(t, torch.Tensor):
-            return t.requires_grad_(inputs_requires_grad
-                                    and t.is_floating_point())
+            return t.requires_grad_(next(it) and t.is_floating_point())
         return t
 
     return nested_map(f, ts)
@@ -883,8 +869,8 @@ def cuda_backward(partition,
                   inputs,
                   recomputation=True,
                   inputs_requires_grad=False):
-    ''' measure forward/backward time of a partition on the GPU
-    '''
+    """Measure forward/backward time of a partition on the GPU
+    """
     # now we move inputs to GPU
     # with torch.no_grad():
     # NOTE: we do not record the cpu->gpu transfer,
@@ -1139,11 +1125,11 @@ def worst_balance(times):
     return min(times.values()) / max(times.values())
 
 
-def parameter_count(partition_config):
-    n_partitions = sum(1 for k in partition_config if isinstance(k, int))
+def parameter_count(partition_config: AnalysisPipelineConfig):
+    n_partitions = partition_config.n_stages
     d = {}
     for i in range(n_partitions):
-        model = partition_config[i]['model']
+        model = partition_config.stage_to_model[i]
         n_params = sum(p.numel() for p in model.parameters())
         d[i] = n_params
 
@@ -1167,6 +1153,6 @@ def same_gpu_parameter_count(stage_param_count: Dict[Union[int, str], int], stag
 
     # given:
     # stages_on_same_gpu = [{0, 4}]
-    # internal represntation:
+    # internal representation:
     # stages_on_same_gpu[0] = {0, 4}
     # stages_on_same_gpu[4] = {0, 4}
