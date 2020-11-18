@@ -1,3 +1,4 @@
+import inspect
 import operator
 import warnings
 from contextlib import contextmanager
@@ -8,7 +9,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch._overrides import get_overridable_functions
+
+if torch.__version__ < '1.7.0':
+    from torch._overrides import get_overridable_functions
+else:
+    from torch.overrides import get_overridable_functions
 
 from autopipe.autopipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
@@ -124,6 +129,7 @@ class TracedFunction():
         self.namespace = namespace
         self.original_function = original_function
         self.function_name = self.original_function.__name__
+        self.__name__ = self.original_function.__name__
 
     def replace_binding(self):
         setattr(self.namespace, self.function_name, self)
@@ -150,7 +156,8 @@ class TracedFunction():
 
 def used_namespaces():
     return {namespace.__name__ for namespace in
-            chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces())}
+            chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces()) if
+            (hasattr(namespace, "__name__") and inspect.ismodule(namespace))}
 
 
 def delegate_to_traced_value(func):
@@ -741,6 +748,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     nodes = NODES
 
     nodes = discard_unused_nodes(nodes, output_id)
+    # TODO: optionally discard no-op nodes
 
     nodes, output_id = duplicate_constants(nodes, output_id)
 
