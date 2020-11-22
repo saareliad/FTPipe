@@ -52,7 +52,7 @@ conda install -y -c pytorch magma-cuda102
 
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch || exit 1
-git checkout --recurse-submodules v1.6.0
+git checkout --recurse-submodules v1.7.0
 git submodule sync
 git submodule update --init --recursive
 
@@ -72,4 +72,4 @@ conda env update -f pipe/env_utils/env_add_to_build_from_source.yml
 pip uninstall pillow
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 # (2) Install torchvision from source.
-pip install git+https://github.com/pytorch/vision.git@v0.7.0
+pip install git+https://github.com/pytorch/vision.git@v0.8.1
