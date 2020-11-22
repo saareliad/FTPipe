@@ -53,7 +53,7 @@ class SGD(Optimizer):
     """
 
     def __init__(self, params, lr=required, momentum=0, dampening=0,
-                 weight_decay=0, nesterov=False):
+                 weight_decay=0, nesterov=False, momentum_correction=False):
         if lr is not required and lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if momentum < 0.0:
@@ -68,6 +68,7 @@ class SGD(Optimizer):
             raise ValueError(
                 "Nesterov momentum requires a momentum and zero dampening")
         super(SGD, self).__init__(params, defaults)
+        self.momentum_correction = momentum_correction
 
     def __setstate__(self, state):
         super(SGD, self).__setstate__(state)
@@ -94,7 +95,7 @@ class SGD(Optimizer):
             # Momentum Correction
             # Proposed in 'Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour'.
             # See https://arxiv.org/pdf/1706.02677.pdf
-            if 'prev_lr' in group:
+            if self.momentum_correction and 'prev_lr' in group and group['prev_lr']:
                 momentum *= group['lr'] / group['prev_lr']
             group['prev_lr'] = group['lr']
 
@@ -120,6 +121,6 @@ class SGD(Optimizer):
                     else:
                         d_p = buf
 
-                p.data.add_(-1, d_p)  # Third Change
+                p.data.add_(d_p, alpha=-1)  # Third Change
 
         return loss
