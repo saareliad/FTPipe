@@ -61,7 +61,9 @@ class NormCVstats(CVStats):
             train=True,
             test=False)
 
-        self.register_pipeline_per_stage_statistic("grad_norm")
+        # self.register_pipeline_per_stage_statistic("grad_norm")
+        self.register_pipeline_per_stage_statistic("local_grad_norm")
+
 
 
 class CVDistanceNorm(NormCVstats):

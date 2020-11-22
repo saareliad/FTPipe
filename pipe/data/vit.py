@@ -7,25 +7,29 @@ import torchvision
 
 from pipe.data import CommonDatasetHandler, register_dataset, register_hardcoded_just_xy_dataset
 from pipe.data.cv import get_imagenet_just_x_or_y_ds, get_cifar_10_just_x_or_y_ds, get_cifar_100_just_x_or_y_ds
+
 #
 # IMAGENET_DEFAULT_MEAN = [0.485, 0.456, 0.406]
 # IMAGENET_DEFAULT_STD = [0.229, 0.224, 0.225]
+# CIFAR100_DEFAULT_MEAN = [0.5071, 0.4867, 0.4408]
+# CIFAR100_DEFAULT_STD = [0.2675, 0.2565, 0.2761]
+# CIFAR10_DEFAULT_MEAN = [0.49139968, 0.48215841, 0.44653091]
+# CIFAR10_DEFAULT_STD = [0.24703223, 0.24348513, 0.26158784]
+#
 
 IMAGENET_DEFAULT_MEAN = [0.5, 0.5, 0.5]
 IMAGENET_DEFAULT_STD = [0.5, 0.5, 0.5]
-
-CIFAR100_DEFAULT_MEAN = [0.5071, 0.4867, 0.4408]
-CIFAR100_DEFAULT_STD = [0.2675, 0.2565, 0.2761]
-CIFAR10_DEFAULT_MEAN = [0.49139968, 0.48215841, 0.44653091]
-CIFAR10_DEFAULT_STD = [0.24703223, 0.24348513, 0.26158784]
-
+CIFAR100_DEFAULT_MEAN = [0.5, 0.5, 0.5]
+CIFAR100_DEFAULT_STD = [0.5, 0.5, 0.5]
+CIFAR10_DEFAULT_MEAN = [0.5, 0.5, 0.5]
+CIFAR10_DEFAULT_STD = [0.5, 0.5, 0.5]
 
 
 def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_script=False):
     if mode == 'train':
         transform = [
-            torchvision.transforms.Resize((resize_size,resize_size)),
-            torchvision.transforms.RandomCrop((crop_size,crop_size)),
+            torchvision.transforms.Resize((resize_size, resize_size)),
+            torchvision.transforms.RandomCrop((crop_size, crop_size)),
             torchvision.transforms.RandomHorizontalFlip(),
             torchvision.transforms.ToTensor(),
             # Note: replacing:     im = (im - 127.5) / 127.5  of original
@@ -34,7 +38,7 @@ def get_transformations(mean, std, resize_size, crop_size, mode='train', jit_scr
     else:
         transform = [
             # usage of crop_size here is intentional
-            torchvision.transforms.Resize((crop_size,crop_size)),
+            torchvision.transforms.Resize((crop_size, crop_size)),
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize(mean, std),
         ]
@@ -144,10 +148,8 @@ register_dataset("imagenet_384", sep_imagenet_handler_factory(resize_size=384, c
 register_dataset("imagenet_512", sep_imagenet_handler_factory(resize_size=512, crop_size=512))
 register_dataset("imagenet_518", sep_imagenet_handler_factory(resize_size=518, crop_size=518))
 
-
 register_hardcoded_just_xy_dataset("cifar10_384")
 register_hardcoded_just_xy_dataset("cifar100_384")
 register_hardcoded_just_xy_dataset("imagenet_384")
 register_hardcoded_just_xy_dataset("imagenet_512")
 register_hardcoded_just_xy_dataset("imagenet_518")
-

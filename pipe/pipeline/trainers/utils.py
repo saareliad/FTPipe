@@ -21,7 +21,6 @@ def calc_local_total_norm(parameters, norm_type=2):
     return total_norm
 
 
-
 def calc_local_total_norm_wo_sqrt(parameters, norm_type=2):
     """ Exactly like clip_grad_norm_, but without the clip.
         # See https://github.com/pytorch/pytorch/blob/master/torch/nn/utils/clip_grad.py
@@ -33,7 +32,7 @@ def calc_local_total_norm_wo_sqrt(parameters, norm_type=2):
     if norm_type == inf:
         raise NotImplementedError()
     else:
-        total_norm = torch.stack([torch.norm(p.grad.detach(), norm_type)**norm_type for p in parameters]).sum()
+        total_norm = torch.stack([torch.vdot(v, v) for v in [p.grad.detach().view(-1) for p in parameters]]).sum()
     # clip_coef = max_norm / (total_norm + 1e-6)
     # if clip_coef < 1:
     #     for p in parameters:

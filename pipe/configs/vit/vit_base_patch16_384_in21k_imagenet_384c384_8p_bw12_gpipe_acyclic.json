@@ -1,0 +1,5 @@
+{
+  "model": "vit_base_patch16_384_in21k_imagenet_384c384_8p_bw12_gpipe_acyclic.json",
+  "stage_to_device_map": [0,1,2,3,4,5,6,7],
+  "nprocs": 8
+}

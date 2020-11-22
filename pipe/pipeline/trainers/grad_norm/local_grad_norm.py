@@ -29,7 +29,7 @@ def local_grad_norm_mixin_trainer_factory(trainer_cls: Type[ScheduledOptimizatio
                 with torch.no_grad():
                     total_norm = calc_local_total_norm(self.model.parameters(), norm_type=2)
 
-            if total_norm and self.statistics.has_statistic("grad_norm"):
-                self.statistics.update_on_batch("grad_norm", total_norm.item(), 1)
+            if total_norm and self.statistics.has_statistic("local_grad_norm"):
+                self.statistics.update_on_batch("local_grad_norm", total_norm.item(), 1)
 
     return GradNormMixedTrainer
