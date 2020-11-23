@@ -5,6 +5,7 @@ from .interface import LastPartitionTrainer, ScheduledOptimizationStepMultiParti
 from .gap_aware_trainer import gap_aware_trainer_factory, GapAwareTrainerMixin
 from .grad_norm.global_grad_norm import global_grad_norm_mixin_trainer_factory
 from .grad_norm.local_grad_norm import local_grad_norm_mixin_trainer_factory
+from .grad_norm.local_grad_norm_prop import local_grad_norm_prop_mixin_trainer_factory
 
 from .bert_squad_trainer import SquadTrainer
 from .cep_trainer import CEPTrainer
@@ -24,6 +25,8 @@ def register_trainer(name, trainer_cls: Type[PipelineSupportedTrainerType]):
 
     AVAILABLE_TRAINERS[name + "_local_grad_norm"] = local_grad_norm_mixin_trainer_factory(trainer_cls=trainer_cls)
     AVAILABLE_TRAINERS[name + "_global_grad_norm"] = global_grad_norm_mixin_trainer_factory(trainer_cls=trainer_cls)
+    AVAILABLE_TRAINERS[name + "_local_grad_norm_prop"] = local_grad_norm_prop_mixin_trainer_factory(trainer_cls=trainer_cls)
+
     # NOTE: can mix but "_gap_aware" has to be last
     AVAILABLE_TRAINERS[name + "_gap_aware"] = gap_aware_trainer_factory(trainer_cls=trainer_cls)
 

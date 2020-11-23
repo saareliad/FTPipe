@@ -1,0 +1,45 @@
+{
+  "base_config_path": [
+    "cv_dcgn_local_prop.json",
+    "cifar100_384.json",
+    "vit_base_patch16_384_in21k_imagenet_384c384_8p_bw12_gpipe_acyclic.json"
+  ],
+  "base_config_path_is_relative": true,
+  "logdir": "logs/vit/cifar100/local_prop/",
+  "out_dir": "results/vit/cifar100/",
+  "auto_file_name": true,
+  "out_filename": "fast_dcgn_local_prop_no_nesterov_meanstd05",
+  "distributed_backend": "mpi",
+  "bs_train": 32,
+  "bs_test": 32,
+  "num_data_workers": 10,
+  "dont_drop_last": false,
+  "step_every": 16,
+  "log_frequency": 100000,
+  "optimizer": {
+    "type": "sgd2",
+    "args": {
+      "lr": 0.03,
+      "weight_decay": 0,
+      "momentum": 0.9,
+      "nesterov": false
+    }
+  },
+  "steps": 1000,
+  "lr_scheduler": {
+    "type": "get_cosine_schedule_with_warmup",
+    "preproc_args": {
+    },
+    "args": {
+      "num_warmup_steps": 100,
+      "num_training_steps": 1000,
+      "num_cycles": 0.5,
+      "last_epoch": -1
+    }
+  },
+  "weight_stashing": false,
+  "work_scheduler": "gpipe",
+  "cudnn_benchmark": true,
+  "seed_from_cmd": false,
+  "seed": 42
+}
