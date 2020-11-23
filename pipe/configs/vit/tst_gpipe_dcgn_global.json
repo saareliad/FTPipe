@@ -13,11 +13,11 @@
   "bs_train": 32,
   "bs_test": 128,
   "num_data_workers": 10,
-  "dont_drop_last": true,
+  "dont_drop_last": false,
   "step_every": 16,
   "log_frequency": 200000,
   "optimizer": {
-    "type": "sgd1",
+    "type": "sgd2",
     "args": {
       "lr": 0.03,
       "weight_decay": 0,

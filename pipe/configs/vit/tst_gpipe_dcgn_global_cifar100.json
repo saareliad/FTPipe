@@ -11,7 +11,7 @@
   "out_filename": "fast_dcgn_global_no_nesterov_meanstd05",
   "distributed_backend": "mpi",
   "bs_train": 32,
-  "bs_test": 128,
+  "bs_test": 32,
   "num_data_workers": 10,
   "dont_drop_last": false,
   "step_every": 16,
@@ -25,11 +25,11 @@
       "nesterov": false
     }
   },
+  "steps": 1000,
   "lr_scheduler": {
     "type": "get_cosine_schedule_with_warmup",
     "preproc_args": {
     },
-    "steps": 1000,
     "args": {
       "num_warmup_steps": 100,
       "num_training_steps": 1000,
