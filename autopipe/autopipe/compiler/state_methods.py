@@ -45,9 +45,9 @@ def generate_named_parameters_method() -> str:
     """Generates the named_parameters method
         ensuring we use the names given to the parameters in the un-partitioned model
     """
-    named_parameters_method = ["def named_parameters(self, recurse=True):",
+    named_parameters_method = ["def named_parameters(self, *args, **kwargs):",
                                "# we return the named parameters of this part as it should be in the original model",
-                               "return named_parameters(self, recurse=recurse)"]
+                               "return named_parameters(self, *args, **kwargs)"]
     return f"\n{tab}" + f"\n{dtab}".join(named_parameters_method)
 
 
@@ -55,9 +55,9 @@ def generate_named_buffers_method() -> str:
     """Generates the named_buffers method
         ensuring we use the names given to the buffers in the un-partitioned model
     """
-    named_buffers_method = ["def named_buffers(self, recurse=True):",
+    named_buffers_method = ["def named_buffers(self, *args, **kwargs):",
                             f"# we return the named buffers of this part as it should be in the original model",
-                            "return named_buffers(self, recurse=recurse)"]
+                            "return named_buffers(self, *args, **kwargs)"]
     return f"\n{tab}" + f"\n{dtab}".join(named_buffers_method)
 
 
@@ -65,8 +65,8 @@ def generate_load_state_dict_method() -> str:
     """Generates the load_state_dict method
         ensuring that weights will be assigned to their correct counterparts inside the partition
     """
-    func = ['def load_state_dict(self, state):',
-            "return load_state_dict(self, state)"]
+    func = ['def load_state_dict(self, *args, **kwargs):',
+            "return load_state_dict(self, *args, **kwargs)"]
 
     return f"\n{tab}" + f"\n{dtab}".join(func)
 
@@ -115,26 +115,26 @@ def state_dict(partition, *args, **kwargs):
     return result
 
 
-def load_state_dict(partition, state):
+def load_state_dict(partition, state_dict, strict=True):
     reverse_lookup = {v: k for k, v in partition.lookup.items()}
     device = partition.device
     keys = list(partition.state_dict(None).keys())
     new_state = dict()
     for k in keys:
         if k in reverse_lookup:
-            new_state[reverse_lookup[k]] = state[k].to(device)
+            new_state[reverse_lookup[k]] = state_dict[k].to(device)
             continue
         idx = k.rfind(".")
         to_replace = k[:idx]
         if to_replace in reverse_lookup:
             key = reverse_lookup[to_replace] + k[idx:]
-            new_state[key] = state[k].to(device)
-    nn.Module.load_state_dict(partition, new_state, strict=True)
+            new_state[key] = state_dict[k].to(device)
+    nn.Module.load_state_dict(partition, new_state, strict=strict)
 
 
-def named_parameters(partition, recurse=True):
+def named_parameters(partition, prefix='', recurse=True):
     # we return the named parameters of this part as it should be in the original model
-    params = nn.Module.named_parameters(partition, recurse=recurse)
+    params = nn.Module.named_parameters(partition, prefix=prefix, recurse=recurse)
     lookup = partition.lookup
     for k, v in params:
         if k in lookup:
@@ -146,9 +146,9 @@ def named_parameters(partition, recurse=True):
             yield new_k, v
 
 
-def named_buffers(partition, recurse=True):
+def named_buffers(partition, prefix='', recurse=True):
     # we return the named buffers of this part as it should be in the original model
-    params = nn.Module.named_buffers(partition, recurse=recurse)
+    params = nn.Module.named_buffers(partition, prefix=prefix, recurse=recurse)
     lookup = partition.lookup
     for k, v in params:
         if k in lookup:

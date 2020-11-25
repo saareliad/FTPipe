@@ -82,7 +82,6 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            basic_blocks=cmd_args.basic_blocks, node_weight_function=node_weight_function,
                            edge_weight_function=edge_weight_function, use_layers_only_graph=True,
                            output_file=cmd_args.output_file,
-                           generate_model_parallel=cmd_args.generate_model_parallel,
                            generate_explicit_del=cmd_args.generate_explicit_del,
                            generate_activation_propagation=not cmd_args.no_activation_propagation,
                            recomputation=not cmd_args.no_recomputation,

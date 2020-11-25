@@ -12,8 +12,6 @@ from torch.nn import Module
 from autopipe.autopipe.model_partitioning.utils import re_assign_partition_indices
 from autopipe.autopipe.utils import traverse_model, traverse_params_buffs, layerDict, tensorDict, nested_map, move_tensors, \
     flatten, _unflatten, unflatten
-# from .partition_class import Partition
-from .compile_single_machine_model_parallel import create_model_parallel_module
 from .create_pipeline_configuration import create_pipeline_configuration
 from .partition_forward_method import generate_forward_method
 from .partition_init_method import generate_init_method
@@ -28,7 +26,6 @@ dtab = tab + tab
 def compile_partitioned_model(graph: Graph,
                               model: Module,
                               batch_dim: int,
-                              generate_model_parallel: bool = False,
                               generate_explicit_del: bool = False,
                               generate_activation_propagation: bool = True,
                               output_file: Optional[str] = None,
@@ -44,8 +41,6 @@ def compile_partitioned_model(graph: Graph,
         the module itself
     batch_dim:
         the batch dimension of the input
-    generate_model_parallel:
-        whether to generate a model parallel version of the partition in the addition to the partitions themselves
     generate_explicit_del:
         whether to generate del statements to explicitly delete variables when they are no longer used
         default False
@@ -125,8 +120,6 @@ def compile_partitioned_model(graph: Graph,
     create_pipeline_configuration_str, config = create_pipeline_configuration(graph, ios, layer_classes, batch_dim,
                                                                               generate_activation_propagation)
     lines.append(create_pipeline_configuration_str)
-    if generate_model_parallel:
-        lines.append(create_model_parallel_module(config))
 
     # lines .append(inspect.getsource(Partition))
     lines += partitions_code

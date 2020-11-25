@@ -2,7 +2,7 @@ import pickle
 from collections import defaultdict
 from enum import IntEnum
 from itertools import chain
-from typing import Tuple, Optional, Callable, Dict, Iterable, List
+from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type
 
 import networkx as nx
 from torch import Tensor, nn as nn
@@ -98,7 +98,7 @@ EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
 
 class Graph():
     def __init__(self, nodes: GraphNodes, input_kw_ids: Dict[int, str], output_ids: List[int], depth: int,
-                 basic_blocks: Tuple[nn.Module, ...]):
+                 basic_blocks: Tuple[Type[nn.Module], ...]):
         # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
         self.input_kw_ids = input_kw_ids  # id to kw name.

@@ -23,14 +23,22 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                n_iter: int = 10, nparts: int = 4, depth: int = 1000,
                basic_blocks: Optional[Union[List[nn.Module], Tuple[nn.Module]]] = None,
                node_weight_function: Optional[NodeWeightFunction] = None,
-               edge_weight_function: Optional[EdgeWeightFunction] = None, use_layers_only_graph: bool = True,
-               output_file: Optional[str] = None, generate_model_parallel: bool = False,
-               generate_explicit_del: bool = False, generate_activation_propagation: bool = True,
-               recomputation: bool = False, partitioning_method: str = "ACYCLIC", METIS_opt: Optional[Dict] = None,
-               acyclic_opt: Optional[Dict] = None, binpack_opt: Optional[Dict] = None,
-               force_no_recomp_scopes: Optional[Callable[[str], bool]] = None, save_memory_mode: bool = False,
+               edge_weight_function: Optional[EdgeWeightFunction] = None,
+               use_layers_only_graph: bool = True,
+               output_file: Optional[str] = None,
+               generate_explicit_del: bool = False,
+               generate_activation_propagation: bool = True,
+               recomputation: bool = False,
+               partitioning_method: str = "ACYCLIC",
+               METIS_opt: Optional[Dict] = None,
+               acyclic_opt: Optional[Dict] = None,
+               binpack_opt: Optional[Dict] = None,
+               force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
+               save_memory_mode: bool = False,
                trace_on_gpu=False,
-               use_graph_profiler: bool = True, use_network_profiler: bool = False, profile_ops: bool = True,
+               use_graph_profiler: bool = True,
+               use_network_profiler: bool = False,
+               profile_ops: bool = True,
                graph: Optional[Graph] = None,
                async_pipe=False,
                trace_cache_name=None,
@@ -68,8 +76,6 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
     output_file:
         the file name in which to save the partition config
         if not given defaults to generated_{modelClass}{actualNumberOfPartitions}
-     generate_model_parallel:
-        whether to generate a model parallel version of the partition in the addition to the partitions themselves
     generate_explicit_del:
         whether to generate del statements to explicitly delete variables when they are no longer used
         default False
@@ -128,7 +134,6 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                               batch_dim,
                               output_file=output_file,
                               generate_explicit_del=generate_explicit_del,
-                              generate_model_parallel=generate_model_parallel,
                               generate_activation_propagation=generate_activation_propagation)
     print("-I- generated code")
     return graph
@@ -238,7 +243,8 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         # NOTE: very similar thing can be done to partition for heterogeneous accelerators.
 
         graph = build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                           basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
+                                           basic_blocks, save_memory_mode, trace_on_gpu,
+                                           res_cache_name=trace_cache_name)
 
         weights = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
                                           graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
@@ -296,7 +302,7 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
             recomputation_times[n.scope] = ExecTimes(0, 0)
     weights = {
         n.id: FullExecTimes(recomputation_times[n.scope],
-                         no_recomputation_times[n.scope])
+                            no_recomputation_times[n.scope])
         for n in graph.nodes
     }
     print("-I- model profiled")

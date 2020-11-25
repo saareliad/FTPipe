@@ -153,12 +153,6 @@ class Parser(argparse.ArgumentParser, ABC):
             help="weheter to not profile ops when using the GraphProfiler")
         group.add_argument("--partitioning_method", "-m", choices=["ACYCLIC", "METIS", "2DBIN"], default="ACYCLIC")
         group.add_argument(
-            "--generate_model_parallel",
-            action="store_true",
-            default=False,
-            help=
-            "whether to generate a modelParallel version of the partitioning")
-        group.add_argument(
             "--generate_explicit_del",
             action="store_true",
             default=False,
