@@ -595,6 +595,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
     # TODO: this is unused
     args.expected_training_steps = expected_training_steps
 
+    # This is comm-handler specific, its possible that there is a better design
     buffers_ctx = (
         training_tensor_shapes,
         eval_tensor_shapes,
@@ -605,7 +606,6 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
         args.max_buffers,
         args.keep_buffers_alive,
     )
-
     comm_handler.init_buffers_ctx(buffers_ctx)
 
     ##############################

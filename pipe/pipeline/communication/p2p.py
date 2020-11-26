@@ -1,15 +1,16 @@
 import torch
 import torch.distributed as dist
 
-from .common_simple_comm import SimpleCommBase
 from .wrapper import TensorWrapper
+from .buffered_comm import BufferSimpleCommBase
+
 
 
 # filter_none = partial(filter, lambda t: t is not None)
 # TODO: maybe avoid reversed if problems
 # TODO: can avoid synchronized?
 
-class P2PCommunicationHandler(SimpleCommBase):
+class P2PCommunicationHandler(BufferSimpleCommBase):
     def __init__(self, *args, **kw):
         kw["GRAD_UGLY_SHAMEFUL_NAME"] = "_grad"
         super().__init__(*args, **kw)

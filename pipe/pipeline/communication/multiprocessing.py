@@ -372,6 +372,7 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
         return future
 
     def _ensure_bwd_send_buffers_size_set(self, last_due_end):
+        # TODO: just remove it
         # TODO: re-write, currently its inefficient
         # Special case: Last batch with differnt size
         if last_due_end and self.last_batch_train_shapes:
@@ -386,6 +387,8 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
             self.changed_shapes_last_batch_bwd = False
 
     def _ensure_fwd_send_buffers_size_set(self, last_due_end):
+        # TODO: just remove it
+
         """ Here from legacy reasons
             TODO: this is currently its unneeded
         """

@@ -405,7 +405,7 @@ class SinglePartitionManager:
                 if weight_stasher is not None:
                     weight_stasher.stash_current(batch_idx, expected_staleness)
 
-            if expected_staleness > 0:  # self.true_stage_depth > 0:  # Non zero staleness partition
+            if expected_staleness > 0 or self.true_stage_depth > 0:  # self.true_stage_depth > 0:  # Non zero staleness partition
                 self.true_weights_storage.restore_if_needed()  # TODO: not ALWAYS the ideal place
                 return request_objects
 
@@ -416,12 +416,14 @@ class SinglePartitionManager:
             if self.is_last_partition:
                 ctx = (*preload_input_to_outside_loss, *ctx)
                 self.trainer.calc_test_stats(x, *ctx)
-            return []
+                return []
+            else:
+                return request_objects
 
         # Last partition: backward and step
 
         assert is_training
-        assert self.true_stage_depth == 0
+        assert self.true_stage_depth == 0, self.true_stage_depth
 
         ctx = (*preload_input_to_outside_loss, *ctx)
         self.saved_for_backward[batch_idx] = (x, *ctx)
@@ -438,7 +440,7 @@ class SinglePartitionManager:
         # Last partition backward
         ############################
         # Last partition - also do backward.
-        x, ctx = self.saved_for_backward.pop(batch_idx)
+        x, *ctx = self.saved_for_backward.pop(batch_idx)
 
         trainer = self.trainer
         # NOTE: for last partition- batch idx is the same as num backwards.
@@ -472,7 +474,7 @@ class SinglePartitionManager:
         self.maybe_log_lr()
         return request_objects
 
-    def run_batch_backward(self, batch_idx, num_batches):
+    def run_batch_backward(self, batch_idx, num_batches, next_backward_batch_idx=None):
         """ Runs the backwards pass + step for all except the last partition """
         last_due_end = batch_idx + 1 == num_batches
         self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
@@ -486,7 +488,12 @@ class SinglePartitionManager:
         self.partition.recompute(batch_idx)
         # NOTE: in MPI version there was hacky zero and sync here
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
-        self.comm_handler.post_recv_gradients(batch_idx, num_batches)
+
+        if next_backward_batch_idx is not None:
+            next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
+            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches, next_backward_batch_idx_last_due_end)
+
+        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Allow skipping steps (Gradient aggregation)
         old_lrs = None
@@ -640,7 +647,13 @@ class SinglePartitionManager:
                     futures_handler.after_forward(ro, done_fwds, True)
 
             else:
-                ro = run_batch_backward(done_bwds, num_batches)
+
+                if done_bwds + 1 < num_batches:
+                    next_backward_batch_idx_to_run = done_bwds + 1
+                else:
+                    next_backward_batch_idx_to_run = None
+
+                ro = run_batch_backward(done_bwds, num_batches, next_backward_batch_idx=next_backward_batch_idx_to_run)
                 futures_handler.after_backward(ro, done_bwds)
 
             # Increase counters
@@ -758,7 +771,7 @@ class GPipePartitionManager(SinglePartitionManager):
             else:
                 self.saved_for_backward[batch_idx] = ctx
 
-    def last_partition_batch_backward(self, batch_idx: int, num_batches: int):
+    def last_partition_batch_backward(self, batch_idx: int, num_batches: int, next_backward_batch_idx=None):
         # NOTE: Partition already knows if its the last micro batch, from backward
         ##############################
         # Last partition backward
@@ -820,9 +833,8 @@ class GPipePartitionManager(SinglePartitionManager):
         self.maybe_log_lr()
         return request_objects
 
-    def run_batch_backward(self, batch_idx: int, num_batches: int):
+    def run_batch_backward(self, batch_idx: int, num_batches: int, next_backward_batch_idx=None):
         """ Runs the backwards pass + step for all partitions except the last partition """
-
 
         last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
         last_due_end = batch_idx + 1 == num_batches
@@ -841,7 +853,12 @@ class GPipePartitionManager(SinglePartitionManager):
         if not is_last_micro_batch:
             self.partition.recompute(batch_idx)
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
-        self.comm_handler.post_recv_gradients(batch_idx, num_batches)
+
+        if next_backward_batch_idx is not None:
+            next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
+            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches, next_backward_batch_idx_last_due_end)
+
+        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Compute gradients
         if (not do_step) and self.is_replicated:
@@ -924,7 +941,14 @@ class GPipePartitionManager(SinglePartitionManager):
                 micro_batch_to_run = done_fwds - 1 - done_bwds
                 batch_idx_to_run = mark_bwd_start + micro_batch_to_run
 
-                ro = run_batch_backward(batch_idx_to_run, num_batches)
+                if not is_last_partition and done_bwds + 1 < done_fwds:
+                    next_backward_micro_batch_idx = done_fwds - 1 - (done_bwds + 1)
+                    next_backward_batch_idx_to_run = mark_bwd_start + next_backward_micro_batch_idx
+                else:
+                    # TODO: can catch the first bwd micro-batch of the next mini-batch
+                    next_backward_batch_idx_to_run = None
+
+                ro = run_batch_backward(batch_idx_to_run, num_batches, next_backward_batch_idx=next_backward_batch_idx_to_run)
                 futures_handler.after_backward(ro, done_bwds)
 
                 done_bwds += 1
