@@ -1,7 +1,7 @@
 import logging
+import os
 import types
 import warnings
-import os
 
 import torch
 from torch import Tensor
@@ -16,12 +16,12 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
-from .trainers.statistics.gap import try_record_real_gap_from_current
 from .trainers import PipelineSupportedTrainerType
 from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
+from .trainers.statistics.gap import try_record_real_gap_from_current
 from .true_weights_storage import TrueWeightsStorage
 from .weight_prediction.interface import WeightPredictor
-from .weight_stashing import WeightStasher, CachePolicy
+from .weight_stashing import WeightStasher
 from .work_schedulers import WorkScheduler
 
 DEBUG_FAKE_DRAW = os.environ.get("DEBUG_FAKE_DRAW", False)
@@ -31,6 +31,11 @@ DEBUG_FAKE_DRAW = os.environ.get("DEBUG_FAKE_DRAW", False)
 # TODO: weight prediction + weight stashing + step_every + cache (aggmsnag, no aggmsnag)
 # TODO: gap aware + step_every >1
 # TODO: currently assuming is_last_partition also means zero staleness.
+# TODO: Mixed-Recomputation: partition class for non last stage which does not need to recompute (dictated by partitioning)
+# TODO: Replicated stages: https://github.com/saareliad/async_msnag_pipeline/commit/dd699fb9f4df5b211c5d6a3fb821e9edeb699ecf
+# TODO: consider making a STEP function decoupled from backward
+# TODO: consider spliting the methods according to features (prediction / stashing / gap aware)
+
 # experimental "virtual last partition"
 
 class SinglePartitionManager:
@@ -65,7 +70,7 @@ class SinglePartitionManager:
         if gap_aware_just_loss and not use_recomputation:
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
-        self.logger = logging.getLogger("msnag")  # FIXME
+        self.logger = logging.getLogger("msnag")
         self.gap_aware_just_loss = gap_aware_just_loss
         self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
         self.comm_handler = comm_handler
@@ -88,7 +93,6 @@ class SinglePartitionManager:
 
         self.num_stages = num_stages
         self.step_every = step_every
-
 
         self._init_partition(partition, use_recomputation, disable_clone_inputs, req_grad,
                              )
@@ -121,6 +125,8 @@ class SinglePartitionManager:
 
         self.futures_handler = self.comm_handler.create_futures_handler()
 
+        self.saved_for_backward = dict()
+
         # Hints,May be set later.
         # self.dl_iter = None
         self.data_propagator: PipelineDataPropagator
@@ -143,7 +149,6 @@ class SinglePartitionManager:
         device = self.device
 
         # Set partition.
-        # TODO: partition class for non last stage which does not need to recompute
         if use_recomputation:
             if is_last_partition:
                 partition_cls = LastPartition
@@ -205,19 +210,16 @@ class SinglePartitionManager:
         return batch_index % self.step_every
 
     def scale_lr(self, factor):
-        # TODO:
         pgs = self.trainer.optimizer.param_groups
 
         old_lrs = []
-        new_lrs = []
         for g in pgs:
             old_lr = g['lr']
             new_lr = old_lr * factor
             g['lr'] = new_lr
             old_lrs.append(old_lr)
-            new_lrs.append(new_lr)
 
-        return old_lrs, new_lrs
+        return old_lrs
 
     def is_last_micro_batch(self, batch_idx) -> bool:
         """Simply return if a this is the last micro batch"""
@@ -265,20 +267,7 @@ class SinglePartitionManager:
     def set_weight_stasher(self, weight_stasher: WeightStasher):
         assert (weight_stasher is not None)
         if self.is_last_partition:
-            raise NotImplementedError()
-
-        if self.step_every > 1 and not self.is_last_partition:
-            if self.weight_stasher.has_weight_predictor or self.weight_predictor is not None:
-                # TODO: this can work for msnag which does not do aggregation...
-                policy = CachePolicy.EVERY_BATCH
-            else:
-                policy = CachePolicy.STEP_EVERY
-
-            # FIXME: use actual depth (and max depth?)
-            self.weight_stasher.set_problematic(stage_depth=self.stage_depth, pipeline_depth=self.pipeline_depth,
-                                                forward=True,
-                                                policy=policy)
-
+            raise NotImplementedError("Assuming last stage does not need stashing")
         self.weight_stasher = weight_stasher
 
     def train(self):
@@ -297,6 +286,17 @@ class SinglePartitionManager:
         self.partition.eval()
         if self.is_replicated and self.sync_buffers:
             self.comm_handler.sync_buffers(self.buffers_to_sync)
+
+    def maybe_log_lr(self):
+        # Print training statistics.
+        self.batches += 1
+        if self.batches % self.log_frequency == 0:
+            batch_log_str = ''
+            if hasattr(self.trainer, "scheduler"):
+                # Note: could be more than one LR, but we ignore this for simplicity.
+                lr = self.trainer.scheduler.get_last_lr()[0]
+                batch_log_str += '| lr {:02.9f}'.format(lr)
+            self.logger.info(batch_log_str)
 
     def forward_pass_and_send(self,
                               batch_idx,
@@ -342,6 +342,7 @@ class SinglePartitionManager:
                 # (2) the actual forward
                 # (3) send activation (if not last partition)
                 # (4) stash weights if needed, etc. (NOTE: last partition don't stash)
+
                 # (5) last partition does its thing:
                 # (5.1) recompute
                 # (5.2) send activation back
@@ -365,14 +366,13 @@ class SinglePartitionManager:
             weight_predictor = self.weight_predictor
             weight_stasher = self.weight_stasher
             if weight_predictor is not None:
-                # TODO: last partition can do Bengio Nesterov instead of predicting.
                 # Requires per partition optimizer config, or some hack.
 
                 # NOTE: (1) we scale LR here just to tell weight predictor. will do it again when we step.
                 # NOTE: (2) true_weights_storage stuff handled inside predictor.
                 old_lrs = None
                 if batch_idx >= self.first_effected_batch:
-                    old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+                    old_lrs = self.scale_lr(self.reminder_scaler_lr_factor)
 
                 weight_predictor.setup(expected_staleness)
                 weight_predictor.forward()
@@ -388,7 +388,6 @@ class SinglePartitionManager:
                     # Stash parameters for later.
                     # Note: wait stasher should be None be in last partition.
 
-                    # TODO: option to do it in all except last partition.  ("NAG ONLY STALENESS 0")
                     # This is only one batch per epoch, so it does not really matter.
                     if expected_staleness == 0 and weight_predictor.nag_with_predictor:
                         expected_staleness = 1
@@ -405,98 +404,73 @@ class SinglePartitionManager:
                     batch_idx, num_batches, preload_input_partition)
                 if weight_stasher is not None:
                     weight_stasher.stash_current(batch_idx, expected_staleness)
+
+            if expected_staleness > 0:  # self.true_stage_depth > 0:  # Non zero staleness partition
+                self.true_weights_storage.restore_if_needed()  # TODO: not ALWAYS the ideal place
+                return request_objects
+
         else:
-            # Not training. just go on as usual
+            # Eval:
             request_objects, x, ctx = self.forward_pass_and_send(
                 batch_idx, num_batches, preload_input_partition)
-
-        # TODO: for depth 0 stages.
-        if self.true_stage_depth > 0:  # Non zero staleness partition
-            # For the last partition - we restore later.
-            if is_training:
-                self.true_weights_storage.restore_if_needed()
-            return request_objects
-        else:
-            ############################
-            # zero staleness partition backward
-            # Last partition backward
-            ############################
-            # Last partition - also do backward.
             if self.is_last_partition:
                 ctx = (*preload_input_to_outside_loss, *ctx)
-                if not is_training:
-                    # In Eval: Just calculate statistics.
-                    self.trainer.calc_test_stats(x, *ctx)
-                    return []
-            elif not is_training:
-                return []
+                self.trainer.calc_test_stats(x, *ctx)
+            return []
 
-            trainer = self.trainer
+        # Last partition: backward and step
 
-            # TODO: currently only last partition should be at depth 0.
-            # TODO: currently only last partition should be at depth 0.
-            # TODO: currently only last partition should be at depth 0.
+        assert is_training
+        assert self.true_stage_depth == 0
 
-            if not self.is_last_partition:
-                raise NotImplementedError()
-                # return self.run_batch_backward(batch_idx=batch_idx, num_batches=num_batches)
+        ctx = (*preload_input_to_outside_loss, *ctx)
+        self.saved_for_backward[batch_idx] = (x, *ctx)
 
-            # NOTE: for last partition- batch idx is the same as num backwards.
-            old_lrs = None
-            do_step = self.is_last_micro_batch(batch_idx)
-            # Backprop
-            last_due_end = batch_idx + 1 == num_batches
-            if (not do_step) and last_due_end:
-                # For the last batch, we must scale down the learning rate, and then restore.
-                # Because the "step_every" policy: we won't usually step,
-                # but since its the last batch - we just scale down LR and take a smaller step.
-                # TODO: ability to run it off
-                do_step = True
-                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
-
-            if (not do_step) and self.is_replicated:
-                with self.backward_nosync_context_manager():
-                    step_and_stats_ctx = trainer.backprop_last_partition(
-                        x, *ctx)
-            else:
-                try:
-                    step_and_stats_ctx = trainer.backprop_last_partition(
-                        x, *ctx)  # NOTE: Usually, this is loss
-                except Exception as e:
-                    print("*ctx:", *ctx)
-                    raise e
-            # Send partition border gradients
-            grads = partition.get_grad(batch_idx)
-            request_objects = self.comm_handler.send_gradients(
-                grads, batch_idx)
-
-            self.true_weights_storage.restore_if_needed()  # check=False
-
-            # Step
-            trainer.last_partition_step_and_statistics(x,
-                                                       *ctx,
-                                                       step_and_stats_ctx,
-                                                       step=do_step,
-                                                       old_lrs=old_lrs)
-
-            if do_step:
-                self.true_weights_storage.reset_on_step()
-
-            self.log_training_stats()
-
+        request_objects = self.last_partition_batch_backward(batch_idx, num_batches)
         return request_objects
 
-    def log_training_stats(self):
-        # Print training statistics.
-        self.batches += 1
-        if self.batches % self.log_frequency == 0:
-            batch_log_str = ''
-            if hasattr(self.trainer, "scheduler"):
-                # Note: could be more than one LR, but we ignore this for simplicity.
-                lr = self.trainer.scheduler.get_last_lr()[0]
-                batch_log_str += '| lr {:02.9f}'.format(lr)
-            # TODO: add more statistics. e.g can print here time, ' ms/batch {:5.2f} | ' ,...
-            self.logger.info(batch_log_str)
+    def last_partition_batch_backward(self, batch_idx: int, num_batches: int):
+        # TODO: currently only last partition should be at depth 0.
+        if not self.is_last_partition:
+            raise NotImplementedError("currently only last partition should be at depth 0.")
+        ############################
+        # zero staleness partition backward
+        # Last partition backward
+        ############################
+        # Last partition - also do backward.
+        x, ctx = self.saved_for_backward.pop(batch_idx)
+
+        trainer = self.trainer
+        # NOTE: for last partition- batch idx is the same as num backwards.
+        old_lrs = None
+        do_step = self.is_last_micro_batch(batch_idx)
+        # Backprop
+        last_due_end = batch_idx + 1 == num_batches
+        if (not do_step) and last_due_end:
+            # For the last batch, we must scale down the learning rate, and then restore.
+            # Because the "step_every" policy: we won't usually step,
+            # but since its the last batch - we just scale down LR and take a smaller step.
+            # TODO: ability to run it off
+            do_step = True
+            old_lrs = self.scale_lr(self.reminder_scaler_lr_factor)
+        if (not do_step) and self.is_replicated:
+            with self.backward_nosync_context_manager():
+                step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
+        else:
+            step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)  # NOTE: Usually, ctx is loss
+        # Send partition border gradients
+        request_objects = self.comm_handler.send_gradients(self.partition.get_grad(batch_idx), batch_idx)
+        self.true_weights_storage.restore_if_needed()  # check=False
+        # Step
+        trainer.last_partition_step_and_statistics(x,
+                                                   *ctx,
+                                                   step_and_stats_ctx,
+                                                   step=do_step,
+                                                   old_lrs=old_lrs)
+        if do_step:
+            self.true_weights_storage.reset_on_step()
+        self.maybe_log_lr()
+        return request_objects
 
     def run_batch_backward(self, batch_idx, num_batches):
         """ Runs the backwards pass + step for all except the last partition """
@@ -520,7 +494,7 @@ class SinglePartitionManager:
         # also do step for the last. (but with smaller LR)
         if not do_step and last_due_end:
             do_step = True
-            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+            old_lrs = self.scale_lr(self.reminder_scaler_lr_factor)
 
         # Compute gradients
         if (not do_step) and self.is_replicated:
@@ -536,26 +510,24 @@ class SinglePartitionManager:
                 self.partition.get_grad(batch_idx), batch_idx)
 
         # NOTE: we can start the next recv here
-
-        # TODO: just make it a STEP function
         if do_step:
             trainer = self.trainer
             weight_stasher = self.weight_stasher
 
-            # TODO: allow access to real theta just for statistics
+            # allow access to real theta for statistics
             if weight_stasher:
-                if self.gap_aware_just_loss:
+                if self.gap_aware_just_loss or self.weight_stashing_just_for_stats:
                     stashed_theta = weight_stasher.pop_stashed_buff(batch_idx)
-                    # FIXME: the whole idea of recording the gap from here is not good.
-                    pre_computed_gap = 0 if stashed_theta is None else None
-                    try_record_real_gap_from_current(trainer.statistics, trainer.optimizer, stashed_theta, pre_computed_gap=pre_computed_gap)
                     real_theta = None
+                    not_loaded_theta = stashed_theta
                 else:
                     real_theta = self.true_weights_storage.get_true_weights()
-                    # FIXME: the whole idea of recording the gap from here is not good.
-                    # TODO: we can get the gap for free from gap aware sometimes.
-                    try_record_real_gap_from_current(trainer.statistics, trainer.optimizer, real_theta)
                     stashed_theta = None
+                    not_loaded_theta = real_theta
+
+                # NOTE we can get the gap for free from gap aware sometimes.
+                try_record_real_gap_from_current(trainer.statistics, trainer.optimizer, not_loaded_theta,
+                                                 pre_computed_gap=None)
             else:
                 real_theta = None
                 stashed_theta = None
@@ -564,12 +536,11 @@ class SinglePartitionManager:
             if self.gap_aware:
                 # Get delay and modify gradients.
                 if self.step_every > 1:
-                    raise NotImplementedError() # TODO:
+                    raise NotImplementedError()  # TODO:
 
                 delay = self.delay_at_batch.pop(batch_idx)
 
                 # Modify gradients
-                # TODO: return the total gap for statistics.
                 # NOTE: can handle grad clip here instead of in step.
                 trainer.apply_gap_aware(real_theta=real_theta,
                                         delay=delay,
@@ -595,12 +566,9 @@ class SinglePartitionManager:
         # FFFFBFBFBFBFBFBFBFBFBFBFBBBB
         # Batch | bwds   | diff | staleness
         # 0     |  0     |   0  |    0   |
-
-        # TODO: just pre compute a table in the beggining of the run based on this.
-        # I don't care too much about the formula, there is probably a nice one.
-        # FIXME: for step_every > roundtrip. <----------------
-        return sum(
-            [self.is_last_micro_batch(x) for x in range(done_bwds, done_fwds)])
+        # TODO: just pre compute a table in the beginning of the run based on this.
+        # I don't care too much about the formula
+        return sum([self.is_last_micro_batch(x) for x in range(done_bwds, done_fwds)])
 
     def run_forward_until_flush(self, num_batches):
         """
@@ -656,7 +624,6 @@ class SinglePartitionManager:
 
         while done_bwds < num_batches:
             # Act according to some policy
-            # TODO: depth
             action_is_fwd = work_scheduler(stage_depth, pipeline_depth, num_batches,
                                            done_fwds, done_bwds)
             if action_is_fwd:
@@ -689,8 +656,8 @@ class SinglePartitionManager:
                     done_bwds += 1
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
-        # TODO: do it only when epoch is done
-        if not self.trainer.PER_STEP_SCHEDULER:
+        # Do it only when epoch is done
+        if not self.trainer.PER_STEP_SCHEDULER and flush_rate < 0 :
             self.lr_scheduler.step()
         futures_handler.clean_train()
 
@@ -731,9 +698,7 @@ class GPipePartitionManager(SinglePartitionManager):
                                            )
         else:
             # Partition without recomputation
-            # NOTE: its pretty stupid to use GPIPE in this case.
-            # TODO: but I have plan doing so. "per-stage recomputation"
-            raise NotImplementedError()
+            raise NotImplementedError("GPIPE stages without recomputation not yet supported")
 
         if not TO_DEVICE:
             self.partition.to(device)
@@ -782,7 +747,6 @@ class GPipePartitionManager(SinglePartitionManager):
                 return []
             elif is_last_micro_batch:
                 # Save the out for later, when we don't do recomputation
-                # TODO: can ask trainer what exactly is necessary from the output to save space, but its very minor.
 
                 # NOTE: for the micro batch (no recomputation), we have x as root of the computation graph.
                 # otherwise, it can be saved just for statistics, and we need to do recomputation.
@@ -829,8 +793,6 @@ class GPipePartitionManager(SinglePartitionManager):
             (x, *ctx) = self.saved_for_backward.pop(batch_idx)
 
         # Backprop
-
-        # NOTE: Usually, this is loss.backward()
         if (not do_step) and self.is_replicated:
             with self.backward_nosync_context_manager():
                 step_and_stats_ctx = trainer.backprop_last_partition(x, *ctx)
@@ -843,7 +805,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         if change_lr:
             # Scale down the learning rate, and then restore.
-            old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+            old_lrs = self.scale_lr(self.reminder_scaler_lr_factor)
         else:
             old_lrs = None
 
@@ -855,30 +817,27 @@ class GPipePartitionManager(SinglePartitionManager):
                                                    old_lrs=old_lrs)
 
         # Print training statistics.
-        self.log_training_stats()
+        self.maybe_log_lr()
         return request_objects
 
     def run_batch_backward(self, batch_idx: int, num_batches: int):
         """ Runs the backwards pass + step for all partitions except the last partition """
 
-        partition = self.partition
 
         last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
         last_due_end = batch_idx + 1 == num_batches
-        is_last_micro_batch = last_due_step_every or last_due_end
-        partition.is_last_micro_batch = is_last_micro_batch
-
-        # we actually step and change LR at the FIRST micro batch
-        is_first_micro_batch = (batch_idx % self.step_every) == 0
-
-        # Allow skiping steps (Gradient aggregation)
-        do_step = is_first_micro_batch
-        is_final_shorter_batch = (batch_idx + self.step_every > num_batches)
-        # change_lr = do_step and is_final_shorter_batch
-
         self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
 
-        # TODO: consider switching order.
+        is_last_micro_batch = last_due_step_every or last_due_end
+        partition = self.partition
+        partition.is_last_micro_batch = is_last_micro_batch  # No recomputation needed
+
+        # Gradient aggregation:
+        # we actually step at the FIRST micro batch
+        is_first_micro_batch = (batch_idx % self.step_every) == 0
+        do_step = is_first_micro_batch
+
+        # Order is important
         if not is_last_micro_batch:
             self.partition.recompute(batch_idx)
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
@@ -901,9 +860,10 @@ class GPipePartitionManager(SinglePartitionManager):
         if do_step:
             trainer = self.trainer
 
+            is_final_shorter_batch = (batch_idx + self.step_every > num_batches)
             # Sometimes last batch is smaller and needs smaller LR.
             if is_final_shorter_batch:
-                old_lrs, _ = self.scale_lr(self.reminder_scaler_lr_factor)
+                old_lrs = self.scale_lr(self.reminder_scaler_lr_factor)
             else:
                 old_lrs = None
 
@@ -974,6 +934,6 @@ class GPipePartitionManager(SinglePartitionManager):
                     next(b_tqdm_it)
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
-        if not self.trainer.PER_STEP_SCHEDULER:
+        if not self.trainer.PER_STEP_SCHEDULER and flush_rate < 0:
             self.lr_scheduler.step()
         futures_handler.clean_train()

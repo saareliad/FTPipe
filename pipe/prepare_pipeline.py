@@ -36,7 +36,7 @@ class SmallerLastBatchPolicy(Enum):
     DropReminder = auto()
 
 
-DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
+DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
 
 
 # from data import AVAILABLE_DATASETS
@@ -746,6 +746,8 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
 
                 weight_stasher = WeightStasher(
                     optimizer,
+                    stage_depth,
+                    pipeline_depth,
                     step_every=args.step_every,
                     has_weight_predictor=has_weight_predictor,
                     true_weights_storage=true_weights_storage,

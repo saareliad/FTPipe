@@ -16,15 +16,19 @@ def try_record_real_gap_from_current(statistics: Stats,
     """
     if statistics.has_statistic(gap_name):
         if pre_computed_gap is None:
-            with torch.no_grad():
-                gap = sum([
-                    torch.dist(a, b, p=2).item() for a, b in zip(
-                        chain.from_iterable([[p for p in pg['params']]
-                                             for pg in
-                                             optimizer.param_groups]),
-                        chain.from_iterable(real_theta))
-                ])
+            if real_theta is None:
+                gap = 0
+            else:
+                with torch.no_grad():
+                    gap = sum([
+                        torch.dist(a, b, p=2).item() for a, b in zip(
+                            chain.from_iterable([[p for p in pg['params']]
+                                                 for pg in
+                                                 optimizer.param_groups]),
+                            chain.from_iterable(real_theta))
+                    ])
         else:
             gap = pre_computed_gap
 
         statistics.update_on_batch(gap_name, gap, 1)
+        return gap

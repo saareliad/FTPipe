@@ -1,6 +1,7 @@
 from typing import Type
 
 from .interface import ScheduledOptimizationStepMultiPartitionTrainer
+from ..gap_aware.interface import GapAwareBase
 
 PipelineSupportedTrainerWithoutGapAware = ScheduledOptimizationStepMultiPartitionTrainer
 
@@ -8,7 +9,7 @@ PipelineSupportedTrainerWithoutGapAware = ScheduledOptimizationStepMultiPartitio
 class GapAwareTrainerMixin:
     HAS_GAP_AWARE = True
 
-    def __init__(self, gap_aware, scheduler=None):
+    def __init__(self, gap_aware: GapAwareBase, scheduler=None):
         self.gap_aware = gap_aware
 
         # Patch to update max_lr.
@@ -20,7 +21,6 @@ class GapAwareTrainerMixin:
         Otherwise, if stashed theta is given, we assume that the true weights are already loaded into the model,
         and we compute the gap from the stashed weights (used in "Gap aware just for loss" algorithm.
          """
-        # TODO: we may want to save some statistics before we modify grad.
         ga = self.gap_aware
         # NOTE: if they are not already record otherwise,
         # running statistics should record the step size per parameter and step count
@@ -36,9 +36,6 @@ class GapAwareTrainerMixin:
                 # This means: for the "gap_aware.json" configs !!!
                 assert delay == 1
                 ga.apply_from_grad()
-
-        # NOTE: SGD, like paper's implementation
-
 
 def gap_aware_trainer_factory(trainer_cls: Type[PipelineSupportedTrainerWithoutGapAware]):
     class GapAwareCreatedTrainer(trainer_cls, GapAwareTrainerMixin):

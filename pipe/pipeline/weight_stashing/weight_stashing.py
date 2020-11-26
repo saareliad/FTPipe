@@ -8,7 +8,7 @@ import torch
 rank = int(os.environ.get('OMPI_COMM_WORLD_RANK', 0))
 
 
-class CachePolicy(Enum):
+class WeightStashingCachePolicy(Enum):
     EVERY_BATCH = auto()
     STEP_EVERY = auto()
 
@@ -34,10 +34,12 @@ class WeightStasher:
 
     def __init__(self,
                  optimizer,
+                 stage_depth, pipeline_depth,
                  step_every=1,
                  has_weight_predictor=False,
                  true_weights_storage=None,
                  using_clone_weight_predictor=False):
+        # NOTE: called ony if this is a non-zero staleness stage
         self.optimizer = optimizer
         self.theta_buffer = OrderedDict()
         self.dirty_mark = OrderedDict()
@@ -50,13 +52,25 @@ class WeightStasher:
         self.using_clone_weight_predictor = using_clone_weight_predictor
 
         self.true_weights_storage = true_weights_storage
-        # TODO: reduce redundant stashing for micro batches. (check do simply at init...)
 
-    def set_problematic(self, stage_depth, pipeline_depth, forward=True, policy: CachePolicy = CachePolicy.EVERY_BATCH):
+        # Reduce redundant stashing for micro batches.
+        if self.step_every > 1:
+            self.make_weight_stashing_use_cache(stage_depth, pipeline_depth)
+
+    def _weight_stashng_cache_policy(self):
+        # TODO: can be more fine-grained
+        # TODO: this can work for msnag which does not do aggregation...
+        policy = WeightStashingCachePolicy.EVERY_BATCH
+        if self.step_every > 1 and not self.has_weight_predictor:
+            policy = WeightStashingCachePolicy.STEP_EVERY
+        return policy
+
+    def make_weight_stashing_use_cache(self, stage_depth, pipeline_depth, forward=True):
+        policy = self._weight_stashng_cache_policy()
 
         self.is_problematic = True
         se = self.step_every
-        if policy == CachePolicy.STEP_EVERY:
+        if policy == WeightStashingCachePolicy.STEP_EVERY:
             if se >= stage_depth:
                 # FIXME: whole usage of num_stages
                 def get_micro_batch(self, batch_index):
@@ -81,10 +95,10 @@ class WeightStasher:
                 #     return batch_index % se
             # else:
             #     warnings.warn(f"Did not implement better caching so setting EVERY_BATCH caching weight stashing policy instead of STEP_EVERY for stage_id {stage_id}")
-            #     return self.set_problematic(stage_id,num_stages,forward=forward,policy=CachePolicy.EVERY_BATCH)
+            #     return self.make_weight_stashing_use_cache(stage_id,num_stages,forward=forward,policy=WeightStashingCachePolicy.EVERY_BATCH)
             #     # raise NotImplementedError()
 
-        elif policy == CachePolicy.EVERY_BATCH:
+        elif policy == WeightStashingCachePolicy.EVERY_BATCH:
             def get_micro_batch(self, batch_index):
                 # return 0  # TODO: this can be improved, but I have problems with the dirty...
                 return batch_index if batch_index < se else 0

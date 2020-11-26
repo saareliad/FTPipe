@@ -90,6 +90,10 @@ def training_loop(args, logger, train_dl, test_dl,
             if reminder > 0:
                 logger.info(f"Warning: will run for reminder {reminder} to finish epoch")
                 partition.run_until_flush(reminder)
+                # TODO: allow statistics between flushes (e.g eval)
+
+            if not partition.trainer.PER_STEP_SCHEDULER:
+                partition.lr_scheduler.step()
         else:
             partition.run_until_flush(train_batches_to_run)
 
