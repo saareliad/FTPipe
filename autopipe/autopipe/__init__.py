@@ -2,6 +2,7 @@ import functools
 import warnings
 from collections import namedtuple
 from typing import Callable, List, Dict, Optional, Union, Tuple
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -501,7 +502,9 @@ def get_profiles(graph: Graph, model: nn.Module,
 def partition_and_match_weights_until_last_partition_is_with_no_recomputation(graph: Graph,
                                                                               weights: Dict[Node, FullExecTimes],
                                                                               partitioning_method,
-                                                                              partition_profiled_graph_fn):
+                                                                              partition_profiled_graph_fn,
+                                                                              n_runs_limit=100):
+    print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
     if partitioning_method == "ACYCLIC":
@@ -511,7 +514,8 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
     current_mistakes = allowed_mistakes + 1
     n_runs = 0
 
-    while current_mistakes > allowed_mistakes:
+    history = dict()
+    while current_mistakes > allowed_mistakes and (n_runs_limit < 0 or n_runs < n_runs_limit):
 
         for n in graph.nodes:
             if n.scope in last_partition_scopes:
@@ -531,6 +535,7 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         ]
 
         # Count mistakes (false positives and false negatives)
+
         A = set(last_partition_scopes)
         B = set(generated_last_stage_scopes)
         intersection = A & B
@@ -541,11 +546,35 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
 
         # stats:
         d = dict(correct=correct, fp=fp, fn=fn, mistakes=current_mistakes)
+
+        history[n_runs] = dict(last_partition_scopes=last_partition_scopes,
+                               generated_last_stage_scopes=generated_last_stage_scopes,
+                               d=d
+                               )
         # set current scopes as model scopes
         last_partition_scopes = generated_last_stage_scopes
 
         # log something
         print(f"run:{n_runs}", d)
 
-    print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
+    if not (current_mistakes > allowed_mistakes):
+        print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
+    elif not (n_runs_limit < 0 or n_runs < n_runs_limit):
+        print(f"Breaking after reaching run limit of {n_runs_limit}!")
+        i_min = np.argmin([history[i]['d']['mistakes'] for i in history])
+        mistakes_min = history[i_min]['d']['mistakes']
+        print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
+        print(f"Restoring best point in history")
+        # restore the best point from  history
+        last_partition_scopes = history[i_min]['last_partition_scopes']
+        for n in graph.nodes:
+            if n.scope in last_partition_scopes:
+                n.weight = weights[n.id].no_recomputation
+            else:
+                n.weight = weights[n.id].recomputation
+        # Partition
+        graph = partition_profiled_graph_fn(graph)
+
+        # TODO: warn if not the same number...
+
     return graph
