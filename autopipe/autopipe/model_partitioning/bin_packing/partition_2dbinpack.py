@@ -388,7 +388,7 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node]):
+def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False):
     stage_id_generator = count()
 
     # shallow copy bins, excluding inputs:
@@ -404,11 +404,12 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
 
         broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id)
 
-        # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
-        print("unbroken_stages")
-        print(unbroken_stages)
-        print("broken_stages")
-        print(broken_stages)
+        if verbose:
+            # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
+            print("unbroken_stages")
+            print(unbroken_stages)
+            print("broken_stages")
+            print(broken_stages)
 
         broken_stages: List[List[int]]
 
@@ -728,9 +729,9 @@ def convert_handle_missing_print(bins, graph, verbose=False):
     for i, v in node_to_stage_map.items():
         stage_to_nodes_map[v].append(i)
 
-    print("stage_to_gpu_map:")
-    pprint(stage_to_gpu_map)
     if verbose:
+        print("stage_to_gpu_map:")
+        pprint(stage_to_gpu_map)
         print("node_to_stage_map:")
         pprint(node_to_stage_map)
         print("stage_to_nodes_map:")
