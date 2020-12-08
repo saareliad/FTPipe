@@ -69,12 +69,19 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
     cmd_args.basic_blocks = choose_blocks(model, cmd_args)
 
     profiles_cache_name = cmd_args.profiles_cache_name
+    trace_cache_name = cmd_args.trace_cache_name
     overwrite_profiles_cache = cmd_args.overwrite_profiles_cache
+    overwrite_trace_cache = cmd_args.overwrite_trace_cache
 
     partitioner.register_functions()
     if not cmd_args.analysis_only:
         if profiles_cache_name and os.path.exists(profiles_cache_name) and overwrite_profiles_cache:
             os.remove(profiles_cache_name)
+
+        if trace_cache_name and os.path.exists(trace_cache_name) and overwrite_trace_cache:
+            os.remove(trace_cache_name)
+
+
 
         # apply partitioning
         graph = pipe_model(model, partitioner.batch_dim, model_args=args, model_kwargs=kwargs,
@@ -95,7 +102,7 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            profile_ops=not cmd_args.disable_op_profiling,
                            graph=None,  # TODO: deprecated
                            async_pipe=cmd_args.async_pipeline,
-                           trace_cache_name=None,  # TODO: add to cmd.
+                           trace_cache_name=trace_cache_name,
                            profiles_cache_name=profiles_cache_name)
 
         del args, kwargs

@@ -3,7 +3,7 @@ import importlib
 import os
 from typing import Tuple, Type
 
-from .cmd_parser import Parser
+from autopipe.cmd_parser import Parser
 from .partitioning_task import PartitioningTask
 
 REGISTRY = dict()

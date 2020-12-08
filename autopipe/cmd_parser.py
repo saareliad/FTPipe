@@ -205,6 +205,12 @@ class Parser(argparse.ArgumentParser, ABC):
         group.add_argument("--overwrite_profiles_cache", action="store_true", default=False,
                            help="overwrite profile cache")
 
+        group.add_argument("--ct", "--trace_cache_name", default="", type=str, dest="trace_cache_name",
+                           help="Trace cache to use in case of multiple runs")
+
+        group.add_argument("--overwrite_trace_cache", action="store_true", default=False,
+                           help="overwrite trace cache")
+
     # TODO should use sub parsers as those 2 groups are mutaully exclusive
     def _add_METIS_args(self, group):
         group.add_argument("--metis_attempts", type=int, default=10,
