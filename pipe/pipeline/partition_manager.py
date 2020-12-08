@@ -58,6 +58,7 @@ class SinglePartitionManager:
                  weight_stashing_just_for_stats=False,
                  disable_clone_inputs=False,
                  req_grad=None,
+                 scale_down_lr_for_smaller_batches=False
                  # outputs_req_grad=None,
                  ):
 
@@ -65,54 +66,45 @@ class SinglePartitionManager:
             disable_clone_inputs = True
             warnings.warn("setting disable_clone_inputs=True to avoid double clone since we clone in MPI too.")
 
-        self.work_scheduler = work_scheduler
-
         if gap_aware_just_loss and not use_recomputation:
             raise NotImplementedError(
                 "gap_aware_just_loss works only with recomputation on")
+
+        self.work_scheduler = work_scheduler
         self.logger = logging.getLogger("msnag")
-        self.gap_aware_just_loss = gap_aware_just_loss
-        self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
         self.comm_handler = comm_handler
-        self.is_replicated = False
         self.sync_buffers = sync_buffers
         self.device = device
         self.is_last_partition = is_last_partition
         self.is_first_partition = is_first_partition or stage_depth == pipeline_depth - 1
         self.stage = stage
 
-        self.true_stage_depth = stage_depth
-        if hasattr(self.work_scheduler, "get_virtual_stage_depth"):
-            # replace stage_depth with virtual
-            virtual_stage_depth = self.work_scheduler.get_virtual_stage_depth(stage_depth)
-            self.stage_depth = virtual_stage_depth
-        else:
-            self.stage_depth = stage_depth
-
         self.pipeline_depth = pipeline_depth
-
         self.num_stages = num_stages
         self.step_every = step_every
 
-        self._init_partition(partition, use_recomputation, disable_clone_inputs, req_grad,
-                             )
-        if hasattr(comm_handler, "init_ddp_context"):
-            ddp = comm_handler.init_ddp_context(self.partition.layers)
-            self.partition.layers = ddp
-            self.is_replicated = True
-            self.logger.info(
-                f"Initialized DDP stage replication for for stage {stage}.")
-            self.backward_nosync_context_manager = ddp.no_sync
-            if sync_buffers:
-                self.buffers_to_sync = get_buffers_for_ddp_sync(
-                    partition.layers)
+        self.true_stage_depth = stage_depth
+        if hasattr(self.work_scheduler, "get_virtual_stage_depth"):
+            self.stage_depth = self.work_scheduler.get_virtual_stage_depth(stage_depth)
+        else:
+            self.stage_depth = stage_depth
 
-        # Initialize buffers
+
+        self._init_partition(partition, use_recomputation, disable_clone_inputs, req_grad)
+        self.is_replicated = self._maybe_init_ddp(comm_handler, partition, stage, sync_buffers)
         self.comm_handler.init_buffers()
+        self.futures_handler = self.comm_handler.create_futures_handler()
 
         self.weight_predictor = None
         self.gap_aware = None
         self.weight_stasher = None
+        self.gap_aware_just_loss = gap_aware_just_loss
+        self.weight_stashing_just_for_stats = weight_stashing_just_for_stats
+
+        self.true_weights_storage = None
+        self.delay_at_batch = {}
+        self.saved_for_backward = dict()
+        self.dl_iter = None
 
         # State for train logging
         self.log_frequency = log_frequency
@@ -120,12 +112,9 @@ class SinglePartitionManager:
 
         # State for saving current relevant weight.
         self.true_weights_storage = None
-
         self.delay_at_batch = {}
-
-        self.futures_handler = self.comm_handler.create_futures_handler()
-
         self.saved_for_backward = dict()
+        self.dl_iter = None
 
         # Hints,May be set later.
         # self.dl_iter = None
@@ -135,6 +124,21 @@ class SinglePartitionManager:
         self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
+
+    def _maybe_init_ddp(self, comm_handler, partition, stage, sync_buffers):
+        is_replicated = False
+        if hasattr(comm_handler, "init_ddp_context"):
+            is_replicated = True
+            ddp = comm_handler.init_ddp_context(self.partition.layers)
+            self.partition.layers = ddp
+            self.logger.info(
+                f"Initialized DDP stage replication for for stage {stage}.")
+            self.backward_nosync_context_manager = ddp.no_sync
+            if sync_buffers:
+                self.buffers_to_sync = get_buffers_for_ddp_sync(
+                    partition.layers)
+
+        return is_replicated
 
     def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
                         ):
@@ -211,14 +215,12 @@ class SinglePartitionManager:
 
     def scale_lr(self, factor):
         pgs = self.trainer.optimizer.param_groups
-
         old_lrs = []
         for g in pgs:
             old_lr = g['lr']
             new_lr = old_lr * factor
             g['lr'] = new_lr
             old_lrs.append(old_lr)
-
         return old_lrs
 
     def is_last_micro_batch(self, batch_idx) -> bool:
@@ -248,9 +250,6 @@ class SinglePartitionManager:
                 fake_draw = len(dataloader) - debug_run_limit
                 for _ in range(fake_draw):
                     next(self.dl_iter)
-
-    def get_current_dataloader_iter(self):
-        return getattr(self, "dl_iter", None)
 
     def set_weight_predictor(self, weight_predictor: WeightPredictor,
                              nag_with_predictor: bool):
@@ -353,7 +352,7 @@ class SinglePartitionManager:
         """
         # preload stuff from dataloader.
         preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(
-            getattr(self, "dl_iter", None))
+            self.dl_iter)
 
         partition = self.partition
         is_training = partition.training
@@ -491,7 +490,8 @@ class SinglePartitionManager:
 
         if next_backward_batch_idx is not None:
             next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
-            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches, next_backward_batch_idx_last_due_end)
+            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
+                                                 next_backward_batch_idx_last_due_end)
 
         # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
@@ -670,7 +670,7 @@ class SinglePartitionManager:
 
         # Do a scheduler step at the end of epoch if not already doing so each step.
         # Do it only when epoch is done
-        if not self.trainer.PER_STEP_SCHEDULER and flush_rate < 0 :
+        if not self.trainer.PER_STEP_SCHEDULER and flush_rate < 0:
             self.lr_scheduler.step()
         futures_handler.clean_train()
 
@@ -743,7 +743,7 @@ class GPipePartitionManager(SinglePartitionManager):
         partition.is_last_micro_batch = is_last_micro_batch
 
         preload_input_partition, preload_input_to_outside_loss = self.data_propagator.preload_from_dataloader(
-            getattr(self, "dl_iter", None))
+            self.dl_iter)
 
         request_objects, x, ctx = self.forward_pass_and_send(
             batch_idx, num_batches, preload_input_partition)
@@ -856,7 +856,8 @@ class GPipePartitionManager(SinglePartitionManager):
 
         if next_backward_batch_idx is not None:
             next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
-            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches, next_backward_batch_idx_last_due_end)
+            self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
+                                                 next_backward_batch_idx_last_due_end)
 
         # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
@@ -948,7 +949,8 @@ class GPipePartitionManager(SinglePartitionManager):
                     # TODO: can catch the first bwd micro-batch of the next mini-batch
                     next_backward_batch_idx_to_run = None
 
-                ro = run_batch_backward(batch_idx_to_run, num_batches, next_backward_batch_idx=next_backward_batch_idx_to_run)
+                ro = run_batch_backward(batch_idx_to_run, num_batches,
+                                        next_backward_batch_idx=next_backward_batch_idx_to_run)
                 futures_handler.after_backward(ro, done_bwds)
 
                 done_bwds += 1

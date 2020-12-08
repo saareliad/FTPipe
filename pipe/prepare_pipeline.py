@@ -670,6 +670,10 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
         # outputs_req_grad=parsed_config.outputs_req_grad
     )
 
+    # Set Data propagator
+    propagator = propagator_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
+    partition.set_data_propagator(propagator)
+
     # support for simulating stage replication (dev)
     if hasattr(args, "ddp_sim_num_gpus") and args.ddp_sim_num_gpus > 1:
         print(
@@ -757,9 +761,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
         if gap_aware_just_loss:
             assert (getattr(args, "weight_stashing", False))
 
-    # Set Data propagator
-    propagator = propagator_cls(device, is_last_partition, is_first_partition, args.stage, pipe_config)
-    partition.set_data_propagator(propagator)
+
 
     if getattr(args, "auto_file_name", True):
         auto_file_name(args)

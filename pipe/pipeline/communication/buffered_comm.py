@@ -108,9 +108,7 @@ class BufferSimpleCommBase(SimpleCommBase):
     def get_data_forward(self, batch_idx, num_batches, last_due_end):
         self._ensure_fwd_recv_buffers_size_set(last_due_end)
         fwd_recv_buffers = self.fwd_recv_buffers
-
-        self.fwd_recv_buffers.recv_next(batch_idx)
-
+        fwd_recv_buffers.recv_next(batch_idx)
         # print(f"rank {self.rank} get_data_forward, waiting")
         x = fwd_recv_buffers.wait_first()
         # print(f"rank {self.rank} get_data_forward, got {x}")
@@ -120,7 +118,6 @@ class BufferSimpleCommBase(SimpleCommBase):
         # FIXME used to avoid this clone
         # TODO: this clone can happen in another stream
         x = [v.clone() if isinstance(v, torch.Tensor) else v for v in x]
-
         # pre-Start the next fwd Irecv:
         if fwd_recv_buffers.max_buffers > 1 and not last_due_end:
             next_last_due_end = batch_idx + 2 == num_batches
@@ -246,7 +243,7 @@ class BufferSimpleCommBase(SimpleCommBase):
             fwd_recv_buffers.create()
 
     def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
-        # Special case: Last batch with differnt size
+        # Special case: Last batch with different size
         if last_due_end and self.last_batch_train_shapes:
             # Delete previous buffers
             print(
@@ -276,7 +273,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                     self.changed_shapes_last_batch_bwd = dict()
                 self.changed_shapes_last_batch_bwd[bwd_recv_buffers.pointer] = True
 
-            # Overrride
+            # Override
         elif self.changed_shapes_last_batch_bwd:
             # NOTE: this is a special case for gpipe as bwd is LIFO.
             # already change, replace:
