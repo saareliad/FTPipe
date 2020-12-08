@@ -561,9 +561,10 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
     elif not (n_runs_limit < 0 or n_runs < n_runs_limit):
         print(f"Breaking after reaching run limit of {n_runs_limit}!")
-        i_min = np.argmin([history[i]['d']['mistakes'] for i in history])
+        i_min = list(history.keys())[np.argmin([v['d']['mistakes'] for v in history.values()])]
         mistakes_min = history[i_min]['d']['mistakes']
         print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
+        print([history[i]['d']['mistakes'] for i in history])
         print(f"Restoring best point in history")
         # restore the best point from  history
         last_partition_scopes = history[i_min]['last_partition_scopes']
