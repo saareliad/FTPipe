@@ -76,7 +76,7 @@ def exhustive_search_for_last_partition(graph, history, n_runs, partition_profil
                                                                                       partition_profiled_graph_fn,
                                                                                       weights)
 
-        exhaustive_search_history[n_runs] = dict(last_partition_scopes=last_partition_scopes,
+        exhaustive_search_history[i] = dict(last_partition_scopes=last_partition_scopes,
                                                  generated_last_stage_scopes=generated_last_stage_scopes,
                                                  d=d
                                                  )
