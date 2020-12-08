@@ -538,18 +538,8 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
     elif not (n_runs_limit < 0 or n_runs < n_runs_limit):
         print(f"Breaking after reaching run limit of {n_runs_limit}!")
-        i_min = list(history.keys())[np.argmin([v['d']['mistakes'] for v in history.values()])]
-        mistakes_min = history[i_min]['d']['mistakes']
-        print([history[i]['d']['mistakes'] for i in history])
-        print(f"Restoring best point in history")
-        print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
-
-        # restore the best point from  history
-        last_partition_scopes = history[i_min]['last_partition_scopes']
-        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
-                                                                                      last_partition_scopes,
-                                                                                      partition_profiled_graph_fn,
-                                                                                      weights)
+        current_mistakes, graph, mistakes_min = restore_best_from_history(graph, history,
+                                                                          partition_profiled_graph_fn, weights)
 
         if current_mistakes != mistakes_min:
             warnings.warn(f"current_mistakes != mistakes_min, {current_mistakes} != {mistakes_min}")
@@ -582,9 +572,24 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                        )
                 print(f"final_countdown_iteration:{i}/{len(topo_sorted_scopes)}", d)
 
-        # TODO: warn if not the same number..
-
+            current_mistakes, graph, mistakes_min = restore_best_from_history(graph, exhaustive_search_history,
+                                                                              partition_profiled_graph_fn, weights)
     return graph
+
+
+def restore_best_from_history(graph, history, partition_profiled_graph_fn, weights):
+    i_min = list(history.keys())[np.argmin([v['d']['mistakes'] for v in history.values()])]
+    mistakes_min = history[i_min]['d']['mistakes']
+    print([history[i]['d']['mistakes'] for i in history])
+    print(f"Restoring best point in history")
+    print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
+    # restore the best point from  history
+    last_partition_scopes = history[i_min]['last_partition_scopes']
+    current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+                                                                                  last_partition_scopes,
+                                                                                  partition_profiled_graph_fn,
+                                                                                  weights)
+    return current_mistakes, graph, mistakes_min
 
 
 def partition_and_check(graph, last_partition_scopes, partition_profiled_graph_fn, weights):
