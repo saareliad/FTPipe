@@ -149,7 +149,7 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                                recomputation=not cmd_args.no_recomputation,
                                bw_GBps=cmd_args.bw,
                                verbose=True,
-                               async_pipeline=cmd_args.async_pipeline,
+                               async_pipeline=cmd_args.async_pipeline or cmd_args.analysis_as_async_pipeline,
                                sequential_model=model)
 
         if cmd_args.partitioning_method != 'ACYCLIC':

@@ -93,12 +93,12 @@ class Node():
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
-EdgeWeightFunction = Callable[[Tuple[Node, Node]], int]
+EdgeWeightFunction = Callable[[Node, Node], int]
 
 
 class Graph():
-    def __init__(self, nodes: GraphNodes, input_kw_ids: Dict[int, str], output_ids: List[int], depth: int,
-                 basic_blocks: Tuple[Type[nn.Module], ...]):
+    def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]], output_ids: Optional[List[int]], depth: Optional[int],
+                 basic_blocks: Optional[Tuple[Type[nn.Module], ...]]):
         # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
         self.input_kw_ids = input_kw_ids  # id to kw name.
@@ -116,6 +116,10 @@ class Graph():
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
+
+    @property
+    def num_nodes(self) -> int:
+        return len(self._nodes)
 
     @property
     def inputs(self):
@@ -545,7 +549,7 @@ class Graph():
                     visited.add(o)
                 visited.add(n)
                 assert n not in n.out_edges
-            assert len(visited) == len(self.nodes)
+            assert len(visited) == self.num_nodes
         except AssertionError as e:
             self.save_as_pdf("selfcheck_error", ".")
             raise e
@@ -626,10 +630,14 @@ class Graph():
 
         return copy
 
-    def topo_sort(self):
-        # We don't care about the weights here.
-        # node_weight_function: Optional[NodeWeightFunction] = None,
-        # edge_weight_function: Optional[EdgeWeightFunction] = None
+    def topo_sort(self, verbose=False):
+
+        def print_if_verbose(*args,**kw):
+            if verbose:
+                print(*args, **kw)
+
+
+
 
         # To networkx
         G = nx.DiGraph()
@@ -656,8 +664,8 @@ class Graph():
 
         if (ids_sort := sorted(topo_sorted)) != topo_sorted:
             print("-W- topo_sort: node_ids are not topo sorted!")
-            print("topo_sorted:", topo_sorted)
-            print("node_ids", ids_sort)
+            print_if_verbose("topo_sorted:", topo_sorted)
+            print_if_verbose("node_ids", ids_sort)
             replace_ids_with_topo = True
         else:
             print("-I- topo_sort: node_ids are topo sorted")
@@ -676,7 +684,7 @@ class Graph():
             for i, v in self.input_kw_ids.items():
                 topo_sort_id = self[i].topo_sort_id
                 if topo_sort_id != i:
-                    print(f"-I- topo_sort: changed id to input {v}")
+                    print_if_verbose(f"-I- topo_sort: changed id to input {v}")
                 input_kw_ids[topo_sort_id] = v
 
             self.input_kw_ids = input_kw_ids
@@ -686,7 +694,7 @@ class Graph():
             for i in self.output_ids:
                 topo_sort_id = self[i].topo_sort_id
                 if topo_sort_id != i:
-                    print(f"-I- topo_sort: changed id to output {i}")
+                    print_if_verbose(f"-I- topo_sort: changed id to output {i}")
                 output_ids.append(topo_sort_id)
             self.output_ids = output_ids
 

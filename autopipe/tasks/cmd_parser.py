@@ -29,6 +29,9 @@ class Parser(argparse.ArgumentParser, ABC):
         heuristics_args = self.add_argument_group("heuristics_args")
         self._add_heurisitcs_args(heuristics_args)
 
+        presets_args = self.add_argument_group("presets")
+        self._add_presets_args(presets_args)
+
         METIS_args = self.add_argument_group("METIS_args")
         self._add_METIS_args(METIS_args)
 
@@ -70,6 +73,11 @@ class Parser(argparse.ArgumentParser, ABC):
             default=32,
             type=int,
             help="batch size to use during the post partition analysis")
+
+        group.add_argument("--analysis_as_async_pipeline",
+                           default=False,
+                           action="store_true",
+                           help="Force analysis as async pipeline")
 
     def _add_heurisitcs_args(self, group):
         group.add_argument(
@@ -168,7 +176,9 @@ class Parser(argparse.ArgumentParser, ABC):
                            "--async_pipeline",
                            default=False,
                            action="store_true",
-                           help="Do analysis for async pipeline")
+                           help="Do partitioning and analysis for async pipeline")
+
+
         group.add_argument("--dot",
                            default=False,
                            action="store_true",
@@ -305,6 +315,29 @@ class Parser(argparse.ArgumentParser, ABC):
                            help=
                            "maximum constraint value a single stage can have,for example for memory constraint this is the maximum number of parameters a stage can have")
 
+    def _add_presets_args(self, group):
+        group.add_argument("--preset", choices=['ftpipe', 'pipedream', 'gpipe'], required=False, help="set preset partitioning and analysis arguments")
+
+    def parse_presets(self, args):
+        if args.preset == 'ftpipe':
+            args.async_pipeline = True
+            args.bwd_to_fwd_ratio = 1
+        elif args.preset == 'pipedream':
+            # No heterogeneous profiling for last stage.
+            # Note, this does not mean pipedream partitioning
+            args.async_pipeline = False
+            args.bwd_to_fwd_ratio = 1
+            args.analysis_as_async_pipeline = True
+        elif args.preset == 'gpipe':
+            args.auto_infer_node_bwd_to_fwd_ratio = True
+            args.async_pipeline = False
+            args.bwd_to_fwd_ratio = -1  # used only for communication
+            args.analysis_as_async_pipeline = False
+        elif args.preset:
+            raise NotImplementedError()
+
+        return args
+
     def _extra(self, group):
         """add any extra cmd args which are task specific"""
 
@@ -330,6 +363,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
     def parse_args(self, args=None, namespace=None) -> Namespace:
         args, extra = super().parse_known_args(args, namespace)
+        self.parse_presets(args)
         args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
         args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
         args.binpack_opt = self._binpack_opts_dict_from_parsed_args(args)
@@ -344,6 +378,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
         args.force_no_recomputation_scopes_fn = lambda scope: any(
             s in scope for s in args.force_no_recomputation_scopes)
+
 
         return self._post_parse(args, extra)
 
