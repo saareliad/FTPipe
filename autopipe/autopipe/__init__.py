@@ -503,7 +503,7 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                                                               weights: Dict[Node, FullExecTimes],
                                                                               partitioning_method,
                                                                               partition_profiled_graph_fn,
-                                                                              n_runs_limit=100):
+                                                                              n_runs_limit=20):
     print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
@@ -517,35 +517,12 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
     history = dict()
     while current_mistakes > allowed_mistakes and (n_runs_limit < 0 or n_runs < n_runs_limit):
 
-        for n in graph.nodes:
-            if n.scope in last_partition_scopes:
-                n.weight = weights[n.id].no_recomputation
-            else:
-                n.weight = weights[n.id].recomputation
-
         n_runs += 1
 
-        # Partition
-        graph = partition_profiled_graph_fn(graph)
-
-        # Load last partition last stage scopes
-        last_p = max((n.stage_id for n in graph.nodes))
-        generated_last_stage_scopes = [
-            n.scope for n in graph.nodes if n.stage_id == last_p
-        ]
-
-        # Count mistakes (false positives and false negatives)
-
-        A = set(last_partition_scopes)
-        B = set(generated_last_stage_scopes)
-        intersection = A & B
-        correct = len(intersection)
-        fp = len(A) - correct  # we predicted: true, result: false
-        fn = len(B) - correct  # we predicted: false, result: true
-        current_mistakes = fp + fn
-
-        # stats:
-        d = dict(correct=correct, fp=fp, fn=fn, mistakes=current_mistakes)
+        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+                                                                                      last_partition_scopes,
+                                                                                      partition_profiled_graph_fn,
+                                                                                      weights)
 
         history[n_runs] = dict(last_partition_scopes=last_partition_scopes,
                                generated_last_stage_scopes=generated_last_stage_scopes,
@@ -563,19 +540,74 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         print(f"Breaking after reaching run limit of {n_runs_limit}!")
         i_min = list(history.keys())[np.argmin([v['d']['mistakes'] for v in history.values()])]
         mistakes_min = history[i_min]['d']['mistakes']
-        print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
         print([history[i]['d']['mistakes'] for i in history])
         print(f"Restoring best point in history")
+        print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
+
         # restore the best point from  history
         last_partition_scopes = history[i_min]['last_partition_scopes']
-        for n in graph.nodes:
-            if n.scope in last_partition_scopes:
-                n.weight = weights[n.id].no_recomputation
-            else:
-                n.weight = weights[n.id].recomputation
-        # Partition
-        graph = partition_profiled_graph_fn(graph)
+        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+                                                                                      last_partition_scopes,
+                                                                                      partition_profiled_graph_fn,
+                                                                                      weights)
 
-        # TODO: warn if not the same number...
+        if current_mistakes != mistakes_min:
+            warnings.warn(f"current_mistakes != mistakes_min, {current_mistakes} != {mistakes_min}")
+
+        if current_mistakes > 2:
+            # Taking the first point in history
+            possible_scopes = set(history[1]['generated_last_stage_scopes'])
+
+            # topo sort scopes
+            scope_to_id = {}
+            for n in graph.nodes:
+                if n.scope in possible_scopes:
+                    scope_to_id[n.scope] = n.id
+            topo_sorted_scopes = sorted(possible_scopes, key=lambda x: scope_to_id[x])
+
+            print("Guessing prev-option didn't converge,")
+            print("Doing exhaustive search over last stage IDs and taking best fit")
+            exhaustive_search_history = dict()
+            # TODO: can skip some options by last param in range() call
+            for i in range(len(topo_sorted_scopes)):
+                last_partition_scopes = topo_sorted_scopes[i:]
+                current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+                                                                                              last_partition_scopes,
+                                                                                              partition_profiled_graph_fn,
+                                                                                              weights)
+
+                exhaustive_search_history[n_runs] = dict(last_partition_scopes=last_partition_scopes,
+                                       generated_last_stage_scopes=generated_last_stage_scopes,
+                                       d=d
+                                       )
+                print(f"final_countdown_iteration:{i}/{len(topo_sorted_scopes)}", d)
+
+        # TODO: warn if not the same number..
 
     return graph
+
+
+def partition_and_check(graph, last_partition_scopes, partition_profiled_graph_fn, weights):
+    for n in graph.nodes:
+        if n.scope in last_partition_scopes:
+            n.weight = weights[n.id].no_recomputation
+        else:
+            n.weight = weights[n.id].recomputation
+    # Partition
+    graph = partition_profiled_graph_fn(graph)
+    # Load last partition last stage scopes
+    last_p = max((n.stage_id for n in graph.nodes))
+    generated_last_stage_scopes = [
+        n.scope for n in graph.nodes if n.stage_id == last_p
+    ]
+    # Count mistakes (false positives and false negatives)
+    A = set(last_partition_scopes)
+    B = set(generated_last_stage_scopes)
+    intersection = A & B
+    correct = len(intersection)
+    fp = len(A) - correct  # we predicted: true, result: false
+    fn = len(B) - correct  # we predicted: false, result: true
+    current_mistakes = fp + fn
+    # stats:
+    d = dict(correct=correct, fp=fp, fn=fn, mistakes=current_mistakes)
+    return current_mistakes, d, generated_last_stage_scopes, graph

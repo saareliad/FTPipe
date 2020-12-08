@@ -125,6 +125,6 @@ def METIS_partition(graph: Graph,
         graph.induce_layer_partition(work_graph, layers_to_original)
 
     if use_virtual_stages:
-        stage_to_gpu_map = convert_handle_missing_print(bins=bins, graph=graph)
+        stage_to_gpu_map = convert_handle_missing_print(bins=bins, graph=graph, verbose=False)
 
     return graph

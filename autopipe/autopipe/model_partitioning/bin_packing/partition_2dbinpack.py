@@ -711,7 +711,7 @@ def partition_2dbin_pack(graph: Graph,
     return graph, stage_to_gpu_map
 
 
-def convert_handle_missing_print(bins, graph):
+def convert_handle_missing_print(bins, graph, verbose=False):
     # Get stage to GPU map
     node_to_stage_map = {}
     # Convert
@@ -727,12 +727,15 @@ def convert_handle_missing_print(bins, graph):
     stage_to_nodes_map = defaultdict(list)
     for i, v in node_to_stage_map.items():
         stage_to_nodes_map[v].append(i)
+
     print("stage_to_gpu_map:")
     pprint(stage_to_gpu_map)
-    print("node_to_stage_map:")
-    pprint(node_to_stage_map)
-    print("stage_to_nodes_map:")
-    pprint(stage_to_nodes_map)
+    if verbose:
+        print("node_to_stage_map:")
+        pprint(node_to_stage_map)
+        print("stage_to_nodes_map:")
+        pprint(stage_to_nodes_map)
+
     return stage_to_gpu_map
 
 
