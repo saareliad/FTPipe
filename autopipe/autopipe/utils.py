@@ -3,6 +3,7 @@ import inspect
 import operator
 import os
 import re
+from collections import namedtuple
 from contextlib import contextmanager
 from itertools import chain
 from typing import Iterator, Optional, \
@@ -366,3 +367,6 @@ def convert_none_checks(input_file: str, output_file: str):
 
     with open(output_file, "w") as f:
         f.writelines(res)
+
+
+FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
