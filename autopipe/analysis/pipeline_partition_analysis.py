@@ -242,7 +242,11 @@ def run_analysis(sample,
     d_same_gpu_parameter_count = same_gpu_parameter_count(stage_param_count=d_param_count,
                                                           stages_on_same_gpu=stages_on_same_gpu)
 
+    num_params_milions = d_same_gpu_parameter_count['total'] / 1e6
+    num_params_milions = round(number=num_params_milions, ndigits=1)
+
     with io.StringIO() as buf, redirect_stdout(buf):
+        print(f"Number of Model Parameters {num_params_milions}M")
         pprint(d_same_gpu_parameter_count)
         s_gpu_param_count = buf.getvalue()
 
@@ -286,6 +290,12 @@ def run_analysis(sample,
         s = "-I- Printing Report\n"
         if warnings_list:
             s += "warnings:\n" + "\n".join(warnings_list) + "\n"
+
+        if graph is not None:
+            s += f"Number of nodes in Computation Graph: {graph.num_nodes}"
+            # TODO:
+            # pipedream_extimated_time(N=graph.num_nodes, m=)
+            # print(f"PipeDream estimated time: {round(estimated_time)}s (seconds)")
 
         s += f"Number of stages: {num_real_stages}\n"
         if num_dummy_stages:
@@ -480,7 +490,7 @@ def profile_execution(model_inputs,
                       bw_GBps=12,
                       async_pipeline=False,
                       add_comm_times_to_balance=True,
-                      stages_on_same_gpu: Optional[Dict[int ,Set[int]]] = None,
+                      stages_on_same_gpu: Optional[Dict[int, Set[int]]] = None,
                       parallel_comm_and_comp_ratio=0,
                       different_links_between_accelerators=False):
     """
