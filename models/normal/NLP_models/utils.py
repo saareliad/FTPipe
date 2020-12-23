@@ -148,7 +148,7 @@ class PreTrainedModel(TransformersPretrainedModel):
                 )
                 archive_file = pretrained_model_name_or_path + ".index"
             else:
-                if transformers.__verson__ < "3.5.0":
+                if transformers.__version__ < "3.5.0":
                     archive_file = hf_bucket_url(
                         pretrained_model_name_or_path,
                         filename=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
