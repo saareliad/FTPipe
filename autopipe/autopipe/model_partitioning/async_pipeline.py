@@ -1,3 +1,23 @@
+"""Meta algorithm to partition heterogeneous stages
+In some work schedulers there are two types of stages in the pipeline:
+(A) the last stage, which does not recompute (B) other stages, which do recompute.
+Without further actions, the execution of the last stage would not match its profiling (it would be faster by approximately 33)
+and result in underutilization.
+we accommodates by matching the correct profiles for each block.
+
+the process is as follows:
+(1)	For each basic block: profile it twice:
+with Recomputation and without Recomputation.
+(2)	Hold for each block a Boolean value, indicating which profile to use (default: without Recomputation)
+(3)	Run partitioning: during partitioning, each block uses only the profile it was mapped to, according to its Boolean value.
+(4)	Count mistakes, i.e., blocks which used the wrong profile.
+(5). If there are mistakes, change Boolean values to match the last result, then run (3) again.
+
+If (5) still finds mistakes after several trials, we break and run an exhaustive search over the subset of blocks mapped to the last stage during the 1st  run of (3) and take the matching with minimal mistakes.
+
+Note that the identity of block-to-stage mapping is unknown at profiling.  However,
+some partitioning algorithms can switch profiles dynamically,  sparing the meta-algorithm. Nevertheless, we find the meta-algorithm to have only a small overhead and work for more partitioning schemes.
+"""
 import warnings
 from typing import Dict
 

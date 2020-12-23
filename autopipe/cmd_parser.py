@@ -5,8 +5,8 @@ from gettext import gettext
 
 import torch
 
-from autopipe.autopipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
-from autopipe.autopipe.model_partitioning.bin_packing.partition_2dbinpack import ReminderPolicy, \
+from autopipe.autopipe.model_partitioning.acyclic import Objective, META_ALGORITH, Constraint
+from autopipe.autopipe.model_partitioning.mixed_pipe.partition_2dbinpack import ReminderPolicy, \
     SecondAndOnClusterPolicy
 
 

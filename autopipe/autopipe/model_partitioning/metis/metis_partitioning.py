@@ -2,8 +2,8 @@ from collections import defaultdict
 from typing import Optional, Dict
 
 from .post_process import post_process_partition
-from ..bin_packing.partition_2dbinpack import stages_from_bins, convert_handle_missing_print
-from ..bin_packing.post_process import re_assign_partition_indices
+from ..mixed_pipe.partition_2dbinpack import stages_from_bins, convert_handle_missing_print
+from ..mixed_pipe.post_process import re_assign_partition_indices
 from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
 __all__ = ["METIS_partition"]
