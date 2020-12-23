@@ -649,7 +649,7 @@ def partition_2dbin_pack(graph: Graph,
     if isinstance(reminder_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
         reminder_policy = ReminderPolicy._value2member_map_[reminder_policy]
 
-    print(f"use_layers_graph={use_layers_graph}")
+    # print(f"use_layers_graph={use_layers_graph}")
     graph.topo_sort()
 
     if use_layers_graph:

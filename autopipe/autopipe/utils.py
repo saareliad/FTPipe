@@ -52,7 +52,10 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
         if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
+                # TODO:
+                # is_explicit_block_limit = len(list(sub_module.children())) != 0 and (isinstance(sub_module, tuple(basic_blocks)) or depth == 0)
                 yield sub_module, scope, module, True
+
             else:
                 yield sub_module, scope, module
         else:

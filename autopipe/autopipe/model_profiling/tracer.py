@@ -873,13 +873,14 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
         name = scope[scope.rfind('[') + 1:-1]
 
         patch_direct_children = False
-        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) and not allow_ModuleList_ModuleDict:
-            raise TypeError(
-                f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
-        elif isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
-            warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
-            patch_direct_children = True
-        if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) :
+            if not allow_ModuleList_ModuleDict:
+                raise TypeError(
+                    f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+            else:
+                warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
+                patch_direct_children = True
+        elif isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
             continue

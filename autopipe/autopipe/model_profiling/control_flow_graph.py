@@ -1,4 +1,5 @@
 import pickle
+import warnings
 from collections import defaultdict
 from enum import IntEnum
 from itertools import chain
@@ -97,7 +98,8 @@ EdgeWeightFunction = Callable[[Node, Node], int]
 
 
 class Graph():
-    def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]], output_ids: Optional[List[int]], depth: Optional[int],
+    def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]],
+                 output_ids: Optional[List[int]], depth: Optional[int],
                  basic_blocks: Optional[Tuple[Type[nn.Module], ...]]):
         # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
@@ -490,6 +492,11 @@ class Graph():
                 input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
 
             if is_constant or op_without_inputs or input_or_buff_param_with_one_use_at_end:
+                if input_or_buff_param_with_one_use_at_end and not (is_constant or op_without_inputs):
+                    warnings.warn(f"HACK: input_or_buff_param_with_one_use_at_end=True, for {node.scope},"
+                                  f"list(node.out_edges)[0].id={list(node.out_edges)[0].id} "
+                                  f"node.id={node.id}, "
+                                  f"len(self)=len(self) ")
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]
@@ -632,12 +639,9 @@ class Graph():
 
     def topo_sort(self, verbose=False):
 
-        def print_if_verbose(*args,**kw):
+        def print_if_verbose(*args, **kw):
             if verbose:
                 print(*args, **kw)
-
-
-
 
         # To networkx
         G = nx.DiGraph()

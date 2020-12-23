@@ -430,10 +430,16 @@ def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic
     # dev WARNING: can move , model, model_args, model_kwargs to CPU
     if save_memory_mode:
         if not trace_on_gpu:
-            model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
+            print("-I- tracing on CPU")
+            with torch.no_grad():
+                model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
         else:
             print("-I- tracing on GPU")
-            model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cuda')
+            with torch.no_grad():
+                model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cuda')
+
+    model_device = next(model.parameters().device)
+    print(f"-I- tracing device: {model_device}")
 
     print("-I- tracing model")
     graph = trace_module(model, args=model_args, kwargs=model_kwargs, depth=max_depth,
@@ -442,7 +448,8 @@ def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic
     # TODO: tracing is sometimes done on cpu...
     print("-I- inferring gradient requirements")
     if save_memory_mode:
-        model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
+        with torch.no_grad():
+            model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
     infer_req_grad(graph, model, args=model_args, kwargs=model_kwargs)
     print("-I- inferred gradient requirements")
     return graph

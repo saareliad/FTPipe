@@ -7,6 +7,8 @@ from argparse import Namespace
 from collections import defaultdict
 from typing import Dict, Optional, Tuple
 
+import torch
+
 from autopipe.analysis import run_analysis
 from autopipe.analysis.analysis_utils import convert_to_analysis_format
 from autopipe.autopipe import pipe_model, get_weight_functions
@@ -62,7 +64,8 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
     del sample
 
     if not cmd_args.save_memory_mode:
-        model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
+        with torch.no_grad():
+            model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
 
     node_weight_function, edge_weight_function = get_weight_functions(cmd_args, verbose=True)
 
