@@ -7,7 +7,7 @@ import torch.nn as nn
 
 from .cache_utils import compute_and_cache, compute_and_maybe_cache, PickleCache, GraphCache
 from .compiler import compile_partitioned_model
-from .model_partitioning import METIS_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
+from .model_partitioning import metis_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
     get_weight_functions
 from .model_partitioning.async_pipeline import partition_and_match_weights_until_last_partition_is_with_no_recomputation
 from .model_profiling import Graph, Node, profile_network, GraphProfiler, trace_module, NodeWeightFunction, \
@@ -309,23 +309,24 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
 
 def partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function, edge_weight_function,
                              use_virtual_stages, use_layers_only_graph, METIS_opt, acyclic_opt, binpack_opt):
-    if partitioning_method == "METIS":
+    partitioning_method = partitioning_method.lower()
+    if partitioning_method == "metis":
         print("-I- using METIS partitioning algorithm")
-        graph = METIS_partition(graph,
+        graph = metis_partition(graph,
                                 nparts,
                                 node_weight_function=node_weight_function,
                                 edge_weight_function=edge_weight_function,
                                 use_layers_only_graph=use_layers_only_graph,
                                 use_virtual_stages=use_virtual_stages,
                                 **METIS_opt)
-    elif partitioning_method == "ACYCLIC":
+    elif partitioning_method == "acyclic":
         print("-I- using Acyclic Partitioning algorithm")
         acyclic_partition(model, graph, nparts,
                           node_weight_function=node_weight_function,
                           edge_weight_function=edge_weight_function,
                           use_layers_graph=use_layers_only_graph,
                           **acyclic_opt)
-    elif partitioning_method == "2DBIN":
+    elif partitioning_method == "2dbin":
         if "n_clusters" not in binpack_opt:
             if "analyze_n_clusters" not in binpack_opt:
                 warnings.warn(

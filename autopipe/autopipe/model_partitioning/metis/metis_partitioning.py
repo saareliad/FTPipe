@@ -2,14 +2,11 @@ from collections import defaultdict
 from typing import Optional, Dict
 
 from .post_process import post_process_partition
-from ..mixed_pipe.partition_2dbinpack import stages_from_bins, convert_handle_missing_print
-from ..mixed_pipe.post_process import re_assign_partition_indices
+from ..mixed_pipe.partition_mixed_pipe import stages_from_bins, convert_handle_missing_print
 from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
-__all__ = ["METIS_partition"]
 
-
-def METIS_partition(graph: Graph,
+def metis_partition(graph: Graph,
                     num_partitions: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,

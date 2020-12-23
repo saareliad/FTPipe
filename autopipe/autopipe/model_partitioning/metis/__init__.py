@@ -1,1 +1,1 @@
-from .METIS_partitioning import METIS_partition
+from .metis_partitioning import metis_partition

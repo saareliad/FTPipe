@@ -80,8 +80,8 @@ as we are using tracing there are several limitations that come with it:
 # Model Partitioning
 Mixed Pipe is activated automatically in everything except "acyclic".
  * METIS partKway
- * 2DBIN
- * ACYCLIC (and multililevel)
+ * mpipe - Mixed-Pipe
+ * acyclic (and multililevel)
 
 
 # Code Generation

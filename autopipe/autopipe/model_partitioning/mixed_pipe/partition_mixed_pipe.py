@@ -389,8 +389,6 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
 
 def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False):
-    stage_id_generator = count()
-
     # shallow copy bins, excluding inputs:
     bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
 
