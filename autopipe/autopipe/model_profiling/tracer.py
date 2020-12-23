@@ -624,6 +624,8 @@ class TracedLayer(nn.Module):
                  patch_direct_children=False):
         super(TracedLayer, self).__init__()
         self._name = name
+        if isinstance(module, TracedLayer):
+            warnings.warn("Double warp for module")
         self._module = module
         self._terminal = terminal
         self._nesting_special_patch = nesting_special_patch

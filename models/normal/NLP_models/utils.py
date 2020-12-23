@@ -1,10 +1,8 @@
-from transformers.modeling_utils import PreTrainedModel as TransformersPretrainedModel
-
 import logging
 import os
 
 import torch
-
+import transformers
 from transformers.configuration_utils import PretrainedConfig
 from transformers.file_utils import (
     TF2_WEIGHTS_NAME,
@@ -14,7 +12,7 @@ from transformers.file_utils import (
     hf_bucket_url,
     is_remote_url,
 )
-
+from transformers.modeling_utils import PreTrainedModel as TransformersPretrainedModel
 
 logger = logging.getLogger(__name__)
 
@@ -150,11 +148,17 @@ class PreTrainedModel(TransformersPretrainedModel):
                 )
                 archive_file = pretrained_model_name_or_path + ".index"
             else:
-                archive_file = hf_bucket_url(
-                    pretrained_model_name_or_path,
-                    filename=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
-                    use_cdn=use_cdn,
-                )
+                if transformers.__verson__ < "3.5.0":
+                    archive_file = hf_bucket_url(
+                        pretrained_model_name_or_path,
+                        filename=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
+                        use_cdn=use_cdn,
+                    )
+                else:
+                    archive_file = hf_bucket_url(
+                        pretrained_model_name_or_path,
+                        filename=(TF2_WEIGHTS_NAME if from_tf else WEIGHTS_NAME),
+                    )
 
             try:
                 # Load from URL or cache if already cached
@@ -216,18 +220,18 @@ class PreTrainedModel(TransformersPretrainedModel):
                     raise
         else:
             assert cls.KEY_TRANSLATION is not None
-            
+
             # Convert old format to new format if needed from a PyTorch state_dict
             old_keys = []
             new_keys = []
             for key in state_dict.keys():
-                new_key = key	
-                #NOTE this is important
-                #translating modified keys
-                for k,v in cls.KEY_TRANSLATION.items():
+                new_key = key
+                # NOTE this is important
+                # translating modified keys
+                for k, v in cls.KEY_TRANSLATION.items():
                     if k in new_key:
-                        new_key = new_key.replace(k,v)
-                
+                        new_key = new_key.replace(k, v)
+
                 if "gamma" in new_key:
                     new_key = new_key.replace("gamma", "weight")
                 if "beta" in new_key:
@@ -298,10 +302,10 @@ class PreTrainedModel(TransformersPretrainedModel):
         # Set model in evaluation mode to deactivate DropOut modules by default
         model.eval()
         print({
-                "missing_keys": missing_keys[:10],
-                "error_msgs": error_msgs[:10],
-            }
-            )
+            "missing_keys": missing_keys[:10],
+            "error_msgs": error_msgs[:10],
+        }
+        )
         if output_loading_info:
             loading_info = {
                 "missing_keys": missing_keys,
@@ -318,5 +322,5 @@ class PreTrainedModel(TransformersPretrainedModel):
 
         return model
 
-    def forward(self,*args,**kwargs):
+    def forward(self, *args, **kwargs):
         raise NotImplementedError
