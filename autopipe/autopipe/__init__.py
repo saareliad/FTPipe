@@ -438,7 +438,7 @@ def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic
             with torch.no_grad():
                 model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cuda')
 
-    model_device = next(model.parameters().device)
+    model_device = next(model.parameters()).device
     print(f"-I- tracing device: {model_device}")
 
     print("-I- tracing model")
