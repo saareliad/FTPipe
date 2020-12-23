@@ -547,6 +547,8 @@ class ContractedGraph():
                 self._nodes[matched].add_in_edge(self._nodes[matched_i])
                 self._nodes[matched_i].add_out_edge(self._nodes[matched])
 
+                # FIXME: this is incorrect.
+                # The problem is we went to weights too soon, should have stayed at backward/forward.
                 self._edge_weights[(self._nodes[matched_i],
                                     self._nodes[matched])] += edge_weights[(i,
                                                                             n)]
@@ -632,9 +634,8 @@ class ContractedGraph():
             in_edges[n.id] = {u.id for u in n.in_edges}
             partition[n.id] = n.stage_id
 
-        return cls(in_edges, partition, node_weights, edge_weights, params_per_node,
-                   {n: n
-                    for n in node_weights})
+        initial_matching = {n: n for n in node_weights}  # identity
+        return cls(in_edges, partition, node_weights, edge_weights, params_per_node, initial_matching)
 
     def build_dot(self):
         '''
