@@ -634,12 +634,15 @@ class TracedLayer(nn.Module):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         global CURRENT_SCOPE
-        if CURRENT_SCOPE == "":
-            CURRENT_SCOPE = self._name
+        t_scope = CURRENT_SCOPE
+        if t_scope == "":
+            t_scope = self._name
         else:
             if self._is_nesting_special_patched:
-                CURRENT_SCOPE += f"/{self._nesting_special_patch}"
-            CURRENT_SCOPE += f"/{self._name}"
+                t_scope += f"/{self._nesting_special_patch}"
+            t_scope += f"/{self._name}"
+        CURRENT_SCOPE = t_scope
+
 
         if self._terminal:
             # NOTE no need to set the creating operation
@@ -662,10 +665,12 @@ class TracedLayer(nn.Module):
                     out = record_non_terminal_output(out)
 
         # Go one scope back.
-        CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
+        t_scope = CURRENT_SCOPE
+        t_scope = t_scope.rsplit("/", maxsplit=1)[0]
         if self._is_nesting_special_patched:
             # Go on scope back again.
-            CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
+            t_scope = t_scope.rsplit("/", maxsplit=1)[0]
+        CURRENT_SCOPE = t_scope
 
         assert isinstance(
             out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"

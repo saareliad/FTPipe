@@ -292,7 +292,7 @@ def run_analysis(sample,
             s += "warnings:\n" + "\n".join(warnings_list) + "\n"
 
         if graph is not None:
-            s += f"Number of nodes in Computation Graph: {graph.num_nodes}"
+            s += f"Number of nodes in Computation Graph: {graph.num_nodes}\n"
             # TODO:
             # pipedream_extimated_time(N=graph.num_nodes, m=)
             # print(f"PipeDream estimated time: {round(estimated_time)}s (seconds)")
