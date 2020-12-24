@@ -147,26 +147,14 @@ class NodeWeightFunctionWithRatioAutoInfer():
 
 class CoarsenedWeightFunction():
     def __init__(self,
-                 bw_GBps,
-                 MULT_FACTOR=1e4,
-                 penalty=1e4,
-                 penalize_non_tensors=False,
-                 ensure_positive=True,
-                 node_bwd_to_fwd_ratio=1,
-                 edge_bwd_to_fwd_ratio=1,
+                 edge_weight_function: EdgeWeightFunction,
+                 node_weight_function: NodeWeightFunction,
                  do_longest_path=False,
                  ):
         self.mode = "ratio"
-        # self.MULT_FACTOR = MULT_FACTOR
         self.do_longest_path = do_longest_path
-        self.ewf = EdgeWeightFunction(
-            bw_GBps,
-            bwd_to_fwd_ratio=edge_bwd_to_fwd_ratio,
-            MULT_FACTOR=MULT_FACTOR,
-            penalty=penalty,
-            penalize_non_tensors=penalize_non_tensors,
-            ensure_positive=ensure_positive,
-        )
+        self.ewf = edge_weight_function
+        self.nwf = node_weight_function
 
     def __call__(self, nodes: List[Node], ):
         set_nodes = set(nodes)

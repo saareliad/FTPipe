@@ -8,6 +8,8 @@ from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type
 import networkx as nx
 from torch import Tensor, nn as nn
 
+from autopipe.autopipe.utils import ExecTimes
+
 
 class NodeTypes(IntEnum):
     """
@@ -24,7 +26,7 @@ class NodeTypes(IntEnum):
         return self.name
 
 
-class Node():
+class Node:
     def __init__(self, node_type, idx, scope):
         self.type = node_type
         self.id = idx
@@ -32,7 +34,8 @@ class Node():
 
         self.stage_id = 0
         self.gpu_id = None  # New feature
-        self.weight = None
+        self.weight: Optional[ExecTimes] = None
+        self.compound_edge_weights = None
         self.out_edges: List[Node] = []
         self.args = []
         self.kwargs = defaultdict(list)
@@ -46,6 +49,13 @@ class Node():
 
     # def __repr__(self):
     #     return self.scope
+
+    def maybe_create_compound_edge_weights(self, edge_weight_function):
+        if self.compound_edge_weights is None:
+            v_new_compound_edge_weights = dict()
+            for nn in self.out_edges:
+                v_new_compound_edge_weights[nn.id] = edge_weight_function(self, nn)
+            self.compound_edge_weights = v_new_compound_edge_weights
 
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node].append(kwarg)
@@ -64,12 +74,27 @@ class Node():
         return list(chain(self.args, self.kwargs.keys()))
 
     def replace_input(self, original, new):
+        must_be_in_kwargs = False
         try:
             self.args[self.args.index(original)] = new
         except:
-            pass
+            must_be_in_kwargs = True
+
         if original in self.kwargs:
             self.kwargs[new] = self.kwargs.pop(original)
+        elif must_be_in_kwargs:
+            raise KeyError(f"original is not in args and not in kwargs, original={original}")
+
+    def remove_input(self, original):
+        must_be_in_kwargs = False
+        try:
+            del self.args[self.args.index(original)]
+        except:
+            must_be_in_kwargs = True
+        if original in self.kwargs:
+            self.kwargs.pop(original)
+        elif must_be_in_kwargs:
+            raise KeyError(f"original is not in args and not in kwargs, original={original}")
 
     @classmethod
     def from_other(cls, other):
@@ -107,6 +132,50 @@ class Graph():
         self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
+
+    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction):
+        # TODO: parallel edges? u->v u->v
+        # TODO: check if its legal merge
+        # does not exits a path from the set {n : u < n < v} to v.
+        u = self._nodes[uid]
+        v = self._nodes[vid]
+
+        u.remove_output(v)
+        v.remove_input(u)
+
+        # Merge edge weights.
+        u.maybe_create_compound_edge_weights(edge_weight_function)
+        v.maybe_create_compound_edge_weights(edge_weight_function)
+        for id, weight in v.compound_edge_weights:
+            if id in v.compound_edge_weights:
+                u.compound_edge_weights[id] += weight
+            else:
+                u.compound_edge_weights[id] = weight
+
+        # Merge node weights
+        # TODO: we don't know about other x->v or u->y
+        # Needs outside control to with longest path to make it accurate in case of concurrent ops
+        # (there is a path u->v hence its sequential).
+        u.weight.forward_time += v.weight.forward_time
+        u.weight.backward_time += v.weight.backward_time
+
+        # Do the coarsening
+        for nn in v.out_edges:
+            u.out_edges.append(nn)
+
+        u.out_edges.extend(v.out_edges)
+        u.args.extend(v.args)
+        u.kwargs.update(v.kwargs)
+
+        for nn in v.out_edges:
+            nn.replace_input(v, u)
+        for nn in v.in_edges:
+            nn.remove_output(v)
+            nn.add_out_edge(u)
+
+        u.out_edges.sort(key=lambda x: x.id)
+        u.args.sort(key=lambda x: x.id)
+        del self._nodes[vid]
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -465,6 +534,14 @@ class Graph():
 
         return cls(None, None, None, None, None).load_state(graph_data)
 
+    @classmethod
+    def empty_from_other(cls, graph: "Graph"):
+        return cls(None, None, None, None, None).load_state(graph.state())
+
+    @classmethod
+    def from_other(cls, graph: "Graph"):
+        return cls(None, None, None, None, None).load_state(graph.state())
+
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         """
         creates a graph g with nodes of type CONSTANT 
@@ -476,8 +553,8 @@ class Graph():
         new_nodes = dict()
         output_ids = []
 
-        new_graph = Graph(None, None, None, None,
-                          None).load_state(self.state())
+        new_graph = Graph.from_other(self)
+
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():

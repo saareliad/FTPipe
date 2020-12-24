@@ -1,14 +1,9 @@
 """
 A union-find disjoint set data structure.
-# source: https://github.com/deehzee/unionfind/blob/master/unionfind.py
+# adapted from: https://github.com/deehzee/unionfind/blob/master/unionfind.py,
+# We changed the implementation from the source above to support several desired features.
 """
 
-# 2to3 sanity
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals,
-)
-
-# Third-party libraries
 import numpy as np
 
 
@@ -91,7 +86,7 @@ class UnionFind(object):
         self.n_comps = 0  # the number of disjoint sets or components
         self._next = 0  # next available id
         self._elts = []  # the elements
-        self._indx = {}  #  dict mapping elt -> index in _elts
+        self._indx = {}  # dict mapping elt -> index in _elts
         self._par = []  # parent: for the internal tree structure
         self._siz = []  # size of the component - correct only for roots
 
@@ -100,11 +95,10 @@ class UnionFind(object):
         for elt in elements:
             self.add(elt)
 
-
     def __repr__(self):
-        return  (
+        return (
             '<UnionFind:\n\telts={},\n\tsiz={},\n\tpar={},\nn_elts={},n_comps={}>'
-            .format(
+                .format(
                 self._elts,
                 self._siz,
                 self._par,
@@ -195,7 +189,7 @@ class UnionFind(object):
         """
         return self.find(x) == self.find(y)
 
-    def union(self, x, y):
+    def union(self, x, y, smallest_new_root=False):
         """Merge the components of the two given elements into one.
 
         Parameters
@@ -217,12 +211,18 @@ class UnionFind(object):
         yroot = self.find(y)
         if xroot == yroot:
             return
-        if self._siz[xroot] < self._siz[yroot]:
-            self._par[xroot] = yroot
-            self._siz[yroot] += self._siz[xroot]
+        if smallest_new_root:
+            if self._siz[xroot] < self._siz[yroot]:
+                self._par[xroot] = yroot
+                self._siz[yroot] += self._siz[xroot]
+            else:
+                self._par[yroot] = xroot
+                self._siz[xroot] += self._siz[yroot]
         else:
+            # by order given  x <--- y
             self._par[yroot] = xroot
             self._siz[xroot] += self._siz[yroot]
+
         self.n_comps -= 1
 
     def component(self, x):
