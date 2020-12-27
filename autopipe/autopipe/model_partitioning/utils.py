@@ -11,6 +11,14 @@ def re_assign_partition_indices(graph: Graph):
             continue
         for o in node.out_edges:
             out_edges[node.stage_id].add(o.stage_id)
+            # handle sinks (why the heck this results in cycles?!)
+            # if o.stage_id not in out_edges:
+            #     out_edges[node.stage_id] = set()
+
+    # handle sinks: (assuming they are only graph outputs.)
+    for node in graph.outputs:
+        if node.stage_id not in out_edges:
+            out_edges[node.stage_id] = set()
 
     for i, e in out_edges.items():
         e.discard(i)

@@ -428,6 +428,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
             n = id_to_node_worked_on[nid]
             n.stage_id = i
 
+    return len(all_broken_stages)
     # re_assign_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
 

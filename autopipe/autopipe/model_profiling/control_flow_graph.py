@@ -83,7 +83,7 @@ class Node:
         if original in self.kwargs:
             self.kwargs[new] = self.kwargs.pop(original)
         elif must_be_in_kwargs:
-            raise KeyError(f"original is not in args and not in kwargs, original={original}")
+            raise KeyError(f"original is not in args and not in kwargs, original={original}\nself={self}")
 
     def remove_input(self, original):
         must_be_in_kwargs = False
@@ -116,6 +116,8 @@ class Node:
 
         return node
 
+    def __repr__(self):
+        return  str(f"id: {self.id}, scope:{self.scope}, type:{self.type}")
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
@@ -146,8 +148,8 @@ class Graph():
         # Merge edge weights.
         u.maybe_create_compound_edge_weights(edge_weight_function)
         v.maybe_create_compound_edge_weights(edge_weight_function)
-        for id, weight in v.compound_edge_weights:
-            if id in v.compound_edge_weights:
+        for id, weight in v.compound_edge_weights.items():
+            if id in u.compound_edge_weights:
                 u.compound_edge_weights[id] += weight
             else:
                 u.compound_edge_weights[id] = weight
@@ -156,22 +158,30 @@ class Graph():
         # TODO: we don't know about other x->v or u->y
         # Needs outside control to with longest path to make it accurate in case of concurrent ops
         # (there is a path u->v hence its sequential).
-        u.weight.forward_time += v.weight.forward_time
-        u.weight.backward_time += v.weight.backward_time
+        weight = ExecTimes(u.weight.forward_time + v.weight.forward_time,
+                           u.weight.backward_time + v.weight.backward_time
+                           )
+        # u.weight.forward_time += v.weight.forward_time
+        # u.weight.backward_time += v.weight.backward_time
+        u.weight = weight
 
         # Do the coarsening
         for nn in v.out_edges:
             u.out_edges.append(nn)
-
-        u.out_edges.extend(v.out_edges)
-        u.args.extend(v.args)
-        u.kwargs.update(v.kwargs)
-
-        for nn in v.out_edges:
             nn.replace_input(v, u)
-        for nn in v.in_edges:
+        #
+        # for nn in v.in_edges:
+        #     nn.remove_output(v)
+        #     nn.add_out_edge(u)
+
+        for nn in v.args:
             nn.remove_output(v)
             nn.add_out_edge(u)
+            u.args.append(nn)
+        for nn, nnv in v.kwargs.values():
+            nn.remove_output(v)
+            nn.add_out_edge(u)
+            u.kwargs[nn] = nnv
 
         u.out_edges.sort(key=lambda x: x.id)
         u.args.sort(key=lambda x: x.id)
@@ -187,6 +197,13 @@ class Graph():
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
+
+    @property
+    def non_input_nodes(self) -> Iterable[Node]:
+        for n in self._nodes.values():
+            if n.type is NodeTypes.IN:
+                continue
+            yield n
 
     @property
     def num_nodes(self) -> int:

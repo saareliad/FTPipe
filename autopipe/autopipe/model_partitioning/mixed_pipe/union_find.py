@@ -278,6 +278,13 @@ class UnionFind(object):
         distinct_roots = sorted(distinct_roots, *args, **kwargs)
         return [set(elts[roots == root]) for root in distinct_roots]
 
+    # def distinct_roots(self):
+    #     elts = np.array(self._elts)
+    #     vfind = np.vectorize(self.find)
+    #     roots = vfind(elts)
+    #     distinct_roots = set(roots)
+    #     return distinct_roots
+
     def component_mapping(self):
         """Return a dict mapping elements to their components.
 

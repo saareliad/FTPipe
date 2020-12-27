@@ -7,7 +7,8 @@ import torch.nn as nn
 
 from .cache_utils import compute_and_cache, compute_and_maybe_cache, PickleCache, GraphCache
 from .compiler import compile_partitioned_model
-from .model_partitioning import metis_partition, acyclic_partition, partition_2dbin_pack, analyze_n_clusters, \
+from .model_partitioning import metis_partition, acyclic_partition, partition_2dbin_pack, partition_mpipe, \
+    analyze_n_clusters, \
     get_weight_functions
 from .model_partitioning.async_pipeline import partition_and_match_weights_until_last_partition_is_with_no_recomputation
 from .model_profiling import Graph, Node, profile_network, GraphProfiler, trace_module, NodeWeightFunction, \
@@ -338,6 +339,12 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
         graph, stage_to_gpu_map = partition_2dbin_pack(graph, num_gpus=nparts,
                                                        node_weight_function=node_weight_function,
                                                        **binpack_opt)
+    elif partitioning_method == "mpipe":
+        graph, stage_to_gpu_map = partition_mpipe(graph, num_gpus=nparts,
+                                                  node_weight_function=node_weight_function,
+                                                  edge_weight_function=edge_weight_function,
+                                                  **binpack_opt)
+
     else:
         raise NotImplementedError(partitioning_method)  # shouldn't happen
     return graph

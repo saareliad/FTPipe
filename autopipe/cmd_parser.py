@@ -159,7 +159,7 @@ class Parser(argparse.ArgumentParser, ABC):
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        group.add_argument("--partitioning_method", "-m", choices=["acyclic", "metis", "mpipe"], default="acyclic")
+        group.add_argument("--partitioning_method", "-m", choices=["acyclic", "metis", "2dbin", "mpipe"], default="acyclic")
         group.add_argument(
             "--generate_explicit_del",
             action="store_true",
