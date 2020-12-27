@@ -222,6 +222,10 @@ class Graph():
         return len({n.stage_id for n in self.nodes})
 
     @property
+    def unique_partitions_ids(self):
+        return {n.stage_id for n in self.nodes}
+
+    @property
     def output_scopes(self):
         return [n.scope for n in self.outputs]
 

@@ -774,11 +774,16 @@ if __name__ == '__main__':
     IN_FEATURES = 320
     OUT_FEATURES = 8
 
-    model = Sequential(
-        *[Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(
-            IN_FEATURES, IN_FEATURES),
-          Linear(IN_FEATURES, OUT_FEATURES),
-          Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES)])
+    n_encoder_decoder = 12
+
+    l = []
+    for i in range(n_encoder_decoder):
+        l.append(Linear(IN_FEATURES, IN_FEATURES))
+    l.append(Linear(IN_FEATURES, OUT_FEATURES))
+    for i in range(n_encoder_decoder):
+        l.append(Linear(OUT_FEATURES, OUT_FEATURES))
+
+    model = Sequential(*l)
 
     inputs = torch.randn(IN_FEATURES, IN_FEATURES)
 
@@ -800,7 +805,11 @@ if __name__ == '__main__':
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
                                                    node_weight_function=node_weight_function,
                                                    use_layers_graph=False)
-
+    u = graph.unique_partitions_ids
+    if None in u:
+        print(len(u) - 1)
+    else:
+        print(len(u))
 # TODO: THRESHOLD hyper-parameter can be higher.
 
 #################

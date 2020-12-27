@@ -94,10 +94,19 @@ def partition_mpipe(graph: Graph,
             best_L = L
             minmax = worstcase
         L_to_minmax[L] = worstcase
+
+    L_to_num_stages = dict()
+    for L, (work_graph, times) in L_to_res.items():
+        nstages = work_graph.num_partitions
+        if None in work_graph.unique_partitions_ids:
+            nstages -=1
+        L_to_num_stages[L] = nstages
+
     L = best_L
     work_graph = L_to_res[L][0]
     print(f"Best L is {L}")
     print("L_to_minmax:", L_to_minmax)
+    print("L_to_num_stages:", L_to_num_stages)
 
     # # bins to stages
     # stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
@@ -343,12 +352,16 @@ if __name__ == '__main__':
 
     IN_FEATURES = 320
     OUT_FEATURES = 8
+    n_encoder_decoder = 12
 
-    model = Sequential(
-        *[Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(
-            IN_FEATURES, IN_FEATURES),
-          Linear(IN_FEATURES, OUT_FEATURES),
-          Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES)])
+    l = []
+    for i in range(n_encoder_decoder):
+        l.append(Linear(IN_FEATURES, IN_FEATURES))
+    l.append(Linear(IN_FEATURES, OUT_FEATURES))
+    for i in range(n_encoder_decoder):
+        l.append(Linear(OUT_FEATURES, OUT_FEATURES))
+
+    model = Sequential(*l)
 
     inputs = torch.randn(IN_FEATURES, IN_FEATURES)
 
