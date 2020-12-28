@@ -42,8 +42,10 @@ class Refiner:
         self.num_gpus = num_gpus
 
         # Note: summing fwd+bwd, ratio=1 TODO: ratio!=1
-        stage_to_comp_cost = {stage_id: sum(cwf.calculate_comp(nodes)) for stage_id, nodes in stage_to_nodes.items()}
+        stage_to_split_comp_cost = {stage_id: cwf.calculate_comp(nodes) for stage_id, nodes in stage_to_nodes.items()}
+        stage_to_comp_cost = {stage_id: sum(v) for stage_id, v in stage_to_split_comp_cost.items()}
         self.stage_to_comp_cost = stage_to_comp_cost
+        self.stage_to_split_comp_cost = stage_to_split_comp_cost
 
         gpu_to_comp_cost = {gpu_id: 0 for gpu_id in range(num_gpus)}
         for stage_id, nodes in stage_to_nodes.items():
@@ -68,7 +70,10 @@ class Refiner:
 
         stage_to_cost = {
             stage_id: cwf(nodes, boarders=stage_borders[stage_id],
-                          total_gpu_comp_cost=gpu_to_comp_cost[stage_to_gpu[stage_id]]) for
+                          total_gpu_comp_cost=gpu_to_comp_cost[stage_to_gpu[stage_id]],
+                          total_stage_comp_cost_fwd=self.stage_to_split_comp_cost[stage_id][0],
+                          total_stage_comp_cost_bwd=self.stage_to_split_comp_cost[stage_id][1]
+                          ) for
             stage_id, nodes in stage_to_nodes.items()}
         return stage_to_cost
 
@@ -103,6 +108,7 @@ class Refiner:
         # assert new_stage_id >= prev_stage_id  # TODO: concurrent stages
         prev_gpu_id = self.stage_to_gpu[prev_stage_id]  # optionally: assert
         new_gpu_id = self.stage_to_gpu[new_stage_id]
+        nwf = self.nwf
         for node in nodes:
             node.stage_id = new_stage_id
             node.gpu_id = new_gpu_id
@@ -111,9 +117,27 @@ class Refiner:
             if len(self.stage_to_nodes[prev_stage_id]) == 0:
                 warnings.warn(f"stage {prev_stage_id} eliminated in refinement")
 
-            comp_cost = self.nwf(node)
+            tmp = nwf.ratio
+            assert tmp == 1
+
+            nwf.ratio = 0
+            comp_cost_fwd = nwf(node)
+            nwf.ratio = -1
+            comp_cost_bwd = nwf(node)
+
+            nwf.ratio = 1
+
+            comp_cost = comp_cost_bwd + comp_cost_fwd
+
+            # comp_cost = self.nwf(node)
             self.stage_to_comp_cost[prev_stage_id] -= comp_cost
             self.stage_to_comp_cost[new_stage_id] += comp_cost
+
+            x = self.stage_to_split_comp_cost[prev_stage_id]
+            self.stage_to_split_comp_cost[prev_stage_id] = (x[0] - comp_cost_fwd, x[1] - comp_cost_bwd)
+
+            y = self.stage_to_split_comp_cost[new_stage_id]
+            self.stage_to_split_comp_cost[new_stage_id] = (y[0] + comp_cost_fwd, y[1] + comp_cost_bwd)
 
             self.gpu_to_comp_cost[prev_gpu_id] -= comp_cost
             self.gpu_to_comp_cost[new_gpu_id] += comp_cost

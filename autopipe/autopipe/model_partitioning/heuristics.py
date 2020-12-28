@@ -45,6 +45,8 @@ class NodeWeightFunction():
         assert isinstance(node.weight, ExecTimes)
         if self.ratio < 0:
             return self.MULT_FACTOR * node.weight.backward_time
+        elif self.ratio == 0:
+            return self.MULT_FACTOR * node.weight.forward_time
         else:
             # TODO: it has to be consistent with communication times to work
             # NOTE: / (ratio + 1) is removed, as we do in edge.
@@ -202,15 +204,18 @@ class CoarsenedWeightFunction():
 
         if not is_comm_fwd and not is_comm_bwd:
             cost = combined_comp_cost
-        elif not is_comm_fwd and is_comm_bwd:
-            raise NotImplementedError("time*relative power")
-            cost_fwd = comp_fwd
-            cost_bwd = comm_bwd  # HACK
-            cost = cost_bwd + cost_fwd
         elif is_comm_fwd and not is_comm_bwd:
-            raise NotImplementedError("time*relative power")
+            comp_bwd = total_gpu_comp_cost * (
+                        total_stage_comp_cost_bwd / (total_stage_comp_cost_bwd + total_stage_comp_cost_fwd))
             cost_fwd = comm_fwd
-            cost_bwd = comp_bwd  # HACK
+            cost_bwd = max(comp_bwd, comm_bwd)  # HACK
+            cost = cost_bwd + cost_fwd
+        elif not is_comm_fwd and is_comm_bwd:
+            # not possible AFAIK
+            comp_fwd = total_gpu_comp_cost * (
+                        total_stage_comp_cost_fwd / (total_stage_comp_cost_bwd + total_stage_comp_cost_fwd))
+            cost_fwd = max(comp_fwd, comm_fwd)
+            cost_bwd = comm_bwd  # HACK
             cost = cost_bwd + cost_fwd
         else:
             cost = comm_bwd + comm_fwd
