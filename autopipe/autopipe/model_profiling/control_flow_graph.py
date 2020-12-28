@@ -117,7 +117,8 @@ class Node:
         return node
 
     def __repr__(self):
-        return  str(f"id: {self.id}, scope:{self.scope}, type:{self.type}")
+        return str(f"id: {self.id}, scope:{self.scope}, type:{self.type}")
+
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
@@ -136,6 +137,9 @@ class Graph():
         self.basic_blocks = basic_blocks
 
     def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction):
+        assert uid != vid
+        # assert uid < vid  # TODO: super dangerous, but allowing it.
+
         # TODO: parallel edges? u->v u->v
         # TODO: check if its legal merge
         # does not exits a path from the set {n : u < n < v} to v.
@@ -169,23 +173,33 @@ class Graph():
         for nn in v.out_edges:
             u.out_edges.append(nn)
             nn.replace_input(v, u)
-        #
-        # for nn in v.in_edges:
-        #     nn.remove_output(v)
-        #     nn.add_out_edge(u)
+            nn.args = remove_dups(nn.args, nn)
 
         for nn in v.args:
             nn.remove_output(v)
             nn.add_out_edge(u)
             u.args.append(nn)
+
+            nn.out_edges = remove_dups(nn.out_edges, nn)
+
         for nn, nnv in v.kwargs.values():
             nn.remove_output(v)
             nn.add_out_edge(u)
+            nn.out_edges = remove_dups(nn.out_edges, nn)
             u.kwargs[nn] = nnv
 
-        u.out_edges.sort(key=lambda x: x.id)
-        u.args.sort(key=lambda x: x.id)
+        u.args = remove_dups(u.args, u)
+        u.out_edges = remove_dups(u.out_edges, u)
         del self._nodes[vid]
+
+        # Massive check for dups....
+        # for n in self.nodes:
+        #     assert n not in n.out_edges, n
+        #     assert n not in n.in_edges, n
+        #     assert len(set(n.out_edges)) == len(n.out_edges), n
+        #     assert len(set(n.in_edges)) == len(n.in_edges), n
+
+
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -733,6 +747,16 @@ class Graph():
             n.args = set(in_edges)
             n.kwargs.clear()
 
+            if n in n.out_edges:
+                warnings.warn(f"Node with self loop {n}")
+                n.out_edges.remove(n)
+            if n in n.args:
+                warnings.warn(f"Node with self loop {n}")
+                n.args.remove(n)
+
+            n.args = sorted(n.args, key=lambda x: x.id)
+            n.out_edges = sorted(n.out_edges, key=lambda x: x.id)
+
         return copy
 
     def topo_sort(self, verbose=False):
@@ -804,3 +828,10 @@ class Graph():
             #             self._nodes: GraphNodes = nodes
             _nodes = {n.topo_sort_id: n for n in self.nodes}
             self._nodes = _nodes
+
+
+def remove_dups(lnodes: List[Node], myself):
+    s = set(lnodes)
+    if myself in s:
+        s.remove(myself)
+    return sorted(s, key=lambda x: x.id)

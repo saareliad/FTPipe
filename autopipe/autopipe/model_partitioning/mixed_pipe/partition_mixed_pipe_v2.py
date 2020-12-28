@@ -26,6 +26,7 @@ def partition_mpipe(graph: Graph,
                     **kwargs
                     ):
     print("mpipe got kwargs:", kwargs.keys())
+    assert use_layers_graph
     graph.topo_sort()
     if use_layers_graph:
         work_graph, lookup = graph.layers_graph()
@@ -35,11 +36,12 @@ def partition_mpipe(graph: Graph,
     P = num_gpus
     # TODO: Choose L, loop over L's
     saved_work_graph = work_graph
+    saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
 
     L_to_res = dict()
     max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 4 * P + 1)
     for L in range(P, max_num):
-        work_graph = Graph.from_other(saved_work_graph)
+        work_graph = Graph.from_other(saved_work_graph_without_par_edges)
 
         # coarsening
         hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
@@ -113,11 +115,14 @@ def partition_mpipe(graph: Graph,
     print("L_to_minmax:", L_to_minmax)
     print("L_to_num_stages:", L_to_num_stages)
 
+
     # # bins to stages
     # stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
 
     work_graph = post_process_partition(work_graph)
 
+    # Note: this is a must
+    # Copy work_graph -> saved_work_graph, since our graph is without parallel edges.
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
