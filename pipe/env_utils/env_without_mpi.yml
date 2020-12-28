@@ -25,7 +25,8 @@ dependencies:
     - autopep8
     - transformers
     - yapf
-    - t5
+    - t5=0.7.1
     - datasets
     - seaborn
     - timm
+    - sortedcollections

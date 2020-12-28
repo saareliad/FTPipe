@@ -1,9 +1,9 @@
 from copy import deepcopy
 from pprint import pprint
 from typing import Optional, List, Tuple, Set
-from sortedcollections import ValueSortedDict
 
 import networkx as nx
+from sortedcollections import ValueSortedDict
 
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
@@ -36,7 +36,7 @@ def partition_mpipe(graph: Graph,
     saved_work_graph = work_graph
 
     L_to_res = dict()
-    max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 4*P+1)
+    max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 4 * P + 1)
     for L in range(P, max_num):
         work_graph = Graph.from_other(saved_work_graph)
 
@@ -103,7 +103,7 @@ def partition_mpipe(graph: Graph,
     for L, (work_graph, times) in L_to_res.items():
         nstages = work_graph.num_partitions
         if None in work_graph.unique_partitions_ids:
-            nstages -=1
+            nstages -= 1
         L_to_num_stages[L] = nstages
 
     L = best_L
@@ -125,7 +125,7 @@ def partition_mpipe(graph: Graph,
     return graph, stage_to_gpu_map
 
 
-def contract(graph: Graph, matching: List[List[Node]], uf: Optional[UnionFind] = None) -> Graph:
+def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction, uf: Optional[UnionFind] = None) -> Graph:
     # if not matching:
     #     return graph
     new_graph = Graph.from_other(graph)
@@ -133,7 +133,7 @@ def contract(graph: Graph, matching: List[List[Node]], uf: Optional[UnionFind] =
     for m in sorted(matching, key=lambda x: x[0].id, reverse=True):
         root = m[0]
         for i in m[1:]:
-            new_graph.merge(root.id, i.id)
+            new_graph.merge(root.id, i.id, edge_weight_function=edge_weight_function)
             if uf is not None:
                 uf.union(x=root.id, y=i.id)
     return new_graph
@@ -149,7 +149,7 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
 
     p = graph
     matching = penalty_edges_matching(graph=p, edge_weight_function=edge_weight_function)
-    g = contract(p, matching, uf=uf)
+    g = contract(p, matching, edge_weight_function, uf=uf)
     hierarchy.append((p, matching, g, deepcopy(uf)))
     p = g
 
@@ -349,7 +349,7 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, ):
     return bins
 
 
-if __name__ == '__main__':
+def main():
     from autopipe.autopipe import build_profiled_graph
     import torch
     from torch.nn import Sequential, Linear
@@ -388,3 +388,7 @@ if __name__ == '__main__':
                                               node_weight_function=node_weight_function,
                                               edge_weight_function=edge_weight_function,
                                               use_layers_graph=True)
+
+
+if __name__ == '__main__':
+    main()

@@ -560,7 +560,7 @@ class Graph():
         return cls(None, None, None, None, None).load_state(graph.state())
 
     @classmethod
-    def from_other(cls, graph: "Graph"):
+    def from_other(cls, graph: "Graph") -> "Graph":
         return cls(None, None, None, None, None).load_state(graph.state())
 
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
