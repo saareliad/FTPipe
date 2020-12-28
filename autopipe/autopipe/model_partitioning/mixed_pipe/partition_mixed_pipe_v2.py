@@ -1,4 +1,6 @@
+import multiprocessing
 import warnings
+from collections import defaultdict
 from copy import deepcopy
 from pprint import pprint
 from typing import Optional, List, Tuple, Set
@@ -23,6 +25,9 @@ def partition_mpipe(graph: Graph,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_graph: bool = True,
                     round_limit=-1,
+                    nprocs=4,
+                    min_L=None,
+                    max_L=None,
                     **kwargs
                     ):
     print("mpipe got kwargs:", kwargs.keys())
@@ -39,51 +44,27 @@ def partition_mpipe(graph: Graph,
     saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
 
     L_to_res = dict()
-    max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 4 * P + 1)
-    for L in range(P, max_num):
-        work_graph = Graph.from_other(saved_work_graph_without_par_edges)
+    max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
+    L_range = list(range(P, max_num))
 
-        # coarsening
-        hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
-        # the output here should be L stages,
-        last_graph: Graph = hierarchy[-1][-2]
-        print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
-        # greedy load balance
-        bins = greedy_best_fit(last_graph, P, node_weight_function)
+    if nprocs > 1:
+        # Parallel version
+        worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
+                                        saved_work_graph_without_par_edges, work_graph) for L in L_range]
 
-        # TODO: print more stats, e.g comp/comm ratio, its interesting
-        times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
-        print("bin times:")
-        pprint(times)
+        with multiprocessing.Pool(nprocs) as pool:
+            results = pool.map(lworker, worker_args)
 
-        # Bins to GPUs:
-        for i, bin_nodes in bins.items():
-            for n in bin_nodes:
-                n.gpu_id = i
+        for L, (times, work_graph) in zip(L_range, results):
+            L_to_res[L] = (work_graph, times)
+    else:
+        # sequential version
+        for L in L_range:
+            times, work_graph = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
+                                        saved_work_graph_without_par_edges, work_graph)
 
-        # TODO: remove redundancy, its re-creating bins...
-        id_to_node_worked_on = {n.id: n for n in last_graph.non_input_nodes}
-        # Note: assert_missing_in_bins=False, since its the coarsened graph with many missing ids.
-        n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on, assert_missing_in_bins=False)
-        print(f"After greedy assignment: got {n_stages} stages")
-        # un-coarsening
-        first_graph = work_graph
-        full_uf: UnionFind = hierarchy[-1][-1]
-        # copy stage_ids and gpu_ids.
-
-        component_mapping = full_uf.component_mapping()
-        for v in id_to_node_worked_on:
-            for i in component_mapping[v]:
-                a = first_graph[i]
-                b = last_graph[v]
-                a.stage_id = b.stage_id
-                a.gpu_id = b.gpu_id
-        # Refinement
-        refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
-               round_limit=round_limit)
-
-        # save res
-        L_to_res[L] = (work_graph, times)
+            # save res
+            L_to_res[L] = (work_graph, times)
 
     # TODO: choose best L times
     # TODO: fix the assert to torch.allclose, it fails due float round error even though same number.
@@ -127,9 +108,56 @@ def partition_mpipe(graph: Graph,
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
 
+    bins = defaultdict(list)
+    for node in graph.nodes:
+        if node.gpu_id is None:
+            continue
+        bins[node.gpu_id].append(node)
+
     stage_to_gpu_map = convert_handle_missing_print(bins, graph)
 
     return graph, stage_to_gpu_map
+
+
+def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
+            work_graph):
+    work_graph = Graph.from_other(saved_work_graph_without_par_edges)
+    # coarsening
+    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
+    # the output here should be L stages,
+    last_graph: Graph = hierarchy[-1][-2]
+    print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
+    # greedy load balance
+    bins = greedy_best_fit(last_graph, P, node_weight_function)
+    # TODO: print more stats, e.g comp/comm ratio, its interesting
+    times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
+    print("bin times:")
+    pprint(times)
+    # Bins to GPUs:
+    for i, bin_nodes in bins.items():
+        for n in bin_nodes:
+            n.gpu_id = i
+    # TODO: remove redundancy, its re-creating bins...
+    id_to_node_worked_on = {n.id: n for n in last_graph.non_input_nodes}
+    # Note: assert_missing_in_bins=False, since its the coarsened graph with many missing ids.
+    n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on,
+                                assert_missing_in_bins=False)
+    print(f"After greedy assignment: got {n_stages} stages")
+    # un-coarsening
+    first_graph = work_graph
+    full_uf: UnionFind = hierarchy[-1][-1]
+    # copy stage_ids and gpu_ids.
+    component_mapping = full_uf.component_mapping()
+    for v in id_to_node_worked_on:
+        for i in component_mapping[v]:
+            a = first_graph[i]
+            b = last_graph[v]
+            a.stage_id = b.stage_id
+            a.gpu_id = b.gpu_id
+    # Refinement
+    refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
+           round_limit=round_limit)
+    return times, work_graph
 
 
 def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction, uf: Optional[UnionFind] = None) -> Graph:
