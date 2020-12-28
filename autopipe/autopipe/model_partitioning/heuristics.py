@@ -92,14 +92,14 @@ class EdgeWeightFunction():
                 for shape, dtype in zip(flatten(u.tensor_shape),
                                         flatten(u.tensor_dtype)):
                     if isinstance(shape, torch.Size):
-                        v = reduce(operator.mul, shape, 1)
+                        tmp = reduce(operator.mul, shape, 1)
                         # include dtype size
-                        v *= torch.empty(1, dtype=dtype).element_size()
+                        tmp *= torch.empty(1, dtype=dtype).element_size()
                         if u.req_grad:
-                            bwd_volume += v
+                            bwd_volume += tmp
                     else:
                         raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
-                    volume += v
+                    volume += tmp
 
             # TODO: take (partial) care of heterogeneous bandwidth in refinement.
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms

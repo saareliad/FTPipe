@@ -11,6 +11,7 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
 from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import stages_from_bins, \
     convert_handle_missing_print
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
+from autopipe.autopipe.model_partitioning.mixed_pipe.refine import refine
 from autopipe.autopipe.model_partitioning.mixed_pipe.union_find import UnionFind
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
@@ -20,6 +21,7 @@ def partition_mpipe(graph: Graph,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_graph: bool = True,
+                    round_limit=-1,
                     **kwargs
                     ):
     print("mpipe got kwargs:", kwargs.keys())
@@ -73,6 +75,8 @@ def partition_mpipe(graph: Graph,
                 a.stage_id = b.stage_id
                 a.gpu_id = b.gpu_id
         # TODO Refinement
+        refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
+               round_limit=round_limit)
 
         # TODO: save res
         L_to_res[L] = (work_graph, times)
@@ -212,7 +216,7 @@ def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunctio
         # TODO: if this creates a cycle we have nothing to do, but manually wrap it and disallow communication of weird stuff
     """
     matching = []
-    for node in graph.nodes:
+    for node in graph.non_input_nodes:
         check = False
         for out in node.out_edges:
             if edge_weight_function(node, out) == edge_weight_function.penalty:
