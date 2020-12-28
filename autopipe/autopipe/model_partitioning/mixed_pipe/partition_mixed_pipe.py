@@ -388,7 +388,8 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False):
+def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False,
+                     assert_missing_in_bins=True):
     # shallow copy bins, excluding inputs:
     bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
 
@@ -400,7 +401,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
         unbroken_stages = get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
                                               nodes_with_out_edges_to_different_gpu)
 
-        broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id)
+        broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=assert_missing_in_bins)
 
         if verbose:
             # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
@@ -433,7 +434,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
     # break cycles <--- TODO: redundant
 
 
-def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id):
+def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=True):
     # Now, it is problematic if we have:
     #  a->d, b->d, c->d, b->c, and b->d
     # each on different gpu.
@@ -483,12 +484,13 @@ def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages
                     cur_set = list()
 
                     # FIXME Assert:
-                    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
-                    for mid in missing_topo_sort_ids:
-                        in_bins = any(map(lambda v: mid in v, bins_to_id.values()))
-                        if not in_bins:
-                            print(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
-                            raise ValueError(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+                    if assert_missing_in_bins:
+                        missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
+                        for mid in missing_topo_sort_ids:
+                            in_bins = any(map(lambda v: mid in v, bins_to_id.values()))
+                            if not in_bins:
+                                print(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+                                raise ValueError(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
 
             if topo_sort_id in id_to_node_worked_on:
                 cur_set.append(topo_sort_id)

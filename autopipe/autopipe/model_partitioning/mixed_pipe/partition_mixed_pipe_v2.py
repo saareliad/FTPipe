@@ -63,7 +63,8 @@ def partition_mpipe(graph: Graph,
 
         # TODO: remove redundancy, its re-creating bins...
         id_to_node_worked_on = {n.id: n for n in last_graph.non_input_nodes}
-        n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on)
+        # Note: assert_missing_in_bins=False, since its the coarsened graph with many missing ids.
+        n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on, assert_missing_in_bins=False)
         print(f"After greedy assignment: got {n_stages} stages")
         # un-coarsening
         first_graph = work_graph
