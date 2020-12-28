@@ -1,7 +1,7 @@
 import operator
 import warnings
 from functools import reduce
-from typing import List
+from typing import Set, Tuple, Optional, Iterable
 
 import torch
 
@@ -101,9 +101,15 @@ class EdgeWeightFunction():
                         raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
                     volume += v
 
+            # TODO: take (partial) care of heterogeneous bandwidth in refinement.
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-            volume /= (MB * self.bw)
-            bwd_volume /= (MB * self.bw)
+            if u.gpu_id == v.gpu_id:  # u.gpu_id is not None and v.gpu_id is not None and
+                bw = 550  # TODO: check the exact number, its some high number
+            else:
+                bw = self.bw
+
+            volume /= (MB * bw)
+            bwd_volume /= (MB * bw)
             # NOTE (1): we usually traverse every edge twice: activations and gradients. (bwd: not-always)
             # TODO: change name?
             if self.ratio < 0:
@@ -156,29 +162,65 @@ class CoarsenedWeightFunction():
         self.ewf = edge_weight_function
         self.nwf = node_weight_function
 
-    def __call__(self, nodes: List[Node], ):
-        set_nodes = set(nodes)
+        assert self.nwf.MULT_FACTOR == self.ewf.MULT_FACTOR
+        assert self.ewf.MULT_FACTOR == self.ewf.penalty
 
-        outgoing_edges = set()
-        incoming_edges = set()
+        # TODO: ratio < 1 is needed for GPipe (or sync pipeline)
+        if self.nwf.ratio != 1:
+            raise NotImplementedError()
 
-        outgoing_nodes = set()
-        incoming_nodes = set()
+    def __call__(self, nodes: Iterable[Node],
+                 boarders: Optional[Tuple[Set[Tuple[Node, Node]], Set[Node], Set[Tuple[Node, Node]], Set[Node]]] = None,
+                 total_gpu_comp_cost: Optional[float] = None, total_stage_comp_cost_fwd: Optional[float] = None,
+                 total_stage_comp_cost_bwd: Optional[float] = None):
+        if boarders:
+            outgoing_edges, _, incomming_edges, _ = boarders
+        else:
+            outgoing_edges, _, incomming_edges, _ = self.calculate_borders(nodes)
 
-        for node in nodes:
-            for out in node.out_edges:
-                if out not in set_nodes:
-                    outgoing_edges.add((node, out))
-                    outgoing_nodes.add(node)
+        # TODO: ratio < 1 is needed for GPipe (or sync pipeline), checked at init.
+        if total_gpu_comp_cost is None:
+            comp_bwd, comp_fwd = self.calculate_comp(nodes)
 
-            for inode in node.in_edges:
-                if inode not in set_nodes:
-                    incoming_edges.add((inode, node))
-                    incoming_nodes.add(node)
+            combined_comp_cost = comp_bwd + comp_fwd
+            overlaped_comp_fwd = combined_comp_cost
+            overlaped_comp_bwd = combined_comp_cost
+        else:
+            combined_comp_cost = total_gpu_comp_cost
+            overlaped_comp_fwd = combined_comp_cost
+            overlaped_comp_bwd = combined_comp_cost
 
+        comm_fwd = sum(self.ewf(*e) for e in outgoing_edges)
+        tmp = self.ewf.ratio
+        assert tmp == 0
+        self.ewf.ratio = -1
+        comm_bwd = sum(self.ewf(*e) for e in incomming_edges)
+        self.ewf.ratio = 0
+
+        is_comm_fwd = overlaped_comp_fwd <= comm_fwd
+        is_comm_bwd = overlaped_comp_bwd <= comm_bwd
+
+        if not is_comm_fwd and not is_comm_bwd:
+            cost = combined_comp_cost
+        elif not is_comm_fwd and is_comm_bwd:
+            raise NotImplementedError("time*relative power")
+            cost_fwd = comp_fwd
+            cost_bwd = comm_bwd  # HACK
+            cost = cost_bwd + cost_fwd
+        elif is_comm_fwd and not is_comm_bwd:
+            raise NotImplementedError("time*relative power")
+            cost_fwd = comm_fwd
+            cost_bwd = comp_bwd  # HACK
+            cost = cost_bwd + cost_fwd
+        else:
+            cost = comm_bwd + comm_fwd
+
+        return cost
+
+    def calculate_comp(self, nodes: Iterable[Node]):
         if not self.do_longest_path:
-            comp_fwd = sum(node.weight.forward_time for node in set_nodes)
-            comp_bwd = sum(node.weight.backward_time for node in set_nodes)
+            comp_fwd = sum(node.weight.forward_time for node in nodes)
+            comp_bwd = sum(node.weight.backward_time for node in nodes)
         else:
             raise NotImplementedError()
             # TODO Find longest path...
@@ -194,21 +236,27 @@ class CoarsenedWeightFunction():
             #         if inode in set_nodes:
             #             g.add_edge(inode.id, node.id)
 
-        comp_fwd *= self.ewf.MULT_FACTOR
-        comp_bwd *= self.ewf.MULT_FACTOR
-        if self.ewf.ratio == 0:
-            comm_fwd = sum(self.ewf(*e) for e in outgoing_edges)
-            # HACK: this works since bwd_comm <= fwd_comm ("kal vahomer")
-            # This is a fix to PipeDream modeling (page 6: 2a/B  is incorrect)
-            if comp_fwd + comp_bwd > comm_fwd:
-                cost_fwd = comp_fwd
-                cost_bwd = comp_bwd
-                cost = cost_fwd + cost_bwd
-            else:
-                cost_fwd = comm_fwd
-                cost_bwd = comm_fwd
-                cost = cost_bwd + cost_fwd
-        else:
-            raise NotImplementedError("communication modeling is problematic")
+        comp_fwd *= self.nwf.MULT_FACTOR
+        comp_bwd *= self.nwf.MULT_FACTOR
 
-        return cost
+        return comp_bwd, comp_fwd
+
+    @staticmethod
+    def calculate_borders(nodes: Iterable[Node]) -> Tuple[
+        Set[Tuple[Node, Node]], Set[Node], Set[Tuple[Node, Node]], Set[Node]]:
+        set_nodes = set(nodes)
+        outgoing_edges = set()
+        incoming_edges = set()
+        outgoing_nodes = set()
+        incoming_nodes = set()
+        for node in nodes:
+            for out in node.out_edges:
+                if out not in set_nodes:
+                    outgoing_edges.add((node, out))
+                    outgoing_nodes.add(node)
+
+            for inode in node.in_edges:
+                if inode not in set_nodes:
+                    incoming_edges.add((inode, node))
+                    incoming_nodes.add(node)
+        return outgoing_edges, outgoing_nodes, incoming_edges, incoming_nodes
