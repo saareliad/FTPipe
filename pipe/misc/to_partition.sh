@@ -12,6 +12,7 @@ python -m autopipe.partition t5 --model_name_or_path t5-3b \
 --max_seq_length 512 \
 --answer_max_seq_length 4 \
 --ct t5_3b_trace_wo_blocks \
+-c t5_3b_profiles_wo_blocks \
 --save_memory_mode \
 --preset ftpipe \
 --partitioning_method mpipe

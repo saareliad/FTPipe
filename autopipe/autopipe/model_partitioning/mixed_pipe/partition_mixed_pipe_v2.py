@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from pprint import pprint
 from typing import Optional, List, Tuple, Set
@@ -40,12 +41,12 @@ def partition_mpipe(graph: Graph,
     for L in range(P, max_num):
         work_graph = Graph.from_other(saved_work_graph)
 
-        # TODO: coarsening
+        # coarsening
         hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
-        # TODO: the output here should be L stages,
+        # the output here should be L stages,
         last_graph: Graph = hierarchy[-1][-2]
         print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
-        # TODO: greedy load balance
+        # greedy load balance
         bins = greedy_best_fit(last_graph, P, node_weight_function)
 
         # TODO: print more stats, e.g comp/comm ratio, its interesting
@@ -58,11 +59,11 @@ def partition_mpipe(graph: Graph,
             for n in bin_nodes:
                 n.gpu_id = i
 
-        # TODO: remove redudency, its re-creating bins...
+        # TODO: remove redundancy, its re-creating bins...
         id_to_node_worked_on = {n.id: n for n in last_graph.non_input_nodes}
         n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on)
         print(f"After greedy assignment: got {n_stages} stages")
-        # TODO: un-coarsening
+        # un-coarsening
         first_graph = work_graph
         full_uf: UnionFind = hierarchy[-1][-1]
         # copy stage_ids and gpu_ids.
@@ -74,11 +75,11 @@ def partition_mpipe(graph: Graph,
                 b = last_graph[v]
                 a.stage_id = b.stage_id
                 a.gpu_id = b.gpu_id
-        # TODO Refinement
+        # Refinement
         refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
                round_limit=round_limit)
 
-        # TODO: save res
+        # save res
         L_to_res[L] = (work_graph, times)
 
     # TODO: choose best L times
@@ -220,6 +221,9 @@ def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunctio
         check = False
         for out in node.out_edges:
             if edge_weight_function(node, out) == edge_weight_function.penalty:
+                if check_cycle(graph, node, out):
+                    warnings.warn(f"can't compress edge with penalty (node,out)={(node,out)}")
+                    continue
                 matching.append([node, out])  # <---- into node
                 # TODO: we have to handle doubles and so on...
                 check = True

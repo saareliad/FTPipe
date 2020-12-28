@@ -594,7 +594,7 @@ class Graph():
                     warnings.warn(f"HACK: input_or_buff_param_with_one_use_at_end=True, for {node.scope},"
                                   f"list(node.out_edges)[0].id={list(node.out_edges)[0].id} "
                                   f"node.id={node.id}, "
-                                  f"len(self)=len(self) ")
+                                  f"len(self)={len(self)}")
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]

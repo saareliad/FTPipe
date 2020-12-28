@@ -76,7 +76,7 @@ class EdgeWeightFunction():
             # no constant or scalars on boundaries
             # no double penalties so we do not multiply by MULT_FACTOR
             w = self.penalty
-        elif self.penalize_non_tensors and u.type is NodeTypes.CONSTANT or u.value_type in [int, bool, float]:
+        elif self.penalize_non_tensors and (u.type is NodeTypes.CONSTANT or u.value_type in [int, bool, float]):
             w = self.penalty
 
         else:
