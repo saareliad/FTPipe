@@ -151,7 +151,7 @@ class Refiner:
         # post_process_partition(self.graph)  # Fixme
 
     @staticmethod
-    def is_move_valid_local(node):
+    def is_fwd_move_valid_local(node):
         # initial validity:
         cur_stage = node.stage_id
         others = [nn.stage_id for nn in node.out_edges]
@@ -161,9 +161,30 @@ class Refiner:
         return True
 
     @staticmethod
-    def is_move_valid_topo(node, dst_stage_id):
+    def is_fwd_move_valid_topo(node, dst_stage_id):
         for nn in node.out_edges:
             if nn.stage_id < dst_stage_id:  # TODO: concurrent stages?
+                return False
+        return True
+
+    @staticmethod
+    def is_bwd_move_valid_local(node):
+        # initial validity:
+        assert not node.kwargs, "should be eliminated by parallel edges."
+
+        cur_stage = node.stage_id
+        others = [nn.stage_id for nn in node.args]
+        for i in others:
+            if i == cur_stage:
+                return False
+        return True
+
+    @staticmethod
+    def is_bwd_move_valid_topo(node, dst_stage_id):
+        assert not node.kwargs, "should be eliminated by parallel edges."
+
+        for nn in node.args:
+            if nn.stage_id > dst_stage_id:
                 return False
         return True
 
@@ -171,7 +192,7 @@ class Refiner:
 def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_function: EdgeWeightFunction,
            round_limit=-1):
     # O(L*N) = O(P*N)
-    # reassing partition indices to topo order
+    # reassign partition indices to topo order
     re_assign_partition_indices(graph)
     refiner = Refiner(graph, node_weight_function, edge_weight_function)
     #
@@ -191,7 +212,6 @@ def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_f
 
             invalid_local_nodes = set()
             valid_local_noedes = set()
-            moved_local = set()
 
             # Outgoing:
             for e in sorted(outgoing_edges, key=lambda x: (x[0].id, x[1].id), reverse=True):
@@ -200,23 +220,42 @@ def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_f
 
                 if node not in valid_local_noedes:
                     if node not in valid_local_noedes and (node in invalid_local_nodes):
-                        if refiner.is_move_valid_local(node):
+                        if refiner.is_fwd_move_valid_local(node):
                             valid_local_noedes.add(node)
                         else:
                             invalid_local_nodes.add(node)
                             continue
 
-                if not refiner.is_move_valid_topo(node, dst_stage):
+                if not refiner.is_fwd_move_valid_topo(node, dst_stage):
                     continue
 
                 moved = refiner.update_on_move(nodes=[node], new_stage_id=dst_stage, escape_minima=False)
                 if moved:
-                    moved_local.add(node)
                     num_moved += 1
+
+        num_moved_fwd = num_moved
+        # TODO: moves backward.
+        for stage_id, borders in reversed(refiner.stage_borders.items()):
+            outgoing_edges, outgoing_nodes, incoming_edges, incoming_nodes = borders
+
+            # Ingoing:
+            for e in sorted(incoming_edges, key=lambda x: (x[0].id, x[1].id), reverse=False):
+                dst_stage = e[0].stage_id
+                node = e[1]
+
+                if not refiner.is_bwd_move_valid_topo(node, dst_stage):
+                    continue
+
+                moved = refiner.update_on_move(nodes=[node], new_stage_id=dst_stage, escape_minima=False)
+                if moved:
+                    num_moved += 1
+
+        # NOTE: remember : breaking ties is alowed only in one direction.
+        num_moved_bwd = num_moved - num_moved_fwd
         total_moves += num_moved
-        print(f"Round {rounds}: num_moved {num_moved}")
+        print(f"Round {rounds}: num_moved {num_moved}, (fwd {num_moved_fwd}, bwd {num_moved_bwd})")
 
     print(f"Refinement ended after {rounds} rounds and {total_moves} moves")
+    return refiner.best_objective
     # try invalids? next round
-    # ingoing? taken care by outgoin!
     # TODO: try with merges?

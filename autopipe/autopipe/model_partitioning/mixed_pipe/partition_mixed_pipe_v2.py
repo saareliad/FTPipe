@@ -20,8 +20,8 @@ from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
 
 def _lworker(args):
-    (times, work_graph) = lworker(*args)
-    return times, work_graph.state()
+    (times, work_graph, best_objective) = lworker(*args)
+    return times, work_graph.state(), best_objective
 
 
 def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
@@ -63,9 +63,10 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
             a.stage_id = b.stage_id
             a.gpu_id = b.gpu_id
     # Refinement
-    refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
+    best_objective = refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
            round_limit=round_limit)
-    return times, work_graph
+
+    return times, work_graph, best_objective
 
 
 def partition_mpipe(graph: Graph,
@@ -74,7 +75,7 @@ def partition_mpipe(graph: Graph,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
                     use_layers_graph: bool = True,
                     round_limit=-1,
-                    nprocs=4,
+                    nprocs=1,
                     min_L=None,
                     max_L=None,
                     **kwargs
@@ -96,6 +97,10 @@ def partition_mpipe(graph: Graph,
     max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
     L_range = list(range(P, max_num))
     L_range = list(range(2 * P, 2 * P + 1))  # FIXME: debugging cycles
+    L_range = list(range(8 * P, 8 * P + 1))  # FIXME: debugging cycles
+    L_range = [2*P, 4*P, 8*P, 16*P]
+    L_range = [8*P]
+
 
     if nprocs > 1 and len(L_range) > 1:
         # Parallel version
@@ -105,38 +110,59 @@ def partition_mpipe(graph: Graph,
         with multiprocessing.Pool(min(nprocs, len(L_range))) as pool:
             results = pool.map(_lworker, worker_args)
 
-        for L, (times, work_graph_state) in zip(L_range, results):
+        for L, (times, work_graph_state, best_objective) in zip(L_range, results):
             work_graph = Graph.from_state(work_graph_state)
-            L_to_res[L] = (work_graph, times)
+            L_to_res[L] = (work_graph, times, best_objective)
     else:
         # sequential version
         for L in L_range:
-            times, work_graph = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
+            times, work_graph, best_objective = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
                                         saved_work_graph_without_par_edges.state())
 
             # save res
-            L_to_res[L] = (work_graph, times)
+            L_to_res[L] = (work_graph, times, best_objective)
 
     # TODO: choose best L times
     # TODO: fix the assert to torch.allclose, it fails due float round error even though same number.
     # x = [sum(times.values()) for L, (work_graph, times) in L_to_res.items()]
     # assert all([a == x[0] for a in x]), x
 
-    best_L = None
+    # s2
+    best_Ls2 = None
     minmax = None
     L_to_minmax = dict()
-    for L, (work_graph, times) in L_to_res.items():
+    # s3
+    best_L = None
+    best_objective_so_far = None
+
+    best_objective_so_far = None
+    L_to_best_objective = dict()
+
+    L_to_num_stages = dict()
+
+
+    for L, (work_graph, times, best_objective) in L_to_res.items():
+        # s2
         worstcase = max(times.values())
-        if best_L is None:
+        if best_Ls2 is None:
             minmax = worstcase
-            best_L = L
+            best_Ls2 = L
         elif worstcase < minmax:
-            best_L = L
+            best_Ls2 = L
             minmax = worstcase
         L_to_minmax[L] = worstcase
 
-    L_to_num_stages = dict()
-    for L, (work_graph, times) in L_to_res.items():
+        # s3
+        if best_L is None:
+            best_objective_so_far = best_objective
+            best_L = L
+        elif best_objective_so_far > best_objective:
+            best_L = L
+            best_objective_so_far = best_objective
+
+        L_to_best_objective[L] = best_objective
+
+        # stages
         nstages = work_graph.num_partitions
         if None in work_graph.unique_partitions_ids:
             nstages -= 1
@@ -145,8 +171,9 @@ def partition_mpipe(graph: Graph,
     L = best_L
     work_graph = L_to_res[L][0]
     print(f"Best L is {L}")
-    print("L_to_minmax:", L_to_minmax)
+    print("L_to_minmax (stage2):", L_to_minmax)
     print("L_to_num_stages:", L_to_num_stages)
+    print("L_to_best_objective", L_to_best_objective)
 
     # # bins to stages
     # stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)

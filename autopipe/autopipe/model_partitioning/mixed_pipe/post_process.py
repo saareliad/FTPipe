@@ -9,7 +9,7 @@ __all__ = ["post_process_partition"]
 
 
 def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_error=True,
-                           assert_output_types=False, verbose_check_outputs=True) -> Graph:
+                           assert_output_types=False, verbose_check_outputs=False) -> Graph:
     """
     process the partition and optimize it
     called as part of partition_graph method
@@ -52,7 +52,7 @@ def check_partition_outputs(graph, assert_output_types=False, edge_weight_functi
     if assert_output_types:
         assert is_valid, error
     else:
-        if not is_valid:
+        if not is_valid and verbose:
             print("Output between partitions is tricky, but allowing this")
             print_all_problematic_outputs_between_partitions(graph, edge_weight_function)
 
