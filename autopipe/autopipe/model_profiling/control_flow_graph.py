@@ -570,8 +570,8 @@ class Graph():
         return cls(None, None, None, None, None).load_state(graph_data)
 
     @classmethod
-    def empty_from_other(cls, graph: "Graph"):
-        return cls(None, None, None, None, None).load_state(graph.state())
+    def from_state(cls, state) -> "Graph":
+        return cls(None, None, None, None, None).load_state(state)
 
     @classmethod
     def from_other(cls, graph: "Graph") -> "Graph":

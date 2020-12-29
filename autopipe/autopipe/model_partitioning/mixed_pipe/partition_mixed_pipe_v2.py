@@ -46,22 +46,24 @@ def partition_mpipe(graph: Graph,
     L_to_res = dict()
     max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
     L_range = list(range(P, max_num))
+    L_range = list(range(2 * P, 2 * P + 1))  # FIXME: debugging cycles
 
-    if nprocs > 1:
+    if nprocs > 1 or len(L_range) > 1:
         # Parallel version
         worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
-                                        saved_work_graph_without_par_edges, work_graph) for L in L_range]
+                        saved_work_graph_without_par_edges.state()) for L in L_range]
 
-        with multiprocessing.Pool(nprocs) as pool:
-            results = pool.map(lworker, worker_args)
+        with multiprocessing.Pool(min(nprocs, len(L_range))) as pool:
+            results = pool.map(_lworker, worker_args)
 
-        for L, (times, work_graph) in zip(L_range, results):
+        for L, (times, work_graph_state) in zip(L_range, results):
+            work_graph = Graph.from_state(work_graph_state)
             L_to_res[L] = (work_graph, times)
     else:
         # sequential version
         for L in L_range:
             times, work_graph = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
-                                        saved_work_graph_without_par_edges, work_graph)
+                                        saved_work_graph_without_par_edges.state())
 
             # save res
             L_to_res[L] = (work_graph, times)
@@ -97,7 +99,6 @@ def partition_mpipe(graph: Graph,
     print("L_to_minmax:", L_to_minmax)
     print("L_to_num_stages:", L_to_num_stages)
 
-
     # # bins to stages
     # stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
 
@@ -119,9 +120,14 @@ def partition_mpipe(graph: Graph,
     return graph, stage_to_gpu_map
 
 
-def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
-            work_graph):
-    work_graph = Graph.from_other(saved_work_graph_without_par_edges)
+def _lworker(args):
+    (times, work_graph) = lworker(*args)
+    return times, work_graph.state()
+
+
+def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
+    work_graph = Graph(None, None, None, None, None).load_state(saved_work_graph_without_par_edges)
+    # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
     hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
     # the output here should be L stages,
@@ -160,7 +166,8 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
     return times, work_graph
 
 
-def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction, uf: Optional[UnionFind] = None) -> Graph:
+def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction,
+             uf: Optional[UnionFind] = None) -> Graph:
     # if not matching:
     #     return graph
     new_graph = Graph.from_other(graph)
@@ -256,7 +263,7 @@ def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunctio
         for out in node.out_edges:
             if edge_weight_function(node, out) == edge_weight_function.penalty:
                 if check_cycle(graph, node, out):
-                    warnings.warn(f"can't compress edge with penalty (node,out)={(node,out)}")
+                    warnings.warn(f"can't compress edge with penalty (node,out)={(node, out)}")
                     continue
                 matching.append([node, out])  # <---- into node
                 # TODO: we have to handle doubles and so on...
