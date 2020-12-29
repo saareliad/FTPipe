@@ -31,7 +31,7 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                                                               weights: Dict[Node, FullExecTimes],
                                                                               partitioning_method,
                                                                               partition_profiled_graph_fn,
-                                                                              n_runs_limit=20):
+                                                                              n_runs_limit=4):
     print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
@@ -72,13 +72,28 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
             warnings.warn(f"current_mistakes != mistakes_min, {current_mistakes} != {mistakes_min}")
 
         if current_mistakes > 2:
-            graph = exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights)
+            graph = exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=True)
     return graph
 
 
-def exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights):
-    # Taking the first point in history
-    possible_scopes = set(history[1]['generated_last_stage_scopes'])
+def exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=False):
+    if smallest_fp_with_zero_fp:
+        cands = []
+        for i,v in history.items():
+            d = v['d']
+            if d['fp'] > 0:
+                continue
+            cands.append((i, (d['fn'], -d['correct'])))
+
+        best = cands[0]
+        for c in cands[1:]:
+            if c[1] < best:
+                best = c
+
+        possible_scopes = set(history[best[0]]['generated_last_stage_scopes'])
+    else:
+        # Taking the first point in history
+        possible_scopes = set(history[1]['generated_last_stage_scopes'])
     # topo sort scopes
     scope_to_id = {}
     for n in graph.nodes:

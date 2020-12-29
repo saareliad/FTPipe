@@ -6,9 +6,7 @@ from autopipe.autopipe.model_profiling.control_flow_graph import Graph
 
 def re_assign_partition_indices(graph: Graph):
     out_edges = defaultdict(set)
-    for node in graph.nodes:
-        if node in graph.inputs:
-            continue
+    for node in graph.non_input_nodes:
         for o in node.out_edges:
             out_edges[node.stage_id].add(o.stage_id)
             # handle sinks (why the heck this results in cycles?!)
@@ -50,9 +48,7 @@ def _topological_sort(out_edges: Dict[int, Set[int]], v: int, visited: Dict[int,
 
 
 def has_stage_cycles(graph: Graph) -> bool:
-    for u in graph.nodes:
-        if u in graph.inputs:
-            continue
+    for u in graph.non_input_nodes:
         for v in u.out_edges:
             if v.stage_id < u.stage_id:
                 return True

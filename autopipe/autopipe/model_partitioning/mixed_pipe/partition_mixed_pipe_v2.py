@@ -19,6 +19,55 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.union_find import UnionFind
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
 
+def _lworker(args):
+    (times, work_graph) = lworker(*args)
+    return times, work_graph.state()
+
+
+def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
+    work_graph = Graph(None, None, None, None, None).load_state(saved_work_graph_without_par_edges)
+    # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
+    # coarsening
+    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
+    # the output here should be L stages,
+    last_graph: Graph = hierarchy[-1][-2]
+    print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
+    # greedy load balance
+    bins = greedy_best_fit(last_graph, P, node_weight_function)
+    # TODO: print more stats, e.g comp/comm ratio, its interesting
+    times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
+    print("bin times:")
+    pprint(times)
+    # Bins to GPUs:
+    for i, bin_nodes in bins.items():
+        for n in bin_nodes:
+            n.gpu_id = i
+    # TODO: remove redundancy, its re-creating bins...
+    last_graph.topo_sort(verbose=False, change_graph=False)
+    id_to_node_worked_on = {n.topo_sort_id: n for n in last_graph.non_input_nodes}
+    # Note: assert_missing_in_bins=False, since its the coarsened graph with many missing ids.
+    # TODO: it has to be topo-sorted!
+    n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on,
+                                assert_missing_in_bins=False, verbose=False)
+    post_process_partition(last_graph, edge_weight_function=edge_weight_function, verbose_check_outputs=False)
+    print(f"After greedy assignment: got {n_stages} stages")
+    # un-coarsening
+    first_graph = work_graph
+    full_uf: UnionFind = hierarchy[-1][-1]
+    # copy stage_ids and gpu_ids.
+    component_mapping = full_uf.component_mapping()
+    for topo_sort_id, node in id_to_node_worked_on.items():
+        for i in component_mapping[node.id]:
+            a = first_graph[i]
+            b = last_graph[node.id]
+            a.stage_id = b.stage_id
+            a.gpu_id = b.gpu_id
+    # Refinement
+    refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
+           round_limit=round_limit)
+    return times, work_graph
+
+
 def partition_mpipe(graph: Graph,
                     num_gpus: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
@@ -48,7 +97,7 @@ def partition_mpipe(graph: Graph,
     L_range = list(range(P, max_num))
     L_range = list(range(2 * P, 2 * P + 1))  # FIXME: debugging cycles
 
-    if nprocs > 1 or len(L_range) > 1:
+    if nprocs > 1 and len(L_range) > 1:
         # Parallel version
         worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
                         saved_work_graph_without_par_edges.state()) for L in L_range]
@@ -120,52 +169,6 @@ def partition_mpipe(graph: Graph,
     return graph, stage_to_gpu_map
 
 
-def _lworker(args):
-    (times, work_graph) = lworker(*args)
-    return times, work_graph.state()
-
-
-def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
-    work_graph = Graph(None, None, None, None, None).load_state(saved_work_graph_without_par_edges)
-    # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
-    # coarsening
-    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
-    # the output here should be L stages,
-    last_graph: Graph = hierarchy[-1][-2]
-    print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
-    # greedy load balance
-    bins = greedy_best_fit(last_graph, P, node_weight_function)
-    # TODO: print more stats, e.g comp/comm ratio, its interesting
-    times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
-    print("bin times:")
-    pprint(times)
-    # Bins to GPUs:
-    for i, bin_nodes in bins.items():
-        for n in bin_nodes:
-            n.gpu_id = i
-    # TODO: remove redundancy, its re-creating bins...
-    id_to_node_worked_on = {n.id: n for n in last_graph.non_input_nodes}
-    # Note: assert_missing_in_bins=False, since its the coarsened graph with many missing ids.
-    n_stages = stages_from_bins(last_graph, bins, id_to_node_worked_on=id_to_node_worked_on,
-                                assert_missing_in_bins=False)
-    print(f"After greedy assignment: got {n_stages} stages")
-    # un-coarsening
-    first_graph = work_graph
-    full_uf: UnionFind = hierarchy[-1][-1]
-    # copy stage_ids and gpu_ids.
-    component_mapping = full_uf.component_mapping()
-    for v in id_to_node_worked_on:
-        for i in component_mapping[v]:
-            a = first_graph[i]
-            b = last_graph[v]
-            a.stage_id = b.stage_id
-            a.gpu_id = b.gpu_id
-    # Refinement
-    refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
-           round_limit=round_limit)
-    return times, work_graph
-
-
 def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction,
              uf: Optional[UnionFind] = None) -> Graph:
     # if not matching:
@@ -211,6 +214,7 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
 
 def check_cycle(g: Graph, a: Node, b: Node):
     """
+    # TODO: Requires topological order. (e.g dyanamic topo order)
     Checks if merging (a,b) breaks topo order
     Args:
         g: topo-sorted graph
@@ -221,27 +225,28 @@ def check_cycle(g: Graph, a: Node, b: Node):
         (This means merging breaks topo order)
     """
 
-    src_ids = a.id
-    dst_ids = b.id
+    src_ids = a.topo_sort_id
+    dst_ids = b.topo_sort_id
     A = {a}
     B = {b}
 
     missing_ids = set(range(src_ids + 1, dst_ids + 1))
-    missing_nodes_in_work_graph = [g[i] for i in missing_ids if (i in g and g[i] not in g.inputs)]
+    set_inputs = set(g.inputs)
+    missing_nodes_in_work_graph = [g[i] for i in missing_ids if (i in g and g[i] not in set_inputs)]
 
     edge_nodes: Set[Node] = set(missing_nodes_in_work_graph)
     edges = []
     for a in A:
         for c in a.out_edges:
             if c in edge_nodes:
-                edges.append((0, c.id + 2))
+                edges.append((0, c.topo_sort_id + 2))
 
     for c in edge_nodes:
         for nc in c.out_edges:
             if nc in edge_nodes:
-                edges.append((c.id + 2, nc.id + 2))
+                edges.append((c.topo_sort_id + 2, nc.topo_sort_id + 2))
             elif nc in B:
-                edges.append((c.id + 2, 1))
+                edges.append((c.topo_sort_id + 2, 1))
 
     G = nx.DiGraph(incoming_graph_data=edges)
     G.add_node(0)
@@ -250,7 +255,39 @@ def check_cycle(g: Graph, a: Node, b: Node):
     # Scream if has path
     is_ok = not has_path
     has_path_via_missing_nodes = not is_ok
+
+    if not has_path_via_missing_nodes:
+        for nn in b.in_edges:
+            if nn.topo_sort_id > a.topo_sort_id:
+                return True  # TODO: this doesn't mean a cycle!
     return has_path_via_missing_nodes
+
+
+def check_cycle2(g: Graph, a: Node, b: Node):
+    """
+    Checks if contracting (merging) (a,b) breaks topo order
+    Args:
+        g: topo-sorted graph
+        a: start: first node in edge  (a,b)
+        b: end: second node in edge (a,b)
+
+    Returns:
+        True if contracting would create a cycle.
+
+    """
+    # Add node AB, with outputs of combined A,B
+    # start DFS from AB. if encountering A or B : there is a cycle.
+
+    ab = Node(None, None, None)
+    ab.out_edges = sorted(set(a.out_edges + b.out_edges) - {a, b}, key=lambda x: x.id)
+
+    # TODO: dynamic topo sort. than we can just check path from a,b after removing edges.
+    # https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/compiler/jit/graphcycles/graphcycles.cc#L19
+    # https://cs.stackexchange.com/a/88325/130155
+    # when dynamic topo sort is maintaned, we can
+    # change depth_limit to rank b
+    creates_a_cycle = g.forward_dfs_and_check(source=ab, set_to_check={a, b}, depth_limit=None)
+    return creates_a_cycle
 
 
 def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunction):
@@ -262,7 +299,7 @@ def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunctio
         check = False
         for out in node.out_edges:
             if edge_weight_function(node, out) == edge_weight_function.penalty:
-                if check_cycle(graph, node, out):
+                if check_cycle2(graph, node, out):
                     warnings.warn(f"can't compress edge with penalty (node,out)={(node, out)}")
                     continue
                 matching.append([node, out])  # <---- into node
@@ -306,7 +343,7 @@ def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_
         for u, weight_of_u in hd.items():
             # Try to find match:
             for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
-                if check_cycle(graph, u, v):
+                if check_cycle2(graph, u, v):
                     # can't merge without breaking topo sort
                     continue
                 uf.union(u.id, v.id)
@@ -347,7 +384,7 @@ def ofline_smallest_comp_node_matching(graph: Graph, node_weight_function):
         for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
             if v in matched:
                 continue
-            if check_cycle(graph, u, v):
+            if check_cycle2(graph, u, v):
                 # can't merge without breaking topo sort
                 continue
             matched.add(u)

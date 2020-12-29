@@ -3,7 +3,7 @@ import warnings
 from collections import defaultdict
 from enum import IntEnum
 from itertools import chain
-from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type
+from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set
 
 import networkx as nx
 from torch import Tensor, nn as nn
@@ -32,6 +32,7 @@ class Node:
         self.id = idx
         self.scope = scope
 
+        self.topo_sort_id = None
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
@@ -103,6 +104,7 @@ class Node:
         node.gpu_id = other.gpu_id
         node.weight = other.weight
 
+        node.topo_sort_id = other.topo_sort_id
         node.out_edges = list(other.out_edges)
         node.args = list(other.args)
         node.kwargs = dict(other.kwargs)
@@ -136,12 +138,12 @@ class Graph():
         self.depth = depth
         self.basic_blocks = basic_blocks
 
-    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction):
+    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction, dynamic_topo_sort=False):
+        if vid in self.output_ids:
+            self.output_ids[self.output_ids.index(vid)]=uid
         assert uid != vid
-        # assert uid < vid  # TODO: super dangerous, but allowing it.
-
-        # TODO: parallel edges? u->v u->v
-        # TODO: check if its legal merge
+        # print(f"merge {(uid,vid)} ")
+        # TODO: check if its legal merge. currently its user's responsibility.
         # does not exits a path from the set {n : u < n < v} to v.
         u = self._nodes[uid]
         v = self._nodes[vid]
@@ -182,6 +184,7 @@ class Graph():
 
             nn.out_edges = remove_dups(nn.out_edges, nn)
 
+        # shouldn't have kwargs anyway this is redundant.
         for nn, nnv in v.kwargs.values():
             nn.remove_output(v)
             nn.add_out_edge(u)
@@ -192,14 +195,18 @@ class Graph():
         u.out_edges = remove_dups(u.out_edges, u)
         del self._nodes[vid]
 
+        # TODO: dynamic topo_sort
+        if dynamic_topo_sort:
+            raise NotImplementedError()
+
+        # self.topo_sort(verbose=False, change_graph=False)
+
         # Massive check for dups....
         # for n in self.nodes:
         #     assert n not in n.out_edges, n
         #     assert n not in n.in_edges, n
         #     assert len(set(n.out_edges)) == len(n.out_edges), n
         #     assert len(set(n.in_edges)) == len(n.in_edges), n
-
-
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -498,6 +505,7 @@ class Graph():
             state = dict(id=node.id,
                          scope=node.scope,
                          type=node.type,
+                         topo_sort_id=node.topo_sort_id,
                          stage_id=node.stage_id,
                          gpu_id=node.gpu_id,
                          weight=node.weight,
@@ -531,6 +539,7 @@ class Graph():
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
+            node.topo_sort_id = state['topo_sort_id']
             node.stage_id = state['stage_id']
             node.gpu_id = state['gpu_id']
             node.weight = state['weight']
@@ -759,7 +768,7 @@ class Graph():
 
         return copy
 
-    def topo_sort(self, verbose=False):
+    def topo_sort(self, verbose=False, change_graph=True):
 
         def print_if_verbose(*args, **kw):
             if verbose:
@@ -787,6 +796,9 @@ class Graph():
         topo_sorted = list(topo_sorted)
         for topo_sort_id, node_id in enumerate(topo_sorted):
             self[node_id].topo_sort_id = topo_sort_id
+
+        if not change_graph:
+            return
 
         if (ids_sort := sorted(topo_sorted)) != topo_sorted:
             print("-W- topo_sort: node_ids are not topo sorted!")
@@ -829,9 +841,39 @@ class Graph():
             _nodes = {n.topo_sort_id: n for n in self.nodes}
             self._nodes = _nodes
 
+    def forward_dfs_and_check(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
+        if depth_limit is None:
+            depth_limit = len(self)
+        # dfs
+        nodes = [source]
+        visited = set()
+        for start in nodes:
+            if start in visited:
+                continue
+            if start in set_to_check:
+                return True
+            visited.add(start)
+
+            stack = [(start, depth_limit, iter(start.out_edges))]  # : List[Tuple[Node, int, Iterator[Node]]]
+            while stack:
+                parent, depth_now, children = stack[-1]
+                try:
+                    child = next(children)
+                    if child in visited:
+                        continue
+                    if child in set_to_check:
+                        return True
+                    visited.add(child)
+                    if depth_now > 1:
+                        stack.append((child, depth_now - 1, iter(child.out_edges)))
+
+                except StopIteration:
+                    stack.pop()
+        return False
+
 
 def remove_dups(lnodes: List[Node], myself):
     s = set(lnodes)
     if myself in s:
         s.remove(myself)
-    return sorted(s, key=lambda x: x.id)
+    return sorted(s, key=lambda x: x.topo_sort_id)

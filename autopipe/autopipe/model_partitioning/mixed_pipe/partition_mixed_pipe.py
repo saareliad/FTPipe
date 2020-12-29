@@ -390,8 +390,10 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
 def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False,
                      assert_missing_in_bins=True):
+    # TODO: require id_to_node_worked_on to be topo sorted ids.
+
     # shallow copy bins, excluding inputs:
-    bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
+    bins_to_id = {p: set(n.topo_sort_id for n in v if n.topo_sort_id in id_to_node_worked_on) for p, v in bins.items()}
 
     nodes_with_out_edges_to_different_gpu = defaultdict(set)
     nodes_with_in_edges_from_different_gpu = defaultdict(set)
@@ -533,7 +535,11 @@ def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked
     missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
     is_ok = True
     for missing_topo_sort_id in missing_topo_sort_ids:
-        if not (missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on):
+        if missing_topo_sort_id not in id_to_node_worked_on:
+            continue
+        # check if its in graph
+
+        if id_to_node_worked_on[missing_topo_sort_id].id not in graph:
             continue
         #  Need to actually check if there is a cycle.
         cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
@@ -575,16 +581,16 @@ def get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_fr
                         nodes_with_out_edges_to_different_gpu):
     uf = UnionFind(elements=bins_to_id[gpu_id])
     visited = set()
-    open = deque(sorted(nodes_in_bin, key=lambda x: x.id))
+    open = deque(sorted(nodes_in_bin, key=lambda x: x.topo_sort_id))
     while open:
         x = open.popleft()
         x: Node
         for y in x.out_edges:
-            if y.id not in uf:
+            if y.topo_sort_id not in uf:
                 nodes_with_out_edges_to_different_gpu[gpu_id].add(x)
                 nodes_with_in_edges_from_different_gpu[y.gpu_id].add(y)
                 continue
-            uf.union(x.id, y.id)
+            uf.union(x.topo_sort_id, y.topo_sort_id)
     unbroken_stages = uf.sorted_components()
     return unbroken_stages
 

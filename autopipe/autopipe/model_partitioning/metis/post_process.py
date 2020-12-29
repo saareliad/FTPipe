@@ -31,20 +31,20 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
                               ".")
 
-        break_partition_cycles(graph)
-
-        # possibly redundant
-        try:
-            re_assign_partition_indices(graph)
-        except:
-            print(
-                "-W- ignoring exception of redundant re_assign_partition_indices(graph)")
-
-    # this is a sanity check
-    if has_stage_cycles(graph):
-        if os.environ.get("DEBUG", False):
-            graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                              ".")
+    #     break_partition_cycles(graph)
+    #
+    #     # possibly redundant
+    #     try:
+    #         re_assign_partition_indices(graph)
+    #     except:
+    #         print(
+    #             "-W- ignoring exception of redundant re_assign_partition_indices(graph)")
+    #
+    # # this is a sanity check
+    # if has_stage_cycles(graph):
+    #     if os.environ.get("DEBUG", False):
+    #         graph.save_as_pdf(f"{graph.model_name}_after_fix",
+    #                           ".")
 
         if verbose_on_error:
             problems, info = get_problematic_partitions(graph)

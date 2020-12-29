@@ -4,6 +4,7 @@ from typing import Iterable
 
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction, \
     CoarsenedWeightFunction
+from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_partitioning.utils import re_assign_partition_indices
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
@@ -147,6 +148,7 @@ class Refiner:
         # TODO: more efficient implementation for new stage_borders, but it can get tricky.
         # outgoing_edges, outgoing_nodes, incoming_edges, incoming_nodes = self.stage_borders
         self.stage_to_cost = self.calc_stage_to_cost()
+        # post_process_partition(self.graph)  # Fixme
 
     @staticmethod
     def is_move_valid_local(node):
@@ -159,10 +161,9 @@ class Refiner:
         return True
 
     @staticmethod
-    def is_move_valid_topo(node, stage_id):
-        others = [nn.stage_id for nn in node.out_edges]
-        for i in others:
-            if i > stage_id:  # TODO: concurent stages?
+    def is_move_valid_topo(node, dst_stage_id):
+        for nn in node.out_edges:
+            if nn.stage_id < dst_stage_id:  # TODO: concurrent stages?
                 return False
         return True
 

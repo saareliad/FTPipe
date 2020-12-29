@@ -9,7 +9,7 @@ __all__ = ["post_process_partition"]
 
 
 def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_error=True,
-                           assert_output_types=False) -> Graph:
+                           assert_output_types=False, verbose_check_outputs=True) -> Graph:
     """
     process the partition and optimize it
     called as part of partition_graph method
@@ -42,12 +42,12 @@ def post_process_partition(graph: Graph, edge_weight_function=None, verbose_on_e
         error = "error cycle detected mutual dependency between partitions"
         raise AssertionError(error)
 
-    check_partition_outputs(graph, assert_output_types=assert_output_types, edge_weight_function=edge_weight_function)
+    check_partition_outputs(graph, assert_output_types=assert_output_types, edge_weight_function=edge_weight_function, verbose=verbose_check_outputs)
 
     return graph
 
 
-def check_partition_outputs(graph, assert_output_types=False, edge_weight_function=None):
+def check_partition_outputs(graph, assert_output_types=False, edge_weight_function=None, verbose=True):
     is_valid, error = is_output_only_tensors(graph, edge_weight_function)
     if assert_output_types:
         assert is_valid, error
