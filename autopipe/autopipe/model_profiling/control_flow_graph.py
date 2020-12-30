@@ -57,7 +57,7 @@ class Node:
         if not self.compound_edge_weights:
             for nn in self.out_edges:
                 self.compound_edge_weights[nn.id] = edge_weight_function(self, nn)
-            return True
+            return True if self.out_edges else False
         return False
 
     def update_compound_weights_from_uf(self, uf: UnionFind, allow_outside_uf=False):

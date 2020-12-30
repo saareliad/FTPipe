@@ -106,7 +106,8 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            graph=None,  # TODO: deprecated
                            async_pipe=cmd_args.async_pipeline,
                            trace_cache_name=trace_cache_name,
-                           profiles_cache_name=profiles_cache_name)
+                           profiles_cache_name=profiles_cache_name,
+                           dont_use_async_meta_alg=cmd_args.dont_use_async_meta_alg)
 
         del args, kwargs
 

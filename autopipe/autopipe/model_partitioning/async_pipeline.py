@@ -33,6 +33,8 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                                                               partition_profiled_graph_fn,
                                                                               n_runs_limit=4):
     print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
+    # protect graph:
+    saved_state = graph.state()
     allowed_mistakes = 0
     # HACK: allow mistakes for multilevel and acyclic...
     if partitioning_method == "ACYCLIC":
@@ -46,14 +48,15 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
     while current_mistakes > allowed_mistakes and (n_runs_limit < 0 or n_runs < n_runs_limit):
         n_runs += 1
 
-        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(Graph.from_state(saved_state),
                                                                                       last_partition_scopes,
                                                                                       partition_profiled_graph_fn,
                                                                                       weights)
 
         history[n_runs] = dict(last_partition_scopes=last_partition_scopes,
                                generated_last_stage_scopes=generated_last_stage_scopes,
-                               d=d
+                               d=d,
+                               graph_state=graph.state()
                                )
         # set current scopes as model scopes
         last_partition_scopes = generated_last_stage_scopes
@@ -65,18 +68,19 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         print(f"Success! got {current_mistakes} mistakes after {n_runs} runs")
     elif not (n_runs_limit < 0 or n_runs < n_runs_limit):
         print(f"Breaking after reaching run limit of {n_runs_limit}!")
-        current_mistakes, graph, mistakes_min = restore_best_from_history(graph, history,
+        current_mistakes, graph, mistakes_min = restore_best_from_history(saved_state, history,
                                                                           partition_profiled_graph_fn, weights)
 
         if current_mistakes != mistakes_min:
             warnings.warn(f"current_mistakes != mistakes_min, {current_mistakes} != {mistakes_min}")
 
         if current_mistakes > 2:
-            graph = exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=True)
+            graph = exhustive_search_for_last_partition(saved_state, graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=True)
     return graph
 
 
-def exhustive_search_for_last_partition(graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=False):
+def exhustive_search_for_last_partition(saved_state, graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=False):
+
     if smallest_fp_with_zero_fp:
         cands = []
         for i,v in history.items():
@@ -106,33 +110,43 @@ def exhustive_search_for_last_partition(graph, history, n_runs, partition_profil
     # TODO: can skip some options by last param in range() call
     for i in range(len(topo_sorted_scopes)):
         last_partition_scopes = topo_sorted_scopes[i:]
-        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
+        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(Graph.from_state(saved_state),
                                                                                       last_partition_scopes,
                                                                                       partition_profiled_graph_fn,
                                                                                       weights)
 
         exhaustive_search_history[i] = dict(last_partition_scopes=last_partition_scopes,
                                                  generated_last_stage_scopes=generated_last_stage_scopes,
-                                                 d=d
+                                                 d=d,
+                                                graph_state=graph.state()
                                                  )
         print(f"final_countdown_iteration:{i}/{len(topo_sorted_scopes)}", d)
-    current_mistakes, graph, mistakes_min = restore_best_from_history(graph, exhaustive_search_history,
+    current_mistakes, graph, mistakes_min = restore_best_from_history(saved_state, exhaustive_search_history,
                                                                       partition_profiled_graph_fn, weights)
     return graph
 
 
-def restore_best_from_history(graph, history, partition_profiled_graph_fn, weights):
+def restore_best_from_history(saved_state, history, partition_profiled_graph_fn, weights):
+    # saved_state is initial saved_state
     i_min = list(history.keys())[int(np.argmin([v['d']['mistakes'] for v in history.values()]))]
     mistakes_min = history[i_min]['d']['mistakes']
     print([history[i]['d']['mistakes'] for i in history])
     print(f"Restoring best point in history")
     print(f"Taking best seen: {mistakes_min} mistakes after {i_min} runs")
     # restore the best point from  history
-    last_partition_scopes = history[i_min]['last_partition_scopes']
-    current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(graph,
-                                                                                  last_partition_scopes,
-                                                                                  partition_profiled_graph_fn,
-                                                                                  weights)
+    min_hist = history[i_min]
+    if 'graph_state' in min_hist:
+        graph_state = min_hist['graph_state']
+        current_mistakes = mistakes_min
+        graph = Graph.from_state(graph_state)
+    else:
+        print("Partitioning again to restore history")
+        warnings.warn("must start from clear state!")
+        last_partition_scopes = history[i_min]['last_partition_scopes']
+        current_mistakes, d, generated_last_stage_scopes, graph = partition_and_check(Graph.from_state(saved_state),
+                                                                                      last_partition_scopes,
+                                                                                      partition_profiled_graph_fn,
+                                                                                      weights)
     return current_mistakes, graph, mistakes_min
 
 

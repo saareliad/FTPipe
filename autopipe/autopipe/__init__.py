@@ -41,7 +41,8 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                graph: Optional[Graph] = None,
                async_pipe=False,
                trace_cache_name=None,
-               profiles_cache_name=None) -> Graph:
+               profiles_cache_name=None,
+               dont_use_async_meta_alg=False) -> Graph:
     """
     Attempts to partition a model to given number of bins (parts).
     This will produce a python file with the partitions and config.
@@ -126,7 +127,8 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                             use_network_profiler=use_network_profiler, profile_ops=profile_ops,
                             save_memory_mode=save_memory_mode, trace_on_gpu=trace_on_gpu, graph=graph,
                             async_pipe=async_pipe,
-                            trace_cache_name=trace_cache_name, profiles_cache_name=profiles_cache_name)
+                            trace_cache_name=trace_cache_name, profiles_cache_name=profiles_cache_name,
+                            dont_use_async_meta_alg=dont_use_async_meta_alg)
 
     compile_partitioned_model(graph,
                               model,
@@ -152,6 +154,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                     async_pipe=False,
                     trace_cache_name=None,
                     profiles_cache_name=None,
+                    dont_use_async_meta_alg=False
                     ) -> Graph:
     """
     profiles the network and return a graph representing the partition
@@ -218,7 +221,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
     if binpack_opt is None:
         binpack_opt = dict()
 
-    if not async_pipe or not recomputation:
+    if not async_pipe or not recomputation or dont_use_async_meta_alg:
         if graph is None:
             graph = compute_and_maybe_cache(build_profiled_graph, profiles_cache_name,
                                             model, _cache_cls_to_use=GraphCache, model_args=model_args,

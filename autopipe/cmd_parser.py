@@ -178,6 +178,8 @@ class Parser(argparse.ArgumentParser, ABC):
                            action="store_true",
                            help="Do partitioning and analysis for async pipeline")
 
+        group.add_argument("--dont_use_async_meta_alg", default=False, action="store_true",
+                           help="Explicitly avoid the async meta alg. (e.g when number of stages is big)")
 
         group.add_argument("--dot",
                            default=False,
