@@ -15,7 +15,7 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import
     convert_handle_missing_print
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_partitioning.mixed_pipe.refine import refine
-from autopipe.autopipe.model_partitioning.mixed_pipe.union_find import UnionFind
+from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
 
@@ -205,7 +205,7 @@ def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: Edg
     for m in sorted(matching, key=lambda x: x[0].id, reverse=True):
         root = m[0]
         for i in m[1:]:
-            new_graph.merge(root.id, i.id, edge_weight_function=edge_weight_function)
+            new_graph.merge(root.id, i.id, edge_weight_function=edge_weight_function, uf=uf)
             if uf is not None:
                 uf.union(x=root.id, y=i.id)
     return new_graph
@@ -216,7 +216,7 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     # elements = set(i.id for i in itertools.chain.from_iterable(matching))
     uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
 
-    num_nodes = graph.num_nodes
+    print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
     hierarchy = []
 
     p = graph
@@ -373,11 +373,11 @@ def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_
                 if check_cycle2(graph, u, v):
                     # can't merge without breaking topo sort
                     continue
+                graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
                 uf.union(u.id, v.id)
                 uf2.union(u.id, v.id)
                 hd.pop(u)
                 hd.pop(v)
-                graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function)
                 hd[u] = node_weight_function(u)
                 return True, weight_of_u
         return False, None

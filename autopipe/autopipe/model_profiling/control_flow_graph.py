@@ -1,6 +1,7 @@
 import pickle
 import warnings
 from collections import defaultdict
+from copy import deepcopy
 from enum import IntEnum
 from itertools import chain
 from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set
@@ -8,6 +9,7 @@ from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set
 import networkx as nx
 from torch import Tensor, nn as nn
 
+from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.utils import ExecTimes
 
 
@@ -36,7 +38,7 @@ class Node:
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
-        self.compound_edge_weights = None
+        self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
         self.args = []
         self.kwargs = defaultdict(list)
@@ -52,11 +54,24 @@ class Node:
     #     return self.scope
 
     def maybe_create_compound_edge_weights(self, edge_weight_function):
-        if self.compound_edge_weights is None:
-            v_new_compound_edge_weights = dict()
+        if not self.compound_edge_weights:
             for nn in self.out_edges:
-                v_new_compound_edge_weights[nn.id] = edge_weight_function(self, nn)
-            self.compound_edge_weights = v_new_compound_edge_weights
+                self.compound_edge_weights[nn.id] = edge_weight_function(self, nn)
+            return True
+        return False
+
+    def update_compound_weights_from_uf(self, uf: UnionFind, allow_outside_uf=False):
+
+        items_to_handle = list(self.compound_edge_weights.items())
+        if allow_outside_uf:
+            items_to_handle = filter(lambda x: x[0] in uf ,items_to_handle)
+
+        for id, weight in items_to_handle:
+            if not uf.is_root(id):
+                new_id = uf[uf.find(id)]
+                if new_id != id:
+                    del self.compound_edge_weights[id]
+                    self.compound_edge_weights[new_id] = weight
 
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node].append(kwarg)
@@ -69,6 +84,11 @@ class Node:
 
     def remove_output(self, out_node):
         self.out_edges.remove(out_node)
+
+    def replace_out_edge_on_merge(self, dest_node, new_dest_node):
+        self.remove_output(dest_node)
+        self.out_edges.append(new_dest_node)
+
 
     @property
     def in_edges(self) -> List["Node"]:
@@ -138,9 +158,10 @@ class Graph():
         self.depth = depth
         self.basic_blocks = basic_blocks
 
-    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction, dynamic_topo_sort=False):
+    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction, dynamic_topo_sort=False,
+              uf: Optional[UnionFind] = None, partial_uf: Optional[UnionFind] = None):
         if vid in self.output_ids:
-            self.output_ids[self.output_ids.index(vid)]=uid
+            self.output_ids[self.output_ids.index(vid)] = uid
         assert uid != vid
         # print(f"merge {(uid,vid)} ")
         # TODO: check if its legal merge. currently its user's responsibility.
@@ -151,14 +172,11 @@ class Graph():
         u.remove_output(v)
         v.remove_input(u)
 
-        # Merge edge weights.
-        u.maybe_create_compound_edge_weights(edge_weight_function)
-        v.maybe_create_compound_edge_weights(edge_weight_function)
-        for id, weight in v.compound_edge_weights.items():
-            if id in u.compound_edge_weights:
-                u.compound_edge_weights[id] += weight
-            else:
-                u.compound_edge_weights[id] = weight
+        self._update_compound_weights_on_merge(u, v, edge_weight_function, uf, partial_uf)
+
+        for a in v.in_edges:
+            a.maybe_create_compound_edge_weights(edge_weight_function=edge_weight_function)
+
 
         # Merge node weights
         # TODO: we don't know about other x->v or u->y
@@ -207,6 +225,44 @@ class Graph():
         #     assert n not in n.in_edges, n
         #     assert len(set(n.out_edges)) == len(n.out_edges), n
         #     assert len(set(n.in_edges)) == len(n.in_edges), n
+
+    def _update_compound_weights_on_merge(self, u, v, edge_weight_function, uf,  partial_uf: Optional[UnionFind] = None):
+        # Merge edge weights.
+        is_new_u_weights = u.maybe_create_compound_edge_weights(edge_weight_function)
+        # TODO: if is_new_u_weights remove v from there, but the id is unkown at this step.
+        is_new_v_weights = v.maybe_create_compound_edge_weights(edge_weight_function)
+        if uf is None:
+            warnings.warn("merge without union find may miss compound edge weights")
+        else:
+            # (1): update the current compound weight ids according to the unions so far.
+            # (2): add
+            if not is_new_v_weights:
+                v.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    v.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+            if not is_new_u_weights:
+                u.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    u.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+
+        for id, weight in v.compound_edge_weights.items():
+            u.compound_edge_weights[id] += weight
+
+        for a in v.in_edges:
+            is_new_a_weights = a.maybe_create_compound_edge_weights(edge_weight_function)
+            if not is_new_a_weights:
+                a.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    a.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+
+            if u in a.out_edges:
+                w = a.compound_edge_weights[u.id]
+                del a.compound_edge_weights[u.id]
+                a.compound_edge_weights[v.id] += w   # defaultdict
+
+    #
+    # def _update_compound_weights_on_replaced_output(self, nn, u, v, edge_weight_function, uf):
+
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -517,7 +573,8 @@ class Graph():
                          constant_value=node.constant_value,
                          tensor_dtype=node.tensor_dtype,
                          tensor_shape=node.tensor_shape,
-                         req_grad=node.req_grad)
+                         req_grad=node.req_grad,
+                         compound_edge_weights=deepcopy(node.compound_edge_weights))
             node_states[node.id] = state
 
         return {"node_data": node_states,
@@ -550,6 +607,7 @@ class Graph():
             node.tensor_dtype = state['tensor_dtype']
             node.tensor_shape = state['tensor_shape']
             node.req_grad = state['req_grad']
+            node.compound_edge_weights = state['compound_edge_weights']
 
         for node in nodes.values():
             node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)

@@ -1,7 +1,6 @@
 import warnings
 from collections import deque, defaultdict
 from enum import Enum
-from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union, Set
 
@@ -13,7 +12,7 @@ from sklearn.cluster import KMeans
 
 from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
-from autopipe.autopipe.model_partitioning.mixed_pipe.union_find import UnionFind
+from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
 from autopipe.autopipe.model_profiling import Graph, Node
 
@@ -589,7 +588,6 @@ def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked
 def get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
                         nodes_with_out_edges_to_different_gpu):
     uf = UnionFind(elements=bins_to_id[gpu_id])
-    visited = set()
     open = deque(sorted(nodes_in_bin, key=lambda x: x.topo_sort_id))
     while open:
         x = open.popleft()

@@ -3,6 +3,7 @@ A union-find disjoint set data structure.
 # adapted from: https://github.com/deehzee/unionfind/blob/master/unionfind.py,
 # We changed the implementation from the source above to support several desired features.
 """
+from typing import Optional, Iterable, Any
 
 import numpy as np
 
@@ -81,7 +82,7 @@ class UnionFind(object):
 
     """
 
-    def __init__(self, elements=None):
+    def __init__(self, elements: Optional[Iterable[Any]] = None):
         self.n_elts = 0  # current num of elements
         self.n_comps = 0  # the number of disjoint sets or components
         self._next = 0  # next available id
@@ -343,3 +344,7 @@ class UnionFind(object):
             # If you don't want to share the same set to different keys:
             # comps.update({x: set(comp) for x in comp})
         return comps
+
+    def is_root(self, x):
+        idx = self._indx[x]
+        return idx == self._par[idx]
