@@ -88,8 +88,8 @@ def metis_partition(graph: Graph,
 
             #### Taken from 2dbin
             nodes = [n for n in work_graph.nodes if n not in work_graph.inputs]
-            id_to_node = {node.id: node for node in nodes}
-
+            graph.topo_sort(change_graph=False)
+            id_to_node = {node.topo_sort_id: node for node in nodes}
             stages_from_bins(graph=work_graph, bins=bins, id_to_node_worked_on=id_to_node)
 
         try:

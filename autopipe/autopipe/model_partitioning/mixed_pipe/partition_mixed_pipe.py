@@ -389,7 +389,16 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
 
 
 def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False,
-                     assert_missing_in_bins=True):
+                     assert_missing_in_bins=False, convert_id_to_node_to_topo=False):
+
+    if convert_id_to_node_to_topo:
+        tmp = dict()
+        for i,v in id_to_node_worked_on.items():
+            tmp[v.topo_sort_id] = v
+        id_to_node_worked_on = tmp
+        del tmp
+
+
     # TODO: require id_to_node_worked_on to be topo sorted ids.
 
     # shallow copy bins, excluding inputs:
@@ -436,7 +445,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
     # break cycles <--- TODO: redundant
 
 
-def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=True):
+def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=False):
     # Now, it is problematic if we have:
     #  a->d, b->d, c->d, b->c, and b->d
     # each on different gpu.
@@ -707,7 +716,8 @@ def partition_2dbin_pack(graph: Graph,
             n.gpu_id = i
 
     # bins to stages
-    stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
+    work_graph.topo_sort(change_graph=False)
+    stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node, convert_id_to_node_to_topo=True)
 
     work_graph = post_process_partition(work_graph)
 

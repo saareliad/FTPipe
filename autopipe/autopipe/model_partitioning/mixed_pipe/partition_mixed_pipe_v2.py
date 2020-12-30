@@ -76,8 +76,7 @@ def partition_mpipe(graph: Graph,
                     use_layers_graph: bool = True,
                     round_limit=-1,
                     nprocs=1,
-                    min_L=None,
-                    max_L=None,
+                    L_list=None,
                     **kwargs
                     ):
     print("mpipe got kwargs:", kwargs.keys())
@@ -94,28 +93,29 @@ def partition_mpipe(graph: Graph,
     saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
 
     L_to_res = dict()
-    max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
-    L_range = list(range(P, max_num))
-    L_range = list(range(2 * P, 2 * P + 1))  # FIXME: debugging cycles
-    L_range = list(range(8 * P, 8 * P + 1))  # FIXME: debugging cycles
-    L_range = [2*P, 4*P, 8*P, 16*P]
-    L_range = [8*P]
+    # max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
+    # L_list = list(range(P, max_num))
+    # L_list = list(range(2 * P, 2 * P + 1))  # FIXME: debugging cycles
+    # L_list = list(range(8 * P, 8 * P + 1))  # FIXME: debugging cycles
+    # L_list = [2*P, 4*P, 8*P, 16*P]
+    if L_list is None:
+        L_list=[P, 2*P, 3*P, 4*P, 5*P, 6*P, 7*P, 8*P]
+        warnings.warn(f"no L_list given. using mine {L_list}")
 
-
-    if nprocs > 1 and len(L_range) > 1:
+    if nprocs > 1 and len(L_list) > 1:
         # Parallel version
         worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph_without_par_edges.state()) for L in L_range]
+                        saved_work_graph_without_par_edges.state()) for L in L_list]
 
-        with multiprocessing.Pool(min(nprocs, len(L_range))) as pool:
+        with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
             results = pool.map(_lworker, worker_args)
 
-        for L, (times, work_graph_state, best_objective) in zip(L_range, results):
+        for L, (times, work_graph_state, best_objective) in zip(L_list, results):
             work_graph = Graph.from_state(work_graph_state)
             L_to_res[L] = (work_graph, times, best_objective)
     else:
         # sequential version
-        for L in L_range:
+        for L in L_list:
             times, work_graph, best_objective = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
                                         saved_work_graph_without_par_edges.state())
 

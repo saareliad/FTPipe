@@ -496,6 +496,10 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_i
     # when we detach we make x0 a leaf
     # while in the original model x0 was just an intermediary value
     # the solution is to transform the operation into an out of place one x0 + 1
+    # TODO: doesn't this create a problem?
+    # x0+=1 - > x+1
+    # grad(f(x.mul_(y)) + x) != grad(f(x.mul(y)) + x)  # whereas grad = d/dy
+    # so the general solution should be adding a clone node before the problematic node.
     for n in partition:
         if (n.type != NodeTypes.OP) or (n.value_type != torch.Tensor):
             continue
@@ -508,7 +512,10 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_i
             not func_name.startswith("__"))
         inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
 
+
         if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
+            # Note: assuming topo-sort.
+            # TODO: this handles first arg, what about inplace with out=xxx?
             u = n.in_edges[0]
             if not ((u.value_type is torch.Tensor) and u.req_grad and u in partition_inputs):
                 continue
@@ -522,7 +529,7 @@ def enforce_out_of_place_for_partition_inputs(partition: List[Node], partition_i
                 n.scope = n.scope.rsplit("/", maxsplit=1)[0] + f"/{namespace}::{func_name[:-1]}_{idx}"
 
             if warn:
-                warnings.warn(f"Enforcing out of place for {op_path}")
+                warnings.warn(f"Enforcing out of place for {op_path}: changed to: {n.scope}")
 
 
 def apply_input_propagation(stage_id: int, outputs: List[Node], inputs: List[Node]) -> Set[Node]:
