@@ -5,17 +5,17 @@ from typing import Set, Dict, Tuple
 from sortedcollections import ValueSortedDict
 
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction
-from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe_v2 import check_cycle2
+from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
 
 class RatioBlockCreator:
     def __init__(self, graph: Graph, edge_weight_function: EdgeWeightFunction,
-                 node_weight_fucntion: NodeWeightFunction, uf: UnionFind):
+                 node_weight_function: NodeWeightFunction, uf: UnionFind):
         self.graph = graph
         self.ewf = edge_weight_function
-        self.nwf = node_weight_fucntion
+        self.nwf = node_weight_function
         self.uf = uf
 
         # edges we already handled and don't want to touch

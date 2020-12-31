@@ -11,7 +11,8 @@ import torch
 
 from autopipe.analysis import run_analysis
 from autopipe.analysis.analysis_utils import convert_to_analysis_format
-from autopipe.autopipe import pipe_model, get_weight_functions
+from autopipe.autopipe import get_weight_functions
+from autopipe.autopipe.api import pipe_model
 from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
 from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
 from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
@@ -166,8 +167,8 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         if cmd_args.partitioning_method != 'ACYCLIC':
             gpu_to_stages = defaultdict(set)
             stage_to_gpu = dict()
-            for n in graph.nodes:
-                if n.gpu_id is None or n in graph.inputs or n.type == NodeTypes.CONSTANT:
+            for n in graph.non_input_nodes:
+                if n.gpu_id is None or n.type == NodeTypes.CONSTANT:
                     continue
                 gpu_to_stages[n.gpu_id].add(n.stage_id)
                 if n.stage_id in stage_to_gpu:

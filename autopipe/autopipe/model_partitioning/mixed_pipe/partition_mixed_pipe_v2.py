@@ -1,22 +1,19 @@
 import multiprocessing
 import warnings
 from collections import defaultdict
-from copy import deepcopy
 from pprint import pprint
-from typing import Optional, List, Tuple, Set
-
-import networkx as nx
-from sortedcollections import ValueSortedDict
+from typing import Optional
 
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
+from autopipe.autopipe.model_partitioning.mixed_pipe.coarsening import coarsening
 from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
 from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import stages_from_bins, \
     convert_handle_missing_print
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_partitioning.mixed_pipe.refine import refine
 from autopipe.autopipe.union_find import UnionFind
-from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
+from autopipe.autopipe.model_profiling.control_flow_graph import Graph
 
 
 def _lworker(args):
@@ -100,7 +97,7 @@ def partition_mpipe(graph: Graph,
     # L_list = [2*P, 4*P, 8*P, 16*P]
     if L_list is None:
         L_list=[P, 2*P, 3*P, 4*P, 5*P, 6*P, 7*P, 8*P]
-        L_list=[3*P]
+        # L_list=[3*P]
         warnings.warn(f"no L_list given. using mine {L_list}")
 
     if nprocs > 1 and len(L_list) > 1:
@@ -171,6 +168,7 @@ def partition_mpipe(graph: Graph,
 
     L = best_L
     work_graph = L_to_res[L][0]
+    # TODO: SAVE THIS. (also save the graphs and run full exp)
     print(f"Best L is {L}")
     print("L_to_minmax (stage2):", L_to_minmax)
     print("L_to_num_stages:", L_to_num_stages)
@@ -197,235 +195,8 @@ def partition_mpipe(graph: Graph,
     return graph, stage_to_gpu_map
 
 
-def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction,
-             uf: Optional[UnionFind] = None) -> Graph:
-    # if not matching:
-    #     return graph
-    new_graph = Graph.from_other(graph)
-    # Start from end, so when we merge outputs are already handled
-    for m in sorted(matching, key=lambda x: x[0].id, reverse=True):
-        root = m[0]
-        for i in m[1:]:
-            new_graph.merge(root.id, i.id, edge_weight_function=edge_weight_function, uf=uf)
-            if uf is not None:
-                uf.union(x=root.id, y=i.id)
-    return new_graph
-
-
-def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_function: NodeWeightFunction, L,
-               matching_heuristics=List[str]) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
-    # elements = set(i.id for i in itertools.chain.from_iterable(matching))
-    uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
-
-    print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
-    hierarchy = []
-
-    p = graph
-    matching = penalty_edges_matching(graph=p, edge_weight_function=edge_weight_function)
-    g = contract(p, matching, edge_weight_function, uf=uf)
-    hierarchy.append((p, matching, g, deepcopy(uf)))
-    p = g
-
-    p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
-                                                          node_weight_function,
-                                                          edge_weight_function,
-                                                          L,
-                                                          uf,
-                                                          verbose=True,
-                                                          record_history=True
-                                                          )
-    # it is the last so we dont deepcopy(uf)
-    hierarchy.append((p, uf2, g, uf))
-    p = g
-    return hierarchy
-
-
-def check_cycle(g: Graph, a: Node, b: Node):
-    """
-    # TODO: Requires topological order. (e.g dyanamic topo order)
-    Checks if merging (a,b) breaks topo order
-    Args:
-        g: topo-sorted graph
-        a: start: first node in edge  (a,b)
-        b: end: second node in edge (a,b)
-    Returns:
-        True if there is another path (a->...->b) through missing nodes.
-        (This means merging breaks topo order)
-    """
-
-    src_ids = a.topo_sort_id
-    dst_ids = b.topo_sort_id
-    A = {a}
-    B = {b}
-
-    missing_ids = set(range(src_ids + 1, dst_ids + 1))
-    set_inputs = set(g.inputs)
-    missing_nodes_in_work_graph = [g[i] for i in missing_ids if (i in g and g[i] not in set_inputs)]
-
-    edge_nodes: Set[Node] = set(missing_nodes_in_work_graph)
-    edges = []
-    for a in A:
-        for c in a.out_edges:
-            if c in edge_nodes:
-                edges.append((0, c.topo_sort_id + 2))
-
-    for c in edge_nodes:
-        for nc in c.out_edges:
-            if nc in edge_nodes:
-                edges.append((c.topo_sort_id + 2, nc.topo_sort_id + 2))
-            elif nc in B:
-                edges.append((c.topo_sort_id + 2, 1))
-
-    G = nx.DiGraph(incoming_graph_data=edges)
-    G.add_node(0)
-    G.add_node(1)
-    has_path = nx.algorithms.shortest_paths.generic.has_path(G, 0, 1)
-    # Scream if has path
-    is_ok = not has_path
-    has_path_via_missing_nodes = not is_ok
-
-    if not has_path_via_missing_nodes:
-        for nn in b.in_edges:
-            if nn.topo_sort_id > a.topo_sort_id:
-                return True  # TODO: this doesn't mean a cycle!
-    return has_path_via_missing_nodes
-
-
-def check_cycle2(g: Graph, a: Node, b: Node):
-    """
-    Checks if contracting (merging) (a,b) breaks topo order
-    Args:
-        g: topo-sorted graph
-        a: start: first node in edge  (a,b)
-        b: end: second node in edge (a,b)
-
-    Returns:
-        True if contracting would create a cycle.
-
-    """
-    # Add node AB, with outputs of combined A,B
-    # start DFS from AB. if encountering A or B : there is a cycle.
-
-    ab = Node(None, None, None)
-    ab.out_edges = sorted(set(a.out_edges + b.out_edges) - {a, b}, key=lambda x: x.id)
-
-    # TODO: dynamic topo sort. than we can just check path from a,b after removing edges.
-    # https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/compiler/jit/graphcycles/graphcycles.cc#L19
-    # https://cs.stackexchange.com/a/88325/130155
-    # when dynamic topo sort is maintaned, we can
-    # change depth_limit to rank b
-    creates_a_cycle = g.forward_dfs_and_check(source=ab, set_to_check={a, b}, depth_limit=None)
-    return creates_a_cycle
-
-
-def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunction):
-    """Penalized edges are for disallowing sending weird stuff which MPI and the like can't handle.
-        # TODO: if this creates a cycle we have nothing to do, but manually wrap it and disallow communication of weird stuff
-    """
-    matching = []
-    for node in graph.non_input_nodes:
-        check = False
-        for out in node.out_edges:
-            if edge_weight_function(node, out) == edge_weight_function.penalty:
-                if check_cycle2(graph, node, out):
-                    warnings.warn(f"can't compress edge with penalty (node,out)={(node, out)}")
-                    continue
-                matching.append([node, out])  # <---- into node
-                # TODO: we have to handle doubles and so on...
-                check = True
-        if check:
-            for e in matching[-len(node.out_edges):]:
-                if e[0] != node:
-                    # This should happen, since penalty is on the node itself
-                    raise NotImplementedError(
-                        f"potential cycle in edge {e}. Should probably duplicate node, or check topo order.")
-    return matching
-
-
-def code_analysis_matching(graph: Graph):
-    pass
-
-
-def adjacent_and_same_size_matching(graph: Graph):
-    pass
-
-
-def comm_comp_ratio_matching(graph: Graph):
-    pass
-
-
-def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
-                                       verbose=False, record_history=False):
-    # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
-    prev_graph = graph.from_other(graph)
-    # Used to find the local multi-matching
-    uf2 = UnionFind(elements=graph._nodes.keys())
-
-    hd = ValueSortedDict({
-        n: node_weight_function(n) for n in graph.non_input_nodes
-    })
-
-    def inner_loop():
-        # optimization: can use the index of new item to skip initial checks if there is no match in them.
-        # But it works good enough without it.
-        for u, weight_of_u in hd.items():
-            # Try to find match:
-            for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
-                if check_cycle2(graph, u, v):
-                    # can't merge without breaking topo sort
-                    continue
-                graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
-                uf.union(u.id, v.id)
-                uf2.union(u.id, v.id)
-                hd.pop(u)
-                hd.pop(v)
-                hd[u] = node_weight_function(u)
-                return True, weight_of_u
-        return False, None
-
-    history_sizes = []
-    history_weights = []
-    while len(hd) > L:
-        # u, weight_of_u = hd.peekitem()
-        merged_something, weight_of_u = inner_loop()
-        if not merged_something:
-            break
-        if record_history:
-            history_sizes.append(len(hd) + 1)
-            history_weights.append(weight_of_u)
-        if verbose:
-            print(f"Nodes: {len(hd)}, Smallest: {weight_of_u}")
-
-    # Note: matching is pretty much meaningless.
-    matching = None
-    return prev_graph, matching, graph, uf, uf2
-
-
-def ofline_smallest_comp_node_matching(graph: Graph, node_weight_function):
-    matching = []
-    matched = set()
-
-    for u in sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)):
-        # Try to find match:
-        if u in matched:
-            continue
-        for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
-            if v in matched:
-                continue
-            if check_cycle2(graph, u, v):
-                # can't merge without breaking topo sort
-                continue
-            matched.add(u)
-            matched.add(v)
-            matching.append((u, v))
-    return matching
-
-
-def below_threshold_matching(graph: Graph):
-    pass
-
-
 # Heavy edge matching: in communications.
+
 
 def greedy_best_fit(graph: Graph, P, node_weight_function, ):
     bins = {i: list() for i in range(P)}
@@ -460,7 +231,7 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, ):
 
 
 def main():
-    from autopipe.autopipe import build_profiled_graph
+    from autopipe.autopipe.api import build_profiled_graph
     import torch
     from torch.nn import Sequential, Linear
 
