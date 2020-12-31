@@ -22,7 +22,7 @@ def _lworker(args):
 
 
 def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
-    work_graph = Graph(None, None, None, None, None).load_state(saved_work_graph_without_par_edges)
+    work_graph = Graph.from_state(saved_work_graph_without_par_edges)
     # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
     hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
@@ -96,8 +96,8 @@ def partition_mpipe(graph: Graph,
     # L_list = list(range(8 * P, 8 * P + 1))  # FIXME: debugging cycles
     # L_list = [2*P, 4*P, 8*P, 16*P]
     if L_list is None:
-        L_list=[P, 2*P, 3*P, 4*P, 5*P, 6*P, 7*P, 8*P]
-        # L_list=[3*P]
+        # L_list=[P, 2*P, 3*P, 4*P, 5*P, 6*P, 7*P, 8*P]
+        L_list=[3*P]
         warnings.warn(f"no L_list given. using mine {L_list}")
 
     if nprocs > 1 and len(L_list) > 1:

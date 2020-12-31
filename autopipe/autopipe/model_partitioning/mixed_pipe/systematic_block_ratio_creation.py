@@ -1,6 +1,6 @@
 from collections import deque
 from copy import copy
-from typing import Set, Dict, Tuple
+from typing import Set, Dict, Tuple, List
 
 from sortedcollections import ValueSortedDict
 
@@ -9,6 +9,8 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_c
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
+# TODO: look at cuts instead of edges
+# TODO: take statisic of "handled nodes".
 
 class RatioBlockCreator:
     def __init__(self, graph: Graph, edge_weight_function: EdgeWeightFunction,
@@ -43,23 +45,26 @@ class RatioBlockCreator:
                 self.protected_edges.remove(edge)
                 self.protected_edges.add((edge[0], a.id))
 
-        protected_changed = changes_list_in or changes_list_out
+        protected_changed = len(changes_list_in) > 0 or len(changes_list_out) > 0
         return protected_changed
 
-    def apply(self):
+    def apply(self, L, verbose=False):
         uf = self.uf
         edges_to_value = self.sorted_graph_forward_edges()
         # TODO: also handle updating the sort, removing merged edges from the graph
         # Needs some union find.
+        n_merges = 0
+        n_iter = 0
 
-        while edges_to_value:
+        while edges_to_value and len(self.graph) > L:
+            n_iter += 1
             edge, comm_objective_left = edges_to_value.popitem()
             root_left = self.graph[edge[0]]
             root_right = self.graph[edge[1]]
 
             tmp = self.ewf.ratio
             assert tmp == 0
-            tmp.ratio = -1
+            self.ewf.ratio = -1
             comm_objective_right = self.ewf(root_left, root_right)
             self.ewf.ratio = tmp
 
@@ -92,69 +97,93 @@ class RatioBlockCreator:
             self.protected_edges.add(edge)
             merges = merges1 + merges2
 
-            # problem: given (u,v) then v is merged, but we want to remove edges (x,v) or (v,x).
-            # solution: union find in the opposite direction to track roots, which are in edge dict.
-            # than use self.uf to replace these edges if not removed.
-            uf_bwd = UnionFind()
+            self.update_sorted_edges_on_merges(edges_to_value, merges, allow_poped_outside=True)
+            if verbose:
+                cur_merges = len(merges)
+                # n_merges_left = len(merges1)
+                # n_merges_right = len(merges2)
+                n_merges += len(merges)
+                n_protected = len(self.protected_edges)
+                print(
+                    f"-I- Iter {n_iter} nodes {self.graph.num_nodes}, merges {n_merges} (now: {cur_merges}), protected: {n_protected}, remaining {len(edges_to_value)}")
 
-            for edge in merges:
-                edges_to_value.pop(edge)
-                # update the overall union find on merges.
-                self.uf.union(*edge, smallest_new_root=False)
+    def update_sorted_edges_on_merges(self, edges_to_value, merges: List[Tuple[int, int]],
+                                      allow_poped_outside=True):
+        # problem: given (u,v) then v is merged, but we want to remove edges (x,v) or (v,x).
+        # solution: union find in the opposite direction to track roots, which are in edge dict.
+        # than use self.uf to replace these edges if not removed.
 
-                uf_bwd.add(edge[0])
-                uf_bwd.add(edge[1])
-                uf_bwd.union(edge[1], edge[0])  # backward
+        assert isinstance(edges_to_value, ValueSortedDict)
+        uf = self.uf
+        uf_bwd = UnionFind()
+        for edge in merges:
+            # update the overall union find on merges.
+            self.uf.union(*edge, smallest_new_root=False)
+            uf_bwd.add(edge[0])
+            uf_bwd.add(edge[1])
+        for (a, b) in merges:
+            # find edge to remove
+            a_old = uf_bwd[uf_bwd.find(a)]
+            b_old = uf_bwd[uf_bwd.find(b)]
 
-            for (a, b) in merges:
-                # find edge to remove
-                a_old = uf_bwd[uf_bwd.find(a)]
-                b_old = uf_bwd[uf_bwd.find(b)]
+            uf_bwd.union(a, b)  # backward
 
-                edge_to_remove = (a_old, b_old)
+            edge_to_remove = (a_old, b_old)
+            try:
                 del edges_to_value[edge_to_remove]
+            except KeyError as e:
+                if not allow_poped_outside:
+                    raise e
 
-                # TODO: also update edge weights for b.in_edges
+            # Also update edge weights for b.in_edges
 
-            for (a, b) in merges:
-                a_old = uf_bwd[uf_bwd.find(a)]
-                b_old = uf_bwd[uf_bwd.find(b)]
+            a_new = uf[uf.find(a)]
+            b_new = uf[uf.find(a)]
+            cur_b_node = self.graph[b_new]
+            cur_a_node = self.graph[a_new]
 
-                a_new = uf[uf.find(a)]
-                b_new = uf[uf.find(a)]
-                cur_b_node = self.graph[b_new]
-                cur_a_node = self.graph[a_new]
+            for cur_x_node in cur_b_node.out_edges:
+                x_new = cur_x_node.id
+                x_old = uf_bwd[uf_bwd.find(x_new)] if x_new in uf_bwd else x_new
+                edge_to_remove = (b_old, x_old)
 
-                for cur_x_node in cur_b_node.out_edges:
-                    x_new = cur_x_node.id
-                    x_old = uf_bwd[uf_bwd.find(x_new)] if x_new in uf_bwd else x_new
-                    edge_to_remove = (b_old, x_old)
+                try:
                     del edges_to_value[edge_to_remove]
-                    # from a as well, we are replacing it, careful, it may not happen.
-                    edge_to_remove = (a_old, x_old)
-                    if edge_to_remove in edges_to_value:
-                        del edges_to_value[edge_to_remove]
-                    edge_to_add = (a_new, x_new)
-                    cur_x_node.update_compound_weights_from_uf(uf)
-                    value_of_edge_to_add = self.ewf(cur_a_node, cur_x_node)
-                    # now, do the job
-                    edges_to_value[edge_to_add] = value_of_edge_to_add
+                except KeyError as e:
+                    if not allow_poped_outside:
+                        raise e
 
-                for cur_x_node in cur_b_node.in_edges:
-                    x_new = cur_x_node.id
-                    x_old = uf_bwd[uf_bwd.find(x_new)] if x_new in uf_bwd else x_new
-                    edge_to_remove = (x_old, b_old)
+                # from a as well, we are replacing it, careful, it may not happen.
+                edge_to_remove = (a_old, x_old)
+                if edge_to_remove in edges_to_value:
                     del edges_to_value[edge_to_remove]
-                    # from a as well, we are replacing it, careful, it may not happen.
-                    edge_to_remove = (x_old, a_old)
-                    if edge_to_remove in edges_to_value:
-                        del edges_to_value[edge_to_remove]
+                edge_to_add = (a_new, x_new)
+                cur_x_node.update_compound_weights_from_uf(uf)
+                value_of_edge_to_add = self.ewf(cur_a_node, cur_x_node)
+                # now, do the job
+                edges_to_value[edge_to_add] = value_of_edge_to_add
 
-                    edge_to_add = (x_new, a_new)
-                    cur_x_node.update_compound_weights_from_uf(uf)
-                    value_of_edge_to_add = self.ewf(cur_x_node, cur_a_node)
-                    # now, do the job
-                    edges_to_value[edge_to_add] = value_of_edge_to_add
+            for cur_x_node in cur_b_node.in_edges:
+                x_new = cur_x_node.id
+                x_old = uf_bwd[uf_bwd.find(x_new)] if x_new in uf_bwd else x_new
+                edge_to_remove = (x_old, b_old)
+
+                try:
+                    del edges_to_value[edge_to_remove]
+                except KeyError as e:
+                    if not allow_poped_outside:
+                        raise e
+
+                # from a as well, we are replacing it, careful, it may not happen.
+                edge_to_remove = (x_old, a_old)
+                if edge_to_remove in edges_to_value:
+                    del edges_to_value[edge_to_remove]
+
+                edge_to_add = (x_new, a_new)
+                cur_x_node.update_compound_weights_from_uf(uf)
+                value_of_edge_to_add = self.ewf(cur_x_node, cur_a_node)
+                # now, do the job
+                edges_to_value[edge_to_add] = value_of_edge_to_add
 
     def search_left(self, root_left: Node, right_root: Node, comm_objective, uf):
         # comp: forward + backward
@@ -187,7 +216,7 @@ class RatioBlockCreator:
                     if edge in self.protected_edges:
                         continue
 
-                    can_merge_without_cycles = check_cycle2(self.graph, child, cur_merged)
+                    can_merge_without_cycles = not check_cycle2(self.graph, child, cur_merged)
                     if can_merge_without_cycles:
                         queue.append((child, reversed(child.args)))
                         assert child in cur_merged.args
@@ -244,7 +273,7 @@ class RatioBlockCreator:
                     if edge in self.protected_edges:
                         continue
 
-                    can_merge_without_cycles = check_cycle2(self.graph, cur_merged, child)
+                    can_merge_without_cycles = not check_cycle2(self.graph, cur_merged, child)
                     if can_merge_without_cycles:
                         queue.append((child, iter(child.out_edges)))
                         assert child in cur_merged.out_edges
@@ -275,15 +304,22 @@ class RatioBlockCreator:
         assert current_comp < comm_objective
         return False, graph_changed, protected_changed, merges
 
-    def sorted_graph_forward_edges(self) -> Dict[Tuple[Node, Node], float]:
+    def sorted_graph_forward_edges(self, descending=False) -> Dict[Tuple[Node, Node], float]:
 
         # TODO: if memory is a problem,  use generator for larger graphs
         edges = list()
         for node in self.graph.non_input_nodes:
             edges.extend([(node, e) for e in node.out_edges])
 
-        d = ValueSortedDict({
-            (e[0].id, e[1].id): self.ewf(*e) for e in edges
-        })
+        if not descending:
+
+            d = ValueSortedDict({
+                (e[0].id, e[1].id): self.ewf(*e) for e in edges
+            })
+        else:
+
+            d = ValueSortedDict(lambda x: -x, {
+                (e[0].id, e[1].id): self.ewf(*e) for e in edges
+            })
 
         return d

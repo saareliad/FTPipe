@@ -34,7 +34,7 @@ class Node:
         self.id = idx
         self.scope = scope
 
-        self.topo_sort_id = None
+        self.topo_sort_id = id  # hack: start with ID. (potential danger)
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
@@ -64,7 +64,7 @@ class Node:
 
         items_to_handle = list(self.compound_edge_weights.items())
         if allow_outside_uf:
-            items_to_handle = filter(lambda x: x[0] in uf ,items_to_handle)
+            items_to_handle = filter(lambda x: x[0] in uf, items_to_handle)
 
         for id, weight in items_to_handle:
             if not uf.is_root(id):
@@ -88,7 +88,6 @@ class Node:
     def replace_out_edge_on_merge(self, dest_node, new_dest_node):
         self.remove_output(dest_node)
         self.out_edges.append(new_dest_node)
-
 
     @property
     def in_edges(self) -> List["Node"]:
@@ -177,7 +176,6 @@ class Graph():
         for a in v.in_edges:
             a.maybe_create_compound_edge_weights(edge_weight_function=edge_weight_function)
 
-
         # Merge node weights
         # TODO: we don't know about other x->v or u->y
         # Needs outside control to with longest path to make it accurate in case of concurrent ops
@@ -219,14 +217,14 @@ class Graph():
 
         # self.topo_sort(verbose=False, change_graph=False)
 
-        # Massive check for dups....
+        # # Massive check for dups....
         # for n in self.nodes:
         #     assert n not in n.out_edges, n
         #     assert n not in n.in_edges, n
         #     assert len(set(n.out_edges)) == len(n.out_edges), n
         #     assert len(set(n.in_edges)) == len(n.in_edges), n
 
-    def _update_compound_weights_on_merge(self, u, v, edge_weight_function, uf,  partial_uf: Optional[UnionFind] = None):
+    def _update_compound_weights_on_merge(self, u, v, edge_weight_function, uf, partial_uf: Optional[UnionFind] = None):
         # Merge edge weights.
         is_new_u_weights = u.maybe_create_compound_edge_weights(edge_weight_function)
         # TODO: if is_new_u_weights remove v from there, but the id is unkown at this step.
@@ -258,11 +256,10 @@ class Graph():
             if u in a.out_edges:
                 w = a.compound_edge_weights[u.id]
                 del a.compound_edge_weights[u.id]
-                a.compound_edge_weights[v.id] += w   # defaultdict
+                a.compound_edge_weights[v.id] += w  # defaultdict
 
     #
     # def _update_compound_weights_on_replaced_output(self, nn, u, v, edge_weight_function, uf):
-
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -595,6 +592,9 @@ class Graph():
         for state in sorted(node_states.values(), key=lambda s: s['id']):
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
+
+        for state in sorted(node_states.values(), key=lambda s: s['id']):
+            node = nodes[state['id']]
 
             node.topo_sort_id = state['topo_sort_id']
             node.stage_id = state['stage_id']

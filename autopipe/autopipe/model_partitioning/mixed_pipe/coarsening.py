@@ -4,10 +4,10 @@ from typing import List, Optional, Tuple
 
 from sortedcollections import ValueSortedDict
 
-from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, NodeWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_partitioning.mixed_pipe.systematic_block_ratio_creation import RatioBlockCreator
+from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
 
@@ -26,8 +26,35 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     p = g
 
     # TODO: heavy edge matching on percentile
-    # TODO: systematic-block-ratio-creation
 
+    p, _, g, uf, uf2  = online_heavy_edge_matching(p,
+                                                  node_weight_function,
+                                                  edge_weight_function,
+                                                  L,
+                                                  uf,
+                                                  verbose=True,
+                                                  record_history=True,
+                                                  pecentile_to_filter=0.9)
+
+    # it is the last so we dont deepcopy(uf)
+    hierarchy.append((p, uf2, g, deepcopy(uf)))
+    p = g
+
+
+    # TODO: systematic-block-ratio-creation
+    p, _, g, uf, uf2  = comm_comp_ratio_matching(
+        p,
+        node_weight_function,
+        edge_weight_function,
+        L,
+        uf,
+        verbose=True,
+    )
+    if uf2 is None:
+        warnings.warn("can't restore single step of systematic max blocks")
+
+    hierarchy.append((p, uf2, g, deepcopy(uf)))
+    p = g
 
 
     p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
@@ -91,8 +118,16 @@ def adjacent_and_same_size_matching(graph: Graph):
     pass
 
 
-def comm_comp_ratio_matching(graph: Graph):
-    pass
+def comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
+                                       verbose=False):
+    prev_graph = graph.from_other(graph)
+
+    rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,
+                            uf=uf)
+    rbc.apply(L, verbose=verbose)
+
+    matching = None
+    return prev_graph, matching, graph, uf, None
 
 
 def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
@@ -163,21 +198,21 @@ def ofline_smallest_comp_node_matching(graph: Graph, node_weight_function):
 
 
 def online_heavy_edge_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
-                                       verbose=False, record_history=False):
-    raise NotImplementedError()
+                               verbose=False, record_history=False, pecentile_to_filter=0.9):
     # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
     prev_graph = graph.from_other(graph)
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
+    # HACK: re-using code from RatioBlockCreator
+    rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,
+                            uf=uf)
 
-    rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,uf=uf)
-
-    hd = rbc.sorted_graph_forward_edges()  # ValueSortedDict
+    hd = rbc.sorted_graph_forward_edges(descending=True)  # ValueSortedDict
 
     def inner_loop():
         # optimization: can use the index of new item to skip initial checks if there is no match in them.
         # But it works good enough without it.
-        for (uid,vid), weight_of_u_v in hd.items():
+        for (uid, vid), weight_of_u_v in hd.items():
             u = graph[uid]
             v = graph[vid]
 
@@ -186,27 +221,35 @@ def online_heavy_edge_matching(graph: Graph, node_weight_function, edge_weight_f
                 # can't merge without breaking topo sort
                 continue
             graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
-            uf.union(u.id, v.id)
+            # uf.union(u.id, v.id) handled below
             uf2.union(u.id, v.id)
-            hd.pop((uid,vid))
-            # TODO: update edges dict, take from prev.
-            hd.pop(v)
-            hd[u] = node_weight_function(u)
-            return True, weight_of_u
+            rbc.update_sorted_edges_on_merges(edges_to_value=hd, merges=[(u.id, v.id)], allow_poped_outside=True)
+            return True, weight_of_u_v
         return False, None
 
     history_sizes = []
     history_weights = []
-    while len(hd) > L:
+    import pandas as pd
+    s = pd.Series(list(hd.values()))
+    description = s.describe(percentiles=[0.5, 0.75, 0.8, 0.9, 0.95, 0.99])
+    print(description)
+
+    if pecentile_to_filter is not None:
+        dest_length = len(hd) * pecentile_to_filter
+        print(f"Filtering hte {pecentile_to_filter} percentile")
+    else:
+        dest_length = L
+
+    while len(hd) > dest_length:
         # u, weight_of_u = hd.peekitem()
-        merged_something, weight_of_u = inner_loop()
+        merged_something, weight_of_merged = inner_loop()
         if not merged_something:
             break
         if record_history:
             history_sizes.append(len(hd) + 1)
-            history_weights.append(weight_of_u)
+            history_weights.append(weight_of_merged)
         if verbose:
-            print(f"Nodes: {len(hd)}, Smallest: {weight_of_u}")
+            print(f"Edges: {len(hd)}, Largest edge: {weight_of_merged}")
 
     # Note: matching is pretty much meaningless.
     matching = None

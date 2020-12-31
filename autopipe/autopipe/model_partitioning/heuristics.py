@@ -58,7 +58,7 @@ class EdgeWeightFunction():
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
                  MULT_FACTOR=1e4,
-                 penalty=1e4,
+                 penalty=1e7,
                  penalize_non_tensors=False,
                  ensure_positive=True,
                  # ensure_at_least1=False

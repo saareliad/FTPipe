@@ -111,15 +111,15 @@ class Parser(argparse.ArgumentParser, ABC):
             type=float,
             default=1e4,
             help=
-            "a constant to multiply weights with (usefull if weights are really small)"
+            "a constant to multiply weights with (useful if weights are really small)"
         )
 
         group.add_argument(
             "--edge_penalty",
             type=float,
-            default=1e4,
+            default=1e7,
             help=
-            "multipicative penalty for edges if `penalize_non_tensors` is set"
+            "multiplicative penalty for edges if `penalize_non_tensors` is set"
         )
 
     def _add_partitioning_args(self, group):
