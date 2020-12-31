@@ -22,7 +22,7 @@ def get_weight_functions(args, verbose=True):
     else:
         node = NodeWeightFunction(bwd_to_fwd_ratio=args.bwd_to_fwd_ratio, MULT_FACTOR=MULT_FACTOR)
 
-    warnings.warn("Communications of activations only (activations >= gradients)")
+    warnings.warn("Modeling Communications of activations only. Problematic for some algorithms")
     edge = EdgeWeightFunction(args.bw,
                               bwd_to_fwd_ratio=0,  # TODO: See warning
                               penalize_non_tensors=args.penalize_non_tensors,
@@ -79,8 +79,7 @@ class EdgeWeightFunction():
                 else:
                     raise NotImplementedError("not supported yet")
                     # return u.compound_edge_weights[v.id] / (550 / self.bw)
-            elif self.ratio<0:
-                #if u.req_grad
+            elif self.ratio < 0:
                 warnings.warn("using forward activations as backward comm for merged node,"
                               " ignoring req_grad=False edges")
 
@@ -113,7 +112,7 @@ class EdgeWeightFunction():
                         tmp = reduce(operator.mul, shape, 1)
                         # include dtype size
                         tmp *= torch.empty(1, dtype=dtype).element_size()
-                        if u.req_grad:
+                        if u.req_grad and v.req_grad:
                             bwd_volume += tmp
                     else:
                         raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
@@ -209,28 +208,19 @@ class CoarsenedWeightFunction():
 
         comm_bwd, comm_fwd = self.calculate_comm_forward_and_backward(incomming_edges, outgoing_edges)
 
-        is_comm_fwd = overlaped_comp_fwd <= comm_fwd
-        is_comm_bwd = overlaped_comp_bwd <= comm_bwd
-
-        if not is_comm_fwd and not is_comm_bwd:
-            cost = combined_comp_cost
-        elif is_comm_fwd and not is_comm_bwd:
-            comp_bwd = total_gpu_comp_cost * (
-                        total_stage_comp_cost_bwd / (total_stage_comp_cost_bwd + total_stage_comp_cost_fwd))
-            cost_fwd = comm_fwd
-            cost_bwd = max(comp_bwd, comm_bwd)  # HACK
-            cost = cost_bwd + cost_fwd
-        elif not is_comm_fwd and is_comm_bwd:
-            # not possible AFAIK
-            comp_fwd = total_gpu_comp_cost * (
-                        total_stage_comp_cost_fwd / (total_stage_comp_cost_bwd + total_stage_comp_cost_fwd))
-            cost_fwd = max(comp_fwd, comm_fwd)
-            cost_bwd = comm_bwd  # HACK
-            cost = cost_bwd + cost_fwd
-        else:
-            cost = comm_bwd + comm_fwd
+        cost = combined_comp_cost + max(0, comm_fwd - overlaped_comp_fwd) + max(0, comm_bwd - overlaped_comp_bwd)
 
         return cost
+
+    def is_comm_bounded_forward(self, node: Node):
+        outgoing = [(node, nn) for nn in node.out_edges]
+        comm = self.calculate_comm_forward(outgoing)
+        return self.nwf(node) <= comm
+
+    def is_comm_bounded_backward(self, node: Node):
+        incomming = [(nn, node) for nn in node.in_edges]
+        comm = self.calculate_comm_backward(incomming)
+        return self.nwf(node) <= comm
 
     def calculate_comp(self, nodes: Iterable[Node]):
         if not self.do_longest_path:
@@ -277,14 +267,14 @@ class CoarsenedWeightFunction():
         return outgoing_edges, outgoing_nodes, incoming_edges, incoming_nodes
 
     def is_comm_bounded(self, nodes: Set[Node],
-                        boarders: Optional[Tuple[Set[Tuple[Node, Node]], Set[Node], Set[Tuple[Node, Node]], Set[Node]]] = None,
+                        boarders: Optional[
+                            Tuple[Set[Tuple[Node, Node]], Set[Node], Set[Tuple[Node, Node]], Set[Node]]] = None,
 
                         ):
 
         comp_bwd, comp_fwd = self.calculate_comp(nodes)
         combined_comp_cost = comp_bwd + comp_fwd
         overlaped_comp_fwd = overlaped_comp_bwd = combined_comp_cost
-
 
         if boarders:
             outgoing_edges, _, incomming_edges, _ = boarders
@@ -293,8 +283,8 @@ class CoarsenedWeightFunction():
 
         comm_bwd, comm_fwd = self.calculate_comm_forward_and_backward(incomming_edges, outgoing_edges)
 
-        is_comm_fwd = overlaped_comp_fwd <= comm_fwd
-        is_comm_bwd = overlaped_comp_bwd <= comm_bwd
+        is_comm_fwd = overlaped_comp_fwd < comm_fwd
+        is_comm_bwd = overlaped_comp_bwd < comm_bwd
 
         return is_comm_fwd, is_comm_bwd
 
@@ -304,15 +294,9 @@ class CoarsenedWeightFunction():
     #
     #     is_comm_fwd = overlaped_comp_fwd <= comm_fwd
 
-
     def calculate_comm_forward_and_backward(self, incomming_edges, outgoing_edges):
-        tmp = self.ewf.ratio
-        assert tmp == 0
-        comm_fwd = sum(self.ewf(*e) for e in outgoing_edges)
-
-        self.ewf.ratio = -1
-        comm_bwd = sum(self.ewf(*e) for e in incomming_edges if e[0].req_grad)
-        self.ewf.ratio = 0
+        comm_bwd = self.calculate_comm_backward(incomming_edges)
+        comm_fwd = self.calculate_comm_forward(outgoing_edges)
         return comm_bwd, comm_fwd
 
     def calculate_comm_forward(self, outgoing_edges):
@@ -323,8 +307,7 @@ class CoarsenedWeightFunction():
 
     def calculate_comm_backward(self, incomming_edges):
         tmp = self.ewf.ratio
-        assert tmp == 0
         self.ewf.ratio = -1
-        comm_bwd = sum(self.ewf(*e) for e in incomming_edges if e[0].req_grad)
+        comm_bwd = sum(self.ewf(*e) for e in incomming_edges)
         self.ewf.ratio = tmp
         return comm_bwd
