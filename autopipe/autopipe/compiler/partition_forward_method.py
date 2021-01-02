@@ -337,7 +337,7 @@ def generate_constant(node):
 def generate_magic(variable_name, self_arg, func_name, param_list):
     ##############################
     # Magic Method delegation
-    # intentionaly explicit
+    # intentionally explicit
     # NOTE if the method requires specific syntax
     # then it should be also added in model_profiling/tracer.py
     # and ensure correct code generation in utils

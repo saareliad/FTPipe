@@ -1,5 +1,6 @@
 import os
 import pickle
+import warnings
 
 import torch
 
@@ -66,13 +67,20 @@ class GraphCache:
         self.exists = os.path.exists(cache_name)
         self.overwrite = overwrite
         self.v = None
+        self.compute_anyway=False
 
     def __enter__(self):
         if self.exists:
-            print(f"loading from cache: {self.cache_name}")
-            self.v = Graph.deserialize(self.cache_name)
-        else:
-            print(f"computing value for {self.cache_name}")
+            try:
+                print(f"loading from cache: {self.cache_name}")
+                self.v = Graph.deserialize(self.cache_name)
+                return self
+            except Exception as e:
+                self.compute_anyway = True
+                warnings.warn("loading from cache failed, (check its consistency!). Will compute value. "
+                              f"overwrite={self.overwrite}")
+
+        print(f"computing value for {self.cache_name}")
         return self
 
     def __exit__(self, type, value, traceback):
@@ -85,6 +93,7 @@ class GraphCache:
                 self.v.serialize(self.cache_name)
             else:
                 print("exception_happened")
+        assert isinstance(self.v, Graph)
 
 
 def compute_and_cache(compute_function, cache_name, *args, _cache_cls_to_use=TorchCache, **kw):
@@ -99,7 +108,7 @@ def compute_and_cache(compute_function, cache_name, *args, _cache_cls_to_use=Tor
     """
 
     with _cache_cls_to_use(cache_name, overwrite=False) as cache:
-        if not cache.exists:
+        if not cache.exists or getattr(cache, "compute_anyway", False):
             cache.v = compute_function(*args, **kw)
     return cache.v
 

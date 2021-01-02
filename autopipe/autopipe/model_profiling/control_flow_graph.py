@@ -826,7 +826,7 @@ class Graph():
 
         return copy
 
-    def topo_sort(self, verbose=False, change_graph=True):
+    def topo_sort(self, verbose=False, change_graph=True, resort_edges=False):
 
         def print_if_verbose(*args, **kw):
             if verbose:
@@ -854,6 +854,11 @@ class Graph():
         topo_sorted = list(topo_sorted)
         for topo_sort_id, node_id in enumerate(topo_sorted):
             self[node_id].topo_sort_id = topo_sort_id
+
+        if resort_edges:
+            for node in self.nodes:
+                node.out_edges.sort(key=lambda x:x.topo_sort_id)
+                node.args.sort(key=lambda x:x.topo_sort_id)
 
         if not change_graph:
             return

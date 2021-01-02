@@ -31,7 +31,8 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                                                               weights: Dict[Node, FullExecTimes],
                                                                               partitioning_method,
                                                                               partition_profiled_graph_fn,
-                                                                              n_runs_limit=4):
+                                                                              n_runs_limit=10,
+                                                                              do_exhustive_search_for_last_partition=True):
     print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
     # protect graph:
     saved_state = graph.state()
@@ -74,7 +75,7 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
         if current_mistakes != mistakes_min:
             warnings.warn(f"current_mistakes != mistakes_min, {current_mistakes} != {mistakes_min}")
 
-        if current_mistakes > 2:
+        if current_mistakes > 2 and do_exhustive_search_for_last_partition:
             graph = exhustive_search_for_last_partition(saved_state, graph, history, n_runs, partition_profiled_graph_fn, weights, smallest_fp_with_zero_fp=True)
     return graph
 

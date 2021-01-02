@@ -272,7 +272,8 @@ class T5Attention(nn.Module):
 
         # half of the buckets are for exact increments in positions
         max_exact = num_buckets // 2
-        is_small = n < max_exact
+        # is_small = n < max_exact
+        is_small = torch.less(n, max_exact)
 
         # The other half of the buckets are for logarithmically bigger bins in positions up to max_distance
         val_if_large = max_exact + (

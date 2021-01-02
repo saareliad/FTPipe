@@ -1,13 +1,15 @@
+import warnings
 from collections import deque
-from copy import copy
-from typing import Set, Dict, Tuple, List
+from typing import Set, Dict, Tuple, List, Union
 
 from sortedcollections import ValueSortedDict
 
-from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction
+from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction, \
+    CoarsenedWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
+
 
 # TODO: look at cuts instead of edges
 # TODO: take statisic of "handled nodes".
@@ -18,11 +20,14 @@ class RatioBlockCreator:
         self.graph = graph
         self.ewf = edge_weight_function
         self.nwf = node_weight_function
+        self.cwf = CoarsenedWeightFunction(edge_weight_function=edge_weight_function,
+                                           node_weight_function=node_weight_function)
         self.uf = uf
 
         # edges we already handled and don't want to touch
         # self.merged_nodes = set()  # merge(u,v) <-> v in merged_nodes
         self.protected_edges: Set[int, int] = set()
+        self.protected_nodes: Set[int] = set()
 
     def change_protected_before_merge(self, a: Node, b: Node):
 
@@ -49,63 +54,107 @@ class RatioBlockCreator:
         return protected_changed
 
     def apply(self, L, verbose=False):
+        # TODO Get initial state of "protected" nodes
         uf = self.uf
-        edges_to_value = self.sorted_graph_forward_edges()
+        node_to_cuts = self.sorted_block_to_cuts(forward=True, descending=False)
+        node_to_ok_fwd = {
+            node.id: not self.cwf.is_comm_bounded_forward(node) for node in self.graph.non_input_nodes
+        }
+        node_to_ok_bwd = {
+            node.id: not self.cwf.is_comm_bounded_backward(node) for node in self.graph.non_input_nodes
+        }
+
+        node_to_ok_both = {
+            x: a and b for x, a, b in zip(node_to_ok_fwd.keys(), node_to_ok_fwd.values(), node_to_ok_bwd.values())
+        }
+
         # TODO: also handle updating the sort, removing merged edges from the graph
         # Needs some union find.
         n_merges = 0
         n_iter = 0
 
-        while edges_to_value and len(self.graph) > L:
-            n_iter += 1
-            edge, comm_objective_left = edges_to_value.popitem()
-            root_left = self.graph[edge[0]]
-            root_right = self.graph[edge[1]]
+        failed: Set[int] = set()
+        failed_then_merged = set()
+        n_ok_fwd = sum(1 for x in node_to_ok_fwd.values() if x)
+        n_ok_bwd = sum(1 for x in node_to_ok_bwd.values() if x)
+        n_ok_both = sum(1 for x in node_to_ok_both.values() if x)
 
-            tmp = self.ewf.ratio
-            assert tmp == 0
-            self.ewf.ratio = -1
-            comm_objective_right = self.ewf(root_left, root_right)
-            self.ewf.ratio = tmp
+        def print_state():
+            n_nodes = len(self.graph)
+
+            n_failed = len(failed)
+
+            d = dict(iter=n_iter, nodes=n_nodes, merges=n_merges, failed=n_failed, ok_fwd=n_ok_fwd, ok_bwd=n_ok_bwd,
+                     ok_both=n_ok_both, remaining=len(node_to_cuts))
+            print(d)
+
+        print_state()
+        print("Handling nodes without merges nodes")
+
+        for n, is_ok in node_to_ok_fwd.items():
+            if is_ok:
+                node_to_cuts.pop(n, default=None)
+                self.protected_nodes.add(n)
+
+        print_state()
+
+        while node_to_cuts and len(self.graph) > L:
+            n_iter += 1
+            node_id, node_fwd_cut = node_to_cuts.popitem()
+            root_left = self.graph[node_id]
 
             saved_state = self.graph.state()  # O(N). we are dead...
-            protected_copy = copy(self.protected_edges)
-            (protect_edge_left_condition, graph_changed, protected_changed, merges1) = self.search_left(root_left,
-                                                                                                        root_right,
-                                                                                                        comm_objective_left,
-                                                                                                        uf=uf)
-            if not protect_edge_left_condition:
+            (is_success, graph_changed, merges_left, protected_node) = self.search_left(root_left,
+                                                                                        node_fwd_cut,
+                                                                                        uf=uf)
+            if not is_success:
                 if graph_changed:
                     self.graph.load_state(graph_state=saved_state)
-                if protected_changed:
-                    self.protected_edges = protected_copy
+                failed.add(root_left.id)
+                print_state()
                 continue
 
-            (protect_edge_right_condition, graph_changed2, protected_changed2, merges2) = self.search_right(root_right,
-                                                                                                            root_left,
-                                                                                                            comm_objective_right,
-                                                                                                            uf=uf)
+            self.protected_nodes.add(protected_node.id)
+            merges = merges_left
+            n_merges += len(merges)
 
-            graph_changed = graph_changed or graph_changed2
-            if not protect_edge_right_condition:
-                if graph_changed:
-                    self.graph.load_state(graph_state=saved_state)
-                if protected_changed:
-                    self.protected_edges = protected_copy
-                continue
+            # update on merges
+            for i, (a, b) in enumerate(merges_left):
+                node_to_cuts.pop(b, default=None)
+                if node_to_ok_fwd.pop(b, None):
+                    n_ok_fwd -= 1
+                if node_to_ok_bwd.pop(b, None):
+                    n_ok_bwd -= 1
+                if node_to_ok_both.pop(b, None):
+                    n_ok_both -= 1
 
-            self.protected_edges.add(edge)
-            merges = merges1 + merges2
+                if b in failed:
+                    failed.remove(b)
+                    failed_then_merged.add(b)
 
-            self.update_sorted_edges_on_merges(edges_to_value, merges, allow_poped_outside=True)
+                uf.union(a, b, smallest_new_root=False)
+
+                if i == len(merges_left) - 1:
+                    assert a == protected_node.id
+                    node = self.graph[a]
+
+                    was_ok_bwd_b4_merge = node_to_ok_bwd[a]
+                    is_ok_bwd_after_merge = not self.cwf.is_comm_bounded_backward(node)
+                    node_to_ok_bwd[a] = is_ok_bwd_after_merge
+                    node_to_ok_both[a] = is_ok_bwd_after_merge  # its already ok fwd
+                    if is_ok_bwd_after_merge and not was_ok_bwd_b4_merge:
+                        n_ok_bwd += 1
+                    if is_ok_bwd_after_merge:
+                        n_ok_both += 1
+
+                    assert not node_to_ok_fwd[a]
+                    node_to_ok_fwd[a] = True
+                    n_ok_fwd += 1
+
+            # self.update_sorted_edges_on_merges(edges_to_value, merges, allow_poped_outside=True)
+
             if verbose:
-                cur_merges = len(merges)
-                # n_merges_left = len(merges1)
-                # n_merges_right = len(merges2)
-                n_merges += len(merges)
-                n_protected = len(self.protected_edges)
-                print(
-                    f"-I- Iter {n_iter} nodes {self.graph.num_nodes}, merges {n_merges} (now: {cur_merges}), protected: {n_protected}, remaining {len(edges_to_value)}")
+                print_state()
 
     def update_sorted_edges_on_merges(self, edges_to_value, merges: List[Tuple[int, int]],
                                       allow_poped_outside=True):
@@ -185,21 +234,30 @@ class RatioBlockCreator:
                 # now, do the job
                 edges_to_value[edge_to_add] = value_of_edge_to_add
 
-    def search_left(self, root_left: Node, right_root: Node, comm_objective, uf):
+    def search_left(self, root_left: Node, comm_objective, uf) -> Tuple[
+        bool, bool, List[Tuple[int, int]], Union[Node, None]]:
         # comp: forward + backward
         # comm: forward
         partial_uf = UnionFind()
         merges = []
         graph_changed = False
-        protected_changed = False
+        assert self.nwf.ratio == 1
+        assert self.ewf.ratio == 0
+
+        # early exit, it shouldn't happen though
+        current_comp = self.nwf(root_left)
+        if current_comp >= comm_objective:
+            warnings.warn("early exit without merges shouldn't happen")
+            return True, graph_changed, merges, root_left
+
+        cur_merged = root_left
         # backward BFS
         source = root_left
         visited = {source}
-        assert self.nwf.ratio == 1
-        current_comp = self.nwf(source)
-        if current_comp >= comm_objective:
-            return True, graph_changed, protected_changed, merges
-        cur_merged = root_left
+        # TODO: order can be topo and not just bfs, e.g edge 4->50 should be taken *after* 49->50
+        # even though its same topo order.
+        # this requires a "smarted queue" e.g sorted by topo sort distance
+        # this also requires topo-sort after each merge, or dynamic toposort.
 
         queue = deque([(source, reversed(source.args))])
         while queue:
@@ -212,8 +270,7 @@ class RatioBlockCreator:
                 if child not in visited:
                     visited.add(child)
                     # TODO: check if we can merge without cycles
-                    edge = (child.id, cur_merged.id)
-                    if edge in self.protected_edges:
+                    if child.id in self.protected_nodes:
                         continue
 
                     can_merge_without_cycles = not check_cycle2(self.graph, child, cur_merged)
@@ -222,87 +279,88 @@ class RatioBlockCreator:
                         assert child in cur_merged.args
                         self.graph.merge(child.id, cur_merged.id, edge_weight_function=self.ewf, uf=uf,
                                          partial_uf=partial_uf)
+                        self.graph.topo_sort(change_graph=False, resort_edges=True)
                         graph_changed = True
 
                         partial_uf.add(child.id)
                         partial_uf.add(cur_merged.id)
                         partial_uf.union(child.id, cur_merged.id)
 
-                        protected_changed |= self.change_protected_before_merge(child, cur_merged)
                         merges.append((child.id, cur_merged.id))
                         cur_merged = child
                         current_comp = self.nwf(cur_merged)
                         # update comm objective in case of merged edges
-                        comm_objective = self.ewf(cur_merged, right_root)
+                        comm_objective = sum(self.ewf(cur_merged, nn) for nn in cur_merged.out_edges)
 
                         if current_comp >= comm_objective:
-                            return True, graph_changed, protected_changed, merges
+                            return True, graph_changed, merges, cur_merged
             except StopIteration:
                 queue.popleft()
 
         assert current_comp < comm_objective
-        return False, graph_changed, protected_changed, merges
+        merges = []  # does not really matter, we are using a checkpoint.
+        return False, graph_changed, merges, None
 
-    def search_right(self, root_right: Node, left_root: Node, comm_objective, uf):
-        partial_uf = UnionFind()
-        merges = []
-        protected_changed = False
-        graph_changed = False
-        # forward BFS
-        source = root_right
-        visited = {source}
-        assert self.nwf.ratio == 1
-        current_comp = self.nwf(source)
-        if current_comp >= comm_objective:
-            return True, graph_changed, protected_changed, merges
-        cur_merged = source
-
-        queue = deque([(source, iter(source.out_edges))])
-        while queue:
-            parent, children = queue[0]
-            # if parent not in merged:
-            #     continue  # visited, but not merged to source
-            try:
-                child = next(children)
-
-                if child not in visited:
-                    visited.add(child)
-                    # TODO: check if we can merge without cycles
-
-                    edge = (cur_merged.id, child.id)
-                    if edge in self.protected_edges:
-                        continue
-
-                    can_merge_without_cycles = not check_cycle2(self.graph, cur_merged, child)
-                    if can_merge_without_cycles:
-                        queue.append((child, iter(child.out_edges)))
-                        assert child in cur_merged.out_edges
-                        self.graph.merge(cur_merged.id, child.id, edge_weight_function=self.ewf, uf=uf,
-                                         partial_uf=partial_uf)
-                        merges.append((cur_merged.id, child.id))
-                        protected_changed |= self.change_protected_before_merge(cur_merged, child)
-
-                        partial_uf.add(child.id)
-                        partial_uf.add(cur_merged.id)
-                        partial_uf.union(cur_merged.id, child.id)
-
-                        graph_changed = True
-                        # cur_merged = cur_merged
-                        current_comp = self.nwf(cur_merged)
-
-                        # update comm objective in case of merged edges
-                        tmp = self.ewf.ratio
-                        self.ewf.ratio = -1
-                        comm_objective = self.ewf(left_root, cur_merged)
-                        self.ewf.ratio = tmp
-
-                        if current_comp >= comm_objective:
-                            return True, graph_changed, protected_changed, merges
-            except StopIteration:
-                queue.popleft()
-
-        assert current_comp < comm_objective
-        return False, graph_changed, protected_changed, merges
+    # def search_right(self, root_right: Node, left_root: Node, comm_objective, uf):
+    #     partial_uf = UnionFind()
+    #     merges = []
+    #     protected_changed = False
+    #     graph_changed = False
+    #     # forward BFS
+    #     source = root_right
+    #     visited = {source}
+    #     assert self.nwf.ratio == 1
+    #     current_comp = self.nwf(source)
+    #     if current_comp >= comm_objective:
+    #         return True, graph_changed, protected_changed, merges
+    #     cur_merged = source
+    #
+    #     queue = deque([(source, iter(source.out_edges))])
+    #     while queue:
+    #         parent, children = queue[0]
+    #         # if parent not in merged:
+    #         #     continue  # visited, but not merged to source
+    #         try:
+    #             child = next(children)
+    #
+    #             if child not in visited:
+    #                 visited.add(child)
+    #                 # TODO: check if we can merge without cycles
+    #
+    #                 edge = (cur_merged.id, child.id)
+    #                 if edge in self.protected_edges:
+    #                     continue
+    #
+    #                 can_merge_without_cycles = not check_cycle2(self.graph, cur_merged, child)
+    #                 if can_merge_without_cycles:
+    #                     queue.append((child, iter(child.out_edges)))
+    #                     assert child in cur_merged.out_edges
+    #                     self.graph.merge(cur_merged.id, child.id, edge_weight_function=self.ewf, uf=uf,
+    #                                      partial_uf=partial_uf)
+    #                     merges.append((cur_merged.id, child.id))
+    #                     protected_changed |= self.change_protected_before_merge(cur_merged, child)
+    #
+    #                     partial_uf.add(child.id)
+    #                     partial_uf.add(cur_merged.id)
+    #                     partial_uf.union(cur_merged.id, child.id)
+    #
+    #                     graph_changed = True
+    #                     # cur_merged = cur_merged
+    #                     current_comp = self.nwf(cur_merged)
+    #
+    #                     # update comm objective in case of merged edges
+    #                     tmp = self.ewf.ratio
+    #                     self.ewf.ratio = -1
+    #                     comm_objective = sum(self.ewf(cur_merged, nn) for nn in cur_merged.out_edges)
+    #                     self.ewf.ratio = tmp
+    #
+    #                     if current_comp >= comm_objective:
+    #                         return True, graph_changed, protected_changed, merges
+    #         except StopIteration:
+    #             queue.popleft()
+    #
+    #     assert current_comp < comm_objective
+    #     return False, graph_changed, protected_changed, merges
 
     def sorted_graph_forward_edges(self, descending=False) -> Dict[Tuple[Node, Node], float]:
 
@@ -321,5 +379,21 @@ class RatioBlockCreator:
             d = ValueSortedDict(lambda x: -x, {
                 (e[0].id, e[1].id): self.ewf(*e) for e in edges
             })
+
+        return d
+
+    def sorted_block_to_cuts(self, forward=True, descending=False) -> Dict[Tuple[Node, Node], float]:
+        if forward:
+            t = {node.id: sum(self.ewf(node, nn) for nn in node.out_edges) for node in self.graph.non_input_nodes}
+        else:
+            t = {node.id: self.cwf.calculate_comm_backward([(nn, node) for nn in node.in_edges]) for node in
+                 self.graph.non_input_nodes}
+
+        if not descending:
+            # TODO: can do a partial relative order with topo-sort ID.
+            # taking later blocks first
+            d = ValueSortedDict(t)
+        else:
+            d = ValueSortedDict(lambda x: -x, t)
 
         return d

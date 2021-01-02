@@ -180,7 +180,6 @@ class CoarsenedWeightFunction():
         self.nwf = node_weight_function
 
         assert self.nwf.MULT_FACTOR == self.ewf.MULT_FACTOR
-        assert self.ewf.MULT_FACTOR == self.ewf.penalty
 
         # TODO: ratio < 1 is needed for GPipe (or sync pipeline)
         if self.nwf.ratio != 1:

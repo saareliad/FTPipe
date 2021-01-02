@@ -25,37 +25,50 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     hierarchy.append((p, matching, g, deepcopy(uf)))
     p = g
 
-    # TODO: heavy edge matching on percentile
+    # Merge nodes with weight 0
+    p, _, g, uf, uf2 = nodes_leq_threshold_matching(p,
+                                                    node_weight_function,
+                                                    edge_weight_function,
+                                                    L,
+                                                    uf,
+                                                    verbose=True,
+                                                    record_history=True,
+                                                    threshold=0
+                                                    )
+    # it is the last so we dont deepcopy(uf)
+    hierarchy.append((p, uf2, g, deepcopy(uf)))
+    p = g
 
-    p, _, g, uf, uf2  = online_heavy_edge_matching(p,
+    # heavy edge matching on percentile
+    p, _, g, uf, uf2 = online_heavy_edge_matching(p,
                                                   node_weight_function,
                                                   edge_weight_function,
                                                   L,
                                                   uf,
                                                   verbose=True,
                                                   record_history=True,
-                                                  pecentile_to_filter=0.9)
+                                                  pecentile_to_filter=0.95)
 
     # it is the last so we dont deepcopy(uf)
     hierarchy.append((p, uf2, g, deepcopy(uf)))
     p = g
 
-
     # TODO: systematic-block-ratio-creation
-    p, _, g, uf, uf2  = comm_comp_ratio_matching(
-        p,
-        node_weight_function,
-        edge_weight_function,
-        L,
-        uf,
-        verbose=True,
-    )
-    if uf2 is None:
-        warnings.warn("can't restore single step of systematic max blocks")
+    DO_SYSTEMATIC = True
+    if DO_SYSTEMATIC:
+        p, _, g, uf, uf2 = comm_comp_ratio_matching(
+            p,
+            node_weight_function,
+            edge_weight_function,
+            L,
+            uf,
+            verbose=True,
+        )
+        if uf2 is None:
+            warnings.warn("can't restore single step of systematic max blocks")
 
-    hierarchy.append((p, uf2, g, deepcopy(uf)))
-    p = g
-
+        hierarchy.append((p, uf2, g, deepcopy(uf)))
+        p = g
 
     p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
                                                           node_weight_function,
@@ -119,8 +132,8 @@ def adjacent_and_same_size_matching(graph: Graph):
 
 
 def comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
-                                       verbose=False):
-    prev_graph = graph.from_other(graph)
+                             verbose=False):
+    prev_graph = Graph.from_other(graph)
 
     rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,
                             uf=uf)
@@ -164,6 +177,58 @@ def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_
     while len(hd) > L:
         # u, weight_of_u = hd.peekitem()
         merged_something, weight_of_u = inner_loop()
+        if not merged_something:
+            break
+        if record_history:
+            history_sizes.append(len(hd) + 1)
+            history_weights.append(weight_of_u)
+        if verbose:
+            print(f"Nodes: {len(hd)}, Smallest: {weight_of_u}")
+
+    # Note: matching is pretty much meaningless.
+    matching = None
+    return prev_graph, matching, graph, uf, uf2
+
+
+def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
+                                 verbose=False, record_history=False, threshold=0):
+    # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
+    prev_graph = graph.from_other(graph)
+    # Used to find the local multi-matching
+    uf2 = UnionFind(elements=graph._nodes.keys())
+
+    hd = ValueSortedDict({
+        n: node_weight_function(n) for n in graph.non_input_nodes
+    })
+
+    def inner_loop():
+        # optimization: can use the index of new item to skip initial checks if there is no match in them.
+        # But it works good enough without it.
+        for u, weight_of_u in hd.items():
+            if weight_of_u > threshold:
+                print(f"done with  nodes <= threshold {threshold}, breaking (last weight: {weight_of_u})")
+                return False, None, True
+            # Try to find match:
+            for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
+                if check_cycle2(graph, u, v):
+                    # can't merge without breaking topo sort
+                    continue
+                graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
+                uf.union(u.id, v.id)
+                uf2.union(u.id, v.id)
+                hd.pop(u)
+                hd.pop(v)
+                hd[u] = node_weight_function(u)
+                return True, weight_of_u, False
+        return False, None, False
+
+    history_sizes = []
+    history_weights = []
+    while len(hd) > L:
+        # u, weight_of_u = hd.peekitem()
+        merged_something, weight_of_u, threshold_cond = inner_loop()
+        if threshold_cond:
+            break
         if not merged_something:
             break
         if record_history:
