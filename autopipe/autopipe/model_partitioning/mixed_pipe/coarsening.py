@@ -11,9 +11,7 @@ from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
 
-def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_function: NodeWeightFunction, L,
-               matching_heuristics=List[str]) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
-    # elements = set(i.id for i in itertools.chain.from_iterable(matching))
+def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_function: NodeWeightFunction, L) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
     uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
 
     print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
@@ -145,8 +143,7 @@ def comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_fun
 
 def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
                                        verbose=False, record_history=False):
-    # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
-    prev_graph = graph.from_other(graph)
+    prev_graph = Graph.from_other(graph)
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
 
@@ -192,8 +189,7 @@ def online_smallest_comp_node_matching(graph: Graph, node_weight_function, edge_
 
 def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
                                  verbose=False, record_history=False, threshold=0):
-    # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
-    prev_graph = graph.from_other(graph)
+    prev_graph = Graph.from_other(graph)
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
 
@@ -264,8 +260,7 @@ def ofline_smallest_comp_node_matching(graph: Graph, node_weight_function):
 
 def online_heavy_edge_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
                                verbose=False, record_history=False, pecentile_to_filter=0.9):
-    # node_to_weight = dict(sorted(graph.non_input_nodes, key=lambda n: node_weight_function(n)))
-    prev_graph = graph.from_other(graph)
+    prev_graph = Graph.from_other(graph)
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
     # HACK: re-using code from RatioBlockCreator
