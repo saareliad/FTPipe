@@ -34,6 +34,7 @@ def partition_pipedream(
         num_machines_in_first_level=None,
         # memory_size = math.inf,
         verbose=True,
+        force_stright_pipeline=True,
 ):
     print("PipeDream Partitioning")
     num_machines = num_gpus
@@ -57,7 +58,7 @@ def partition_pipedream(
     for i in range(len(non_input_nodes)):
         row_A = []
         for j in range(num_machines):
-            row_A.append(None)
+            row_A.append((None, None))
         A.append(row_A)
 
     print("-I- Initializing data-parallel stage T_i_j")
@@ -69,8 +70,8 @@ def partition_pipedream(
         # cum_activation_size += profile_data[i][1]
         cum_parameter_size += node.num_parameters
         # if force_stright_pipeline:
-        # max_m = 1 if force_stright_pipeline else num_machines
-        for j in range(num_machines):
+        max_m = 1 if force_stright_pipeline else num_machines
+        for j in range(max_m):
             # stashed_data_size = math.ceil((num_machines - (j+1)) / (j+1)) * cum_activation_size
             # stashed_data_size += cum_parameter_size
             # if stashed_data_size > memory_size:
@@ -86,7 +87,6 @@ def partition_pipedream(
                 A[i][j] = (max(cum_sum, data_parallel_communication_time) / (j + 1), None)
 
     print("-I- Done")
-
 
     min_machines = 1 if num_machines_in_first_level is None else num_machines_in_first_level
     cum_times = []
@@ -109,7 +109,8 @@ def partition_pipedream(
             node = non_input_nodes[i]
             (min_pipeline_time, optimal_split) = A[i][m]
             for j in range(i):
-                for m_prime in range(1, m + 1):
+                max_m = 2 if force_stright_pipeline else m + 1
+                for m_prime in range(1, max_m):
                     input_transfer_time = 2.0 * sum(edge_weight_function(nn, node) for nn in node.in_edges) / m_prime
                     output_transfer_time = 2.0 * sum(edge_weight_function(node, nn) for nn in node.out_edges) / m_prime
 
@@ -268,7 +269,7 @@ def partition_pipedream(
     # convert
     stage_id = 0
     start = 0
-    for stop in splits[:-1]:
+    for stop in splits:
         for n in non_input_nodes[start:stop]:
             n.stage_id = stage_id
         start = stop
@@ -276,14 +277,11 @@ def partition_pipedream(
 
     # param per stage:
     start = 0
-    params_per_stage = {i:0 for i in range(len(splits))}
-    for n in non_input_nodes[start:stop]:
+    params_per_stage = {i: 0 for i in range(len(splits))}
+    for n in non_input_nodes:
         params_per_stage[n.stage_id] += n.num_parameters
 
     print("params per stage", params_per_stage)
-
-    if len(splits) != num_gpus:
-        raise NotImplementedError("PipeDream returned non-straight pipeline")
 
     work_graph = post_process_partition(work_graph)
 
@@ -291,6 +289,10 @@ def partition_pipedream(
     # Copy work_graph -> saved_work_graph, since our graph is without parallel edges.
     if use_layers_graph:
         graph.induce_layer_partition(work_graph, lookup)
+
+    if len(splits) != num_gpus:
+        graph.serialize("saved_pipedream_non_stright_pipeline_graph")
+        raise NotImplementedError("PipeDream returned non-straight pipeline")
 
     return graph
 
@@ -321,7 +323,8 @@ if __name__ == '__main__':
 
     MULT_FACTOR = 1
     node_weight_function = NodeWeightFunction(bwd_to_fwd_ratio=1, MULT_FACTOR=1)
-    edge_weight_function = EdgeWeightFunction(bw_GBps=12, bwd_to_fwd_ratio=0, MULT_FACTOR=1, penalty=100000, ensure_positive=False)
+    edge_weight_function = EdgeWeightFunction(bw_GBps=12, bwd_to_fwd_ratio=0, MULT_FACTOR=1, penalty=100000,
+                                              ensure_positive=False)
 
     partition_pipedream(graph=graph, num_gpus=8,
                         node_weight_function=node_weight_function,

@@ -111,3 +111,7 @@ See [environment.yml](environment.yml)
 
 - `t_7 = torch.where(t_4, t_8, t_7)`
     RuntimeError: Expected condition to have ScalarType Byte, but got ScalarType Long
+- Can't resort edges
+```[id: 21, scope:BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Tensor::unsqueeze, type:4,
+ id: 1, scope:input1, type:1]```
+replaced `position_ids = position_ids.unsqueeze(0).expand_as(input_ids)` to `t_3 = input_ids.expand_as(t_3)`

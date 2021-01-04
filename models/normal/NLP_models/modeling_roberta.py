@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-from transformers.configuration_roberta import RobertaConfig
+from transformers import RobertaConfig
 #from transformers.file_utils import add_code_sample_docstrings, add_start_docstrings, add_start_docstrings_to_callable
 from transformers.file_utils import add_start_docstrings
 # HACK: we use our own

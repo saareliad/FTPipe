@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 
 from transformers.modeling_utils import Conv1D, prune_conv1d_layer, SequenceSummary
-from transformers.configuration_gpt2 import GPT2Config
+from transformers import GPT2Config
 from transformers.file_utils import add_start_docstrings
 
 from .utils import PreTrainedModel

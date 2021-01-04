@@ -279,7 +279,7 @@ class RatioBlockCreator:
                         assert child in cur_merged.args
                         self.graph.merge(child.id, cur_merged.id, edge_weight_function=self.ewf, uf=uf,
                                          partial_uf=partial_uf)
-                        self.graph.topo_sort(change_graph=False, resort_edges=True)
+                        self.graph.topo_sort(change_graph=False, resort_edges=False)
                         graph_changed = True
 
                         partial_uf.add(child.id)

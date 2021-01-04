@@ -13,7 +13,13 @@ from transformers import (
 from transformers.data.processors.squad import SquadV1Processor, SquadV2Processor
 
 from autopipe.autopipe.model_profiling import register_new_explicit_untraced_function, register_new_traced_function
-from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
+
+from models.normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
+
+# from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
+
+# from models.normal.NLP_models.modeling_bert_4_1_converted import BertForQuestionAnswering
+# from transformers.modeling_utils import get_extended_attention_mask
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +210,8 @@ class BertPartitioner(PartitioningTask):
         config = BertConfig.from_pretrained(args.model_name_or_path,
                                             cache_dir=args.cache_dir if args.cache_dir else None)
         setattr(config, "precompute_attention_mask", args.precompute_attention_mask)
+        setattr(config, "return_dict", False)
+        # config.use_return_dict = True
 
         model = BertForQuestionAnswering.from_pretrained(
             args.model_name_or_path,

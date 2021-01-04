@@ -24,7 +24,7 @@ import operator
 import torch
 import torch.nn.functional as F
 from torch import nn
-from transformers.configuration_t5 import T5Config
+from transformers import T5Config
 from transformers.file_utils import DUMMY_INPUTS, DUMMY_MASK, add_start_docstrings # add_start_docstrings_to_callable
 from transformers.modeling_utils import prune_linear_layer
 from .utils import PreTrainedModel

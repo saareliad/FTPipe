@@ -89,7 +89,7 @@ class EdgeWeightFunction():
                     raise NotImplementedError("not supported yet")
 
         MB = 1e6
-        if u.value_type in [torch.device, torch.dtype, str]:
+        if u.value_type in [torch.device, torch.dtype, str, slice]:
             # no constant or scalars on boundaries
             # no double penalties so we do not multiply by MULT_FACTOR
             w = self.penalty
@@ -115,7 +115,9 @@ class EdgeWeightFunction():
                         if u.req_grad and v.req_grad:
                             bwd_volume += tmp
                     else:
-                        raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
+                        warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. PENALIZING!")
+                        return self.penalty
+                        # raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
                     volume += tmp
 
             # TODO: take (partial) care of heterogeneous bandwidth in refinement.

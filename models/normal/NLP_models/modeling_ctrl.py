@@ -21,7 +21,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from transformers.configuration_ctrl import CTRLConfig
+from transformers import CTRLConfig
 from transformers.file_utils import add_start_docstrings, add_start_docstrings_to_callable
 from transformers.modeling_utils import Conv1D
 

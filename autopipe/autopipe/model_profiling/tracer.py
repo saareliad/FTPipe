@@ -595,7 +595,7 @@ class TracedInstanceFunction(object):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
                           f"/{self.namespace}::{self._func.__name__}")
-        record_arg(out.id, self.self_id)
+        record_arg(out.id, self.self_id)  # FIXME: happens twice?
         connect_inputs_to_output(out.id, args, kwargs)
 
         # perform the operation
@@ -950,7 +950,7 @@ def duplicate_constants(nodes, output_id):
                 copy_node = Node.from_other(node)
                 copy_node.id += n_copy
                 o.replace_input(node, copy_node)
-                copy_node.out_edges = {o}
+                copy_node.out_edges = [o]
                 new_nodes[copy_node.id] = copy_node
                 offset += 1
         else:
@@ -972,6 +972,7 @@ def discard_unused_nodes(nodes, output_id):
 
             # if a >1:      a>1 will be traced but it has no meaning to us
             # as we only record the branch that was taken
+            # FIXME: it is dangerous, check it doesn't discard stuff
             unused_branch = False
             if node.type is NodeTypes.OP and (len(node.out_edges) == 0):
                 op_path = node.scope.rsplit("/", maxsplit=1)[1]
