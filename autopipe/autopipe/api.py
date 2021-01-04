@@ -10,6 +10,7 @@ from autopipe.autopipe import NodeWeightFunction, EdgeWeightFunction, Graph, com
     ExecTimes, FullExecTimes, metis_partition, acyclic_partition, partition_2dbin_pack, partition_mpipe, \
     compute_and_cache, move_tensors, trace_module, infer_req_grad, GraphProfiler, pre_hook_factory, post_hook_factory, \
     execute_graph, profile_network
+from autopipe.autopipe.model_partitioning.pipedream.pipedream_partition_no_hir import partition_pipedream
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -342,6 +343,29 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
                                                   node_weight_function=node_weight_function,
                                                   edge_weight_function=edge_weight_function,
                                                   **binpack_opt)
+
+    elif partitioning_method == "pipedream":
+        t1 = node_weight_function.MULT_FACTOR
+        t2 = edge_weight_function.MULT_FACTOR
+        assert t1 == t2
+        warnings.warn("forcing mult factor to 1")
+        node_weight_function.MULT_FACTOR = 1.0
+        edge_weight_function.MULT_FACTOR = 1.0
+        t3 = edge_weight_function.ensure_positive
+        edge_weight_function.ensure_positive = False
+        graph = partition_pipedream(graph, num_gpus=nparts,
+                                    node_weight_function=node_weight_function,
+                                    edge_weight_function=edge_weight_function,
+                                    num_machines_in_first_level=None,
+                                    )
+
+        node_weight_function.MULT_FACTOR = t1
+        edge_weight_function.MULT_FACTOR = t2
+        edge_weight_function.ensure_positive = t3
+        del t1
+        del t2
+        del t3
+
 
     else:
         raise NotImplementedError(partitioning_method)  # shouldn't happen
