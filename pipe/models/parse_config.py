@@ -157,6 +157,12 @@ def is_shared_parameter(tensor_scope):
     # HACK. (can do it also at config)
     return "Parameter" in tensor_scope
 
+    # FIXME: this is how its done in partitioning
+    # is_param_dict = {
+    #     scope: t.requires_grad
+    #     for t, scope in traverse_params_buffs(model)
+    # }
+
 
 def _check_shared_parameters(pipe_config: PipelineConfig):
     shared = defaultdict(set)

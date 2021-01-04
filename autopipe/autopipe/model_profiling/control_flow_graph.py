@@ -10,8 +10,9 @@ import networkx as nx
 from torch import Tensor, nn as nn
 
 from autopipe.autopipe.union_find import UnionFind
-from autopipe.autopipe.utils import ExecTimes
+from autopipe.autopipe.utils import ExecTimes, layerDict, tensorDict
 
+from torch.nn import Parameter, Module
 
 class NodeTypes(IntEnum):
     """
@@ -38,6 +39,7 @@ class Node:
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
+        self.num_parameters: Optional[int] = 0
         self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
         self.args = []
@@ -122,6 +124,7 @@ class Node:
         node.stage_id = other.stage_id
         node.gpu_id = other.gpu_id
         node.weight = other.weight
+        node.num_parameters = other.num_parameters
 
         node.topo_sort_id = other.topo_sort_id
         node.out_edges = list(other.out_edges)
@@ -176,6 +179,7 @@ class Graph():
         for a in v.in_edges:
             a.maybe_create_compound_edge_weights(edge_weight_function=edge_weight_function)
 
+
         # Merge node weights
         # TODO: we don't know about other x->v or u->y
         # Needs outside control to with longest path to make it accurate in case of concurrent ops
@@ -210,6 +214,9 @@ class Graph():
         u.args = remove_dups(u.args, u)
         u.out_edges = remove_dups(u.out_edges, u)
         del self._nodes[vid]
+
+        # merge node parameters
+        u.num_parameters += v.num_parameters
 
         # TODO: dynamic topo_sort
         if dynamic_topo_sort:
@@ -562,6 +569,7 @@ class Graph():
                          stage_id=node.stage_id,
                          gpu_id=node.gpu_id,
                          weight=node.weight,
+                         num_parameters=node.num_parameters,
                          out_edges=[n.id for n in node.out_edges],
                          args=[n.id for n in node.args],
                          kwargs={n.id: kw for n,
@@ -608,6 +616,7 @@ class Graph():
             node.tensor_shape = state['tensor_shape']
             node.req_grad = state['req_grad']
             node.compound_edge_weights = state['compound_edge_weights']
+            node.num_parameters = state['num_parameters']
 
         for node in nodes.values():
             node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)
@@ -934,6 +943,23 @@ class Graph():
                     stack.pop()
         return False
 
+    def calculate_params_per_node(self, model: Module):
+        # Pytorch
+        layers = layerDict(model, self.depth, self.basic_blocks)
+        tensors = tensorDict(model)
+
+        # params_per_node = dict()
+
+        for n in self.nodes:
+            if n.scope in layers:  # n.value_type == NodeTypes.LAYER
+                x = sum(t.numel() for t in layers[n.scope].parameters())
+            elif (n.value_type is Parameter) and (n.scope in tensors):
+                x = tensors[n.scope].numel()
+            else:
+                x = 0
+            n.num_parameters = x
+
+        # return params_per_node
 
 def remove_dups(lnodes: List[Node], myself):
     s = set(lnodes)

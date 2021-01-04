@@ -238,9 +238,10 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         # This requires heterogeneous profiling.
         # NOTE: very similar thing can be done to partition for heterogeneous accelerators.
 
-        graph = build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                           basic_blocks, save_memory_mode, trace_on_gpu,
-                                           res_cache_name=trace_cache_name)
+        graph = build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth,
+                                                       basic_blocks, save_memory_mode, trace_on_gpu,
+                                                       res_cache_name=trace_cache_name)
+
 
         weights = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
                                           graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
@@ -401,8 +402,8 @@ def build_profiled_graph(model: nn.Module,
         default False
     """
 
-    graph = build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                       basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
+    graph = build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth,
+                                                   basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
 
     print("-I- profiling model")
     weights = get_profiles(graph,
@@ -417,17 +418,18 @@ def build_profiled_graph(model: nn.Module,
                            max_depth=max_depth,
                            basic_blocks=basic_blocks,
                            force_no_recomp_scopes=force_no_recomp_scopes)
-    print("-I- model profiled")
     for n in graph.nodes:
         n.weight = weights.get(n.scope, ExecTimes(0, 0))
+
+    print("-I- model profiled")
 
     return graph
 
 
-def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
-                               res_cache_name=None) -> Graph:
+def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
+                                           res_cache_name=None) -> Graph:
     if res_cache_name:
-        return compute_and_cache(build_graph_with_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
+        return compute_and_cache(build_graph_with_nparams_and_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
                                  basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None,
                                  _cache_cls_to_use=GraphCache)
 
@@ -456,6 +458,10 @@ def build_graph_with_grad_reqs(model, model_args, model_kwargs, max_depth, basic
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
     infer_req_grad(graph, model, args=model_args, kwargs=model_kwargs)
     print("-I- inferred gradient requirements")
+
+    print("-I- inferring params per node")
+    graph.calculate_params_per_node(model)
+
     return graph
 
 

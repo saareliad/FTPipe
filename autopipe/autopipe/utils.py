@@ -12,7 +12,6 @@ from typing import Iterator, Optional, \
 import torch
 import torch.nn as nn
 from torch import Tensor
-from dataclasses import dataclass
 
 
 def is_None(a):
@@ -22,11 +21,6 @@ def is_None(a):
 def is_not_None(a):
     return operator.is_not(a, None)
 
-# from recordclass import recordclass
-# @dataclass
-# class ExecTimes:
-#     forward_time: float
-#     backward_time: float
 
 ExecTimes = collections.namedtuple(
     'ExecTimes',
