@@ -304,6 +304,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             doc_stride=doc_stride,
             max_query_length=max_query_length,
             is_training=is_training,
+            padding_strategy='max_length'
         )
         features = list(
             tqdm(
@@ -643,7 +644,7 @@ class SEP_SQUAD_DatasetHandler(CommonDatasetHandler):
     def __init__(self, **kw):
         super().__init__()
         d = extract_needed_keywords(**kw)
-        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(**d)
+        train_ds, test_ds, extra = get_just_x_or_y_train_dev_dataset(kw['just'], kw['DATA_DIR'], **d)
         self.train_ds = train_ds
         self.dev_ds = test_ds
         self.extra = extra
