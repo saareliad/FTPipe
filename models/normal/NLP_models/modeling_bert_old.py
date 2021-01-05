@@ -31,7 +31,7 @@ import torch
 from torch import nn
 
 from transformers.modeling_utils import PreTrainedModel, prune_linear_layer
-from transformers.configuration_bert import BertConfig
+from transformers import BertConfig
 from transformers.file_utils import add_start_docstrings
 
 logger = logging.getLogger(__name__)

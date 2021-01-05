@@ -779,8 +779,7 @@ def acyclic_partition(
 
 
 def worker(kwargs) -> Tuple[Dict[int, int], float, float]:
-    graph = Graph(None, None,
-                  None, None, None).load_state(kwargs.pop('graph'))
+    graph = Graph.from_state(kwargs.pop('graph'))
     kwargs['graph'] = graph
     meta_algorithm = kwargs.pop("meta_algorithm")
     algorithm = kwargs['algorithm']

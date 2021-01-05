@@ -1,14 +1,10 @@
 """
 A union-find disjoint set data structure.
-# source: https://github.com/deehzee/unionfind/blob/master/unionfind.py
+# adapted from: https://github.com/deehzee/unionfind/blob/master/unionfind.py,
+# We changed the implementation from the source above to support several desired features.
 """
+from typing import Optional, Iterable, Any
 
-# 2to3 sanity
-from __future__ import (
-    absolute_import, division, print_function, unicode_literals,
-)
-
-# Third-party libraries
 import numpy as np
 
 
@@ -86,12 +82,12 @@ class UnionFind(object):
 
     """
 
-    def __init__(self, elements=None):
+    def __init__(self, elements: Optional[Iterable[Any]] = None):
         self.n_elts = 0  # current num of elements
         self.n_comps = 0  # the number of disjoint sets or components
         self._next = 0  # next available id
         self._elts = []  # the elements
-        self._indx = {}  #  dict mapping elt -> index in _elts
+        self._indx = {}  # dict mapping elt -> index in _elts
         self._par = []  # parent: for the internal tree structure
         self._siz = []  # size of the component - correct only for roots
 
@@ -100,11 +96,10 @@ class UnionFind(object):
         for elt in elements:
             self.add(elt)
 
-
     def __repr__(self):
-        return  (
+        return (
             '<UnionFind:\n\telts={},\n\tsiz={},\n\tpar={},\nn_elts={},n_comps={}>'
-            .format(
+                .format(
                 self._elts,
                 self._siz,
                 self._par,
@@ -195,7 +190,7 @@ class UnionFind(object):
         """
         return self.find(x) == self.find(y)
 
-    def union(self, x, y):
+    def union(self, x, y, smallest_new_root=False):
         """Merge the components of the two given elements into one.
 
         Parameters
@@ -217,12 +212,18 @@ class UnionFind(object):
         yroot = self.find(y)
         if xroot == yroot:
             return
-        if self._siz[xroot] < self._siz[yroot]:
-            self._par[xroot] = yroot
-            self._siz[yroot] += self._siz[xroot]
+        if smallest_new_root:
+            if self._siz[xroot] < self._siz[yroot]:
+                self._par[xroot] = yroot
+                self._siz[yroot] += self._siz[xroot]
+            else:
+                self._par[yroot] = xroot
+                self._siz[xroot] += self._siz[yroot]
         else:
+            # by order given  x <--- y
             self._par[yroot] = xroot
             self._siz[xroot] += self._siz[yroot]
+
         self.n_comps -= 1
 
     def component(self, x):
@@ -277,6 +278,13 @@ class UnionFind(object):
         distinct_roots = set(roots)
         distinct_roots = sorted(distinct_roots, *args, **kwargs)
         return [set(elts[roots == root]) for root in distinct_roots]
+
+    # def distinct_roots(self):
+    #     elts = np.array(self._elts)
+    #     vfind = np.vectorize(self.find)
+    #     roots = vfind(elts)
+    #     distinct_roots = set(roots)
+    #     return distinct_roots
 
     def component_mapping(self):
         """Return a dict mapping elements to their components.
@@ -336,3 +344,7 @@ class UnionFind(object):
             # If you don't want to share the same set to different keys:
             # comps.update({x: set(comp) for x in comp})
         return comps
+
+    def is_root(self, x):
+        idx = self._indx[x]
+        return idx == self._par[idx]

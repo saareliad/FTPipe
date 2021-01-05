@@ -96,4 +96,4 @@ if __name__ == "__main__":
     download_wiki2()
     # download_wiki103() TODO: update this when we have experiment.
     download_squad()
-    download_glue()
+    # download_glue()

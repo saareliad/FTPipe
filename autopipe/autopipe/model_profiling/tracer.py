@@ -595,7 +595,7 @@ class TracedInstanceFunction(object):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
         out = TracedValue(NodeTypes.OP,
                           f"/{self.namespace}::{self._func.__name__}")
-        record_arg(out.id, self.self_id)
+        record_arg(out.id, self.self_id)  # FIXME: happens twice?
         connect_inputs_to_output(out.id, args, kwargs)
 
         # perform the operation
@@ -624,6 +624,8 @@ class TracedLayer(nn.Module):
                  patch_direct_children=False):
         super(TracedLayer, self).__init__()
         self._name = name
+        if isinstance(module, TracedLayer):
+            warnings.warn("Double warp for module")
         self._module = module
         self._terminal = terminal
         self._nesting_special_patch = nesting_special_patch
@@ -634,12 +636,15 @@ class TracedLayer(nn.Module):
         args, kwargs = record_args_and_kwargs(*args, **kwargs)
 
         global CURRENT_SCOPE
-        if CURRENT_SCOPE == "":
-            CURRENT_SCOPE = self._name
+        t_scope = CURRENT_SCOPE
+        if t_scope == "":
+            t_scope = self._name
         else:
             if self._is_nesting_special_patched:
-                CURRENT_SCOPE += f"/{self._nesting_special_patch}"
-            CURRENT_SCOPE += f"/{self._name}"
+                t_scope += f"/{self._nesting_special_patch}"
+            t_scope += f"/{self._name}"
+        CURRENT_SCOPE = t_scope
+
 
         if self._terminal:
             # NOTE no need to set the creating operation
@@ -662,10 +667,12 @@ class TracedLayer(nn.Module):
                     out = record_non_terminal_output(out)
 
         # Go one scope back.
-        CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
+        t_scope = CURRENT_SCOPE
+        t_scope = t_scope.rsplit("/", maxsplit=1)[0]
         if self._is_nesting_special_patched:
             # Go on scope back again.
-            CURRENT_SCOPE = CURRENT_SCOPE.rsplit("/", maxsplit=1)[0]
+            t_scope = t_scope.rsplit("/", maxsplit=1)[0]
+        CURRENT_SCOPE = t_scope
 
         assert isinstance(
             out, TracedValue), f"expected layer output of type TracedValue got {type(out)}"
@@ -868,13 +875,14 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
         name = scope[scope.rfind('[') + 1:-1]
 
         patch_direct_children = False
-        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) and not allow_ModuleList_ModuleDict:
-            raise TypeError(
-                f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
-        elif isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
-            warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
-            patch_direct_children = True
-        if isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) :
+            if not allow_ModuleList_ModuleDict:
+                raise TypeError(
+                    f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
+            else:
+                warnings.warn("Experimentally allowing nn.ModuleList/nn.ModuleDict")
+                patch_direct_children = True
+        elif isinstance(sub_layer, (nn.ParameterList, nn.ParameterDict)):
             # it does not have a forward method so there is nothing to trace
             # we register the parameters for tracing in record_free_floating_parameters_and_buffers
             continue
@@ -942,7 +950,7 @@ def duplicate_constants(nodes, output_id):
                 copy_node = Node.from_other(node)
                 copy_node.id += n_copy
                 o.replace_input(node, copy_node)
-                copy_node.out_edges = {o}
+                copy_node.out_edges = [o]
                 new_nodes[copy_node.id] = copy_node
                 offset += 1
         else:
@@ -964,6 +972,7 @@ def discard_unused_nodes(nodes, output_id):
 
             # if a >1:      a>1 will be traced but it has no meaning to us
             # as we only record the branch that was taken
+            # FIXME: it is dangerous, check it doesn't discard stuff
             unused_branch = False
             if node.type is NodeTypes.OP and (len(node.out_edges) == 0):
                 op_path = node.scope.rsplit("/", maxsplit=1)[1]

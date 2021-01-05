@@ -16,11 +16,12 @@ dependencies:
     - autopep8
     - transformers
     - yapf
-    - t5
+    - t5=0.7.1
     - nlp # TODO: replace with datasets
     - datasets
     - git+https://github.com/networkx/networkx-metis.git  # For partitioning
     - timm
+    - sortedcollections
 
 
 

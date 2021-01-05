@@ -1,7 +1,7 @@
 import random
 from typing import Dict, Tuple, List
 
-from autopipe.autopipe.model_partitioning.acyclic_partitioning.data_structures import Path, PathSet, ContractedGraph, \
+from autopipe.autopipe.model_partitioning.acyclic.data_structures import Path, PathSet, ContractedGraph, \
     SimpleNode
 from autopipe.autopipe.model_profiling import Node, Graph
 

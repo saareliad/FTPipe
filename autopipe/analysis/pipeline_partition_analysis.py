@@ -292,7 +292,7 @@ def run_analysis(sample,
             s += "warnings:\n" + "\n".join(warnings_list) + "\n"
 
         if graph is not None:
-            s += f"Number of nodes in Computation Graph: {graph.num_nodes}"
+            s += f"Number of nodes in Computation Graph: {graph.num_nodes}\n"
             # TODO:
             # pipedream_extimated_time(N=graph.num_nodes, m=)
             # print(f"PipeDream estimated time: {round(estimated_time)}s (seconds)")
@@ -465,10 +465,12 @@ def run_analysis(sample,
         print(s)
 
     # Choose a metric to maximize and return it
-    if async_pipeline:
-        metric_to_maximize = -fwd_plus_backward['pipeline_no_comm']['worstcase']
-    else:
-        metric_to_maximize = expected_speedup
+    # if async_pipeline:
+    metric_to_maximize = -fwd_plus_backward['pipeline_no_comm']['worstcase']
+    warnings.warn("ignoring communication in metric_to_maximize")
+    # TODO: this whole model needs a re-write to analyze mixed-pipe normally
+    # else:
+    #     metric_to_maximize = expected_speedup
 
     return metric_to_maximize, s
 

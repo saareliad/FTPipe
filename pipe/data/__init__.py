@@ -2,7 +2,7 @@
 from typing import Optional, Dict, Any
 
 from .datasets import *
-from . import cv, lm, cep, vit
+from . import cv, lm, cep, vit, squad
 from .from_args_and_kw import *
 # Now, import all so available datasets will be loaded
 from .t5 import t5_tfds

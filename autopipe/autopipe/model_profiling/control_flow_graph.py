@@ -1,12 +1,18 @@
 import pickle
+import warnings
 from collections import defaultdict
+from copy import deepcopy
 from enum import IntEnum
 from itertools import chain
-from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type
+from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set
 
 import networkx as nx
 from torch import Tensor, nn as nn
 
+from autopipe.autopipe.union_find import UnionFind
+from autopipe.autopipe.utils import ExecTimes, layerDict, tensorDict
+
+from torch.nn import Parameter, Module
 
 class NodeTypes(IntEnum):
     """
@@ -23,15 +29,18 @@ class NodeTypes(IntEnum):
         return self.name
 
 
-class Node():
+class Node:
     def __init__(self, node_type, idx, scope):
         self.type = node_type
         self.id = idx
         self.scope = scope
 
+        self.topo_sort_id = id  # hack: start with ID. (potential danger)
         self.stage_id = 0
         self.gpu_id = None  # New feature
-        self.weight = None
+        self.weight: Optional[ExecTimes] = None
+        self.num_parameters: Optional[int] = 0
+        self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
         self.args = []
         self.kwargs = defaultdict(list)
@@ -46,6 +55,26 @@ class Node():
     # def __repr__(self):
     #     return self.scope
 
+    def maybe_create_compound_edge_weights(self, edge_weight_function):
+        if not self.compound_edge_weights:
+            for nn in self.out_edges:
+                self.compound_edge_weights[nn.id] = edge_weight_function(self, nn)
+            return True if self.out_edges else False
+        return False
+
+    def update_compound_weights_from_uf(self, uf: UnionFind, allow_outside_uf=False):
+
+        items_to_handle = list(self.compound_edge_weights.items())
+        if allow_outside_uf:
+            items_to_handle = filter(lambda x: x[0] in uf, items_to_handle)
+
+        for id, weight in items_to_handle:
+            if not uf.is_root(id):
+                new_id = uf[uf.find(id)]
+                if new_id != id:
+                    del self.compound_edge_weights[id]
+                    self.compound_edge_weights[new_id] = weight
+
     def add_kwarg(self, kwarg, kwarg_node):
         self.kwargs[kwarg_node].append(kwarg)
 
@@ -58,17 +87,36 @@ class Node():
     def remove_output(self, out_node):
         self.out_edges.remove(out_node)
 
+    def replace_out_edge_on_merge(self, dest_node, new_dest_node):
+        self.remove_output(dest_node)
+        self.out_edges.append(new_dest_node)
+
     @property
     def in_edges(self) -> List["Node"]:
         return list(chain(self.args, self.kwargs.keys()))
 
     def replace_input(self, original, new):
+        must_be_in_kwargs = False
         try:
             self.args[self.args.index(original)] = new
         except:
-            pass
+            must_be_in_kwargs = True
+
         if original in self.kwargs:
             self.kwargs[new] = self.kwargs.pop(original)
+        elif must_be_in_kwargs:
+            raise KeyError(f"original is not in args and not in kwargs, original={original}\nself={self}")
+
+    def remove_input(self, original):
+        must_be_in_kwargs = False
+        try:
+            del self.args[self.args.index(original)]
+        except:
+            must_be_in_kwargs = True
+        if original in self.kwargs:
+            self.kwargs.pop(original)
+        elif must_be_in_kwargs:
+            raise KeyError(f"original is not in args and not in kwargs, original={original}")
 
     @classmethod
     def from_other(cls, other):
@@ -76,7 +124,9 @@ class Node():
         node.stage_id = other.stage_id
         node.gpu_id = other.gpu_id
         node.weight = other.weight
+        node.num_parameters = other.num_parameters
 
+        node.topo_sort_id = other.topo_sort_id
         node.out_edges = list(other.out_edges)
         node.args = list(other.args)
         node.kwargs = dict(other.kwargs)
@@ -90,6 +140,9 @@ class Node():
 
         return node
 
+    def __repr__(self):
+        return str(f"id: {self.id}, scope:{self.scope}, type:{self.type}")
+
 
 GraphNodes = Dict[int, Node]
 NodeWeightFunction = Callable[[Node], int]
@@ -97,7 +150,8 @@ EdgeWeightFunction = Callable[[Node, Node], int]
 
 
 class Graph():
-    def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]], output_ids: Optional[List[int]], depth: Optional[int],
+    def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]],
+                 output_ids: Optional[List[int]], depth: Optional[int],
                  basic_blocks: Optional[Tuple[Type[nn.Module], ...]]):
         # TODO: created in trace module, take doc from there.
         self._nodes: GraphNodes = nodes
@@ -105,6 +159,114 @@ class Graph():
         self.output_ids = output_ids
         self.depth = depth
         self.basic_blocks = basic_blocks
+
+    def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction, dynamic_topo_sort=False,
+              uf: Optional[UnionFind] = None, partial_uf: Optional[UnionFind] = None):
+        if vid in self.output_ids:
+            self.output_ids[self.output_ids.index(vid)] = uid
+        assert uid != vid
+        # print(f"merge {(uid,vid)} ")
+        # TODO: check if its legal merge. currently its user's responsibility.
+        # does not exits a path from the set {n : u < n < v} to v.
+        u = self._nodes[uid]
+        v = self._nodes[vid]
+
+        u.remove_output(v)
+        v.remove_input(u)
+
+        self._update_compound_weights_on_merge(u, v, edge_weight_function, uf, partial_uf)
+
+        for a in v.in_edges:
+            a.maybe_create_compound_edge_weights(edge_weight_function=edge_weight_function)
+
+
+        # Merge node weights
+        # TODO: we don't know about other x->v or u->y
+        # Needs outside control to with longest path to make it accurate in case of concurrent ops
+        # (there is a path u->v hence its sequential).
+        weight = ExecTimes(u.weight.forward_time + v.weight.forward_time,
+                           u.weight.backward_time + v.weight.backward_time
+                           )
+        # u.weight.forward_time += v.weight.forward_time
+        # u.weight.backward_time += v.weight.backward_time
+        u.weight = weight
+
+        # Do the coarsening
+        for nn in v.out_edges:
+            u.out_edges.append(nn)
+            nn.replace_input(v, u)
+            nn.args = remove_dups(nn.args, nn)
+
+        for nn in v.args:
+            nn.remove_output(v)
+            nn.add_out_edge(u)
+            u.args.append(nn)
+
+            nn.out_edges = remove_dups(nn.out_edges, nn)
+
+        # shouldn't have kwargs anyway this is redundant.
+        for nn, nnv in v.kwargs.values():
+            nn.remove_output(v)
+            nn.add_out_edge(u)
+            nn.out_edges = remove_dups(nn.out_edges, nn)
+            u.kwargs[nn] = nnv
+
+        u.args = remove_dups(u.args, u)
+        u.out_edges = remove_dups(u.out_edges, u)
+        del self._nodes[vid]
+
+        # merge node parameters
+        u.num_parameters += v.num_parameters
+
+        # TODO: dynamic topo_sort
+        if dynamic_topo_sort:
+            raise NotImplementedError()
+
+        # self.topo_sort(verbose=False, change_graph=False)
+
+        # # Massive check for dups....
+        # for n in self.nodes:
+        #     assert n not in n.out_edges, n
+        #     assert n not in n.in_edges, n
+        #     assert len(set(n.out_edges)) == len(n.out_edges), n
+        #     assert len(set(n.in_edges)) == len(n.in_edges), n
+
+    def _update_compound_weights_on_merge(self, u, v, edge_weight_function, uf, partial_uf: Optional[UnionFind] = None):
+        # Merge edge weights.
+        is_new_u_weights = u.maybe_create_compound_edge_weights(edge_weight_function)
+        # TODO: if is_new_u_weights remove v from there, but the id is unkown at this step.
+        is_new_v_weights = v.maybe_create_compound_edge_weights(edge_weight_function)
+        if uf is None:
+            warnings.warn("merge without union find may miss compound edge weights")
+        else:
+            # (1): update the current compound weight ids according to the unions so far.
+            # (2): add
+            if not is_new_v_weights:
+                v.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    v.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+            if not is_new_u_weights:
+                u.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    u.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+
+        for id, weight in v.compound_edge_weights.items():
+            u.compound_edge_weights[id] += weight
+
+        for a in v.in_edges:
+            is_new_a_weights = a.maybe_create_compound_edge_weights(edge_weight_function)
+            if not is_new_a_weights:
+                a.update_compound_weights_from_uf(uf)
+                if partial_uf:
+                    a.update_compound_weights_from_uf(partial_uf, allow_outside_uf=True)
+
+            if u in a.out_edges:
+                w = a.compound_edge_weights[u.id]
+                del a.compound_edge_weights[u.id]
+                a.compound_edge_weights[v.id] += w  # defaultdict
+
+    #
+    # def _update_compound_weights_on_replaced_output(self, nn, u, v, edge_weight_function, uf):
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -116,6 +278,13 @@ class Graph():
     @property
     def nodes(self) -> Iterable[Node]:
         return self._nodes.values()
+
+    @property
+    def non_input_nodes(self) -> Iterable[Node]:
+        for n in self._nodes.values():
+            if n.type is NodeTypes.IN:
+                continue
+            yield n
 
     @property
     def num_nodes(self) -> int:
@@ -132,6 +301,10 @@ class Graph():
     @property
     def num_partitions(self) -> int:
         return len({n.stage_id for n in self.nodes})
+
+    @property
+    def unique_partitions_ids(self):
+        return {n.stage_id for n in self.nodes}
 
     @property
     def output_scopes(self):
@@ -392,9 +565,11 @@ class Graph():
             state = dict(id=node.id,
                          scope=node.scope,
                          type=node.type,
+                         topo_sort_id=node.topo_sort_id,
                          stage_id=node.stage_id,
                          gpu_id=node.gpu_id,
                          weight=node.weight,
+                         num_parameters=node.num_parameters,
                          out_edges=[n.id for n in node.out_edges],
                          args=[n.id for n in node.args],
                          kwargs={n.id: kw for n,
@@ -403,7 +578,8 @@ class Graph():
                          constant_value=node.constant_value,
                          tensor_dtype=node.tensor_dtype,
                          tensor_shape=node.tensor_shape,
-                         req_grad=node.req_grad)
+                         req_grad=node.req_grad,
+                         compound_edge_weights=deepcopy(node.compound_edge_weights))
             node_states[node.id] = state
 
         return {"node_data": node_states,
@@ -425,6 +601,10 @@ class Graph():
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
+        for state in sorted(node_states.values(), key=lambda s: s['id']):
+            node = nodes[state['id']]
+
+            node.topo_sort_id = state['topo_sort_id']
             node.stage_id = state['stage_id']
             node.gpu_id = state['gpu_id']
             node.weight = state['weight']
@@ -435,6 +615,8 @@ class Graph():
             node.tensor_dtype = state['tensor_dtype']
             node.tensor_shape = state['tensor_shape']
             node.req_grad = state['req_grad']
+            node.compound_edge_weights = state['compound_edge_weights']
+            node.num_parameters = state['num_parameters']
 
         for node in nodes.values():
             node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)
@@ -463,6 +645,14 @@ class Graph():
 
         return cls(None, None, None, None, None).load_state(graph_data)
 
+    @classmethod
+    def from_state(cls, state) -> "Graph":
+        return cls(None, None, None, None, None).load_state(state)
+
+    @classmethod
+    def from_other(cls, graph: "Graph") -> "Graph":
+        return cls(None, None, None, None, None).load_state(graph.state())
+
     def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
         """
         creates a graph g with nodes of type CONSTANT 
@@ -474,8 +664,8 @@ class Graph():
         new_nodes = dict()
         output_ids = []
 
-        new_graph = Graph(None, None, None, None,
-                          None).load_state(self.state())
+        new_graph = Graph.from_other(self)
+
         num_removed = 0
         lookup = dict()
         for node in new_graph._nodes.values():
@@ -490,6 +680,11 @@ class Graph():
                 input_or_buff_param_with_one_use_at_end &= (list(node.out_edges)[0].id - node.id) >= (len(self) / 2)
 
             if is_constant or op_without_inputs or input_or_buff_param_with_one_use_at_end:
+                if input_or_buff_param_with_one_use_at_end and not (is_constant or op_without_inputs):
+                    warnings.warn(f"HACK: input_or_buff_param_with_one_use_at_end=True, for {node.scope},"
+                                  f"list(node.out_edges)[0].id={list(node.out_edges)[0].id} "
+                                  f"node.id={node.id}, "
+                                  f"len(self)={len(self)}")
                 for o in node.out_edges:
                     o.kwargs.pop(node, None)
                     o.args = [n for n in o.args if n is not node]
@@ -628,16 +823,23 @@ class Graph():
             n.args = set(in_edges)
             n.kwargs.clear()
 
+            if n in n.out_edges:
+                warnings.warn(f"Node with self loop {n}")
+                n.out_edges.remove(n)
+            if n in n.args:
+                warnings.warn(f"Node with self loop {n}")
+                n.args.remove(n)
+
+            n.args = sorted(n.args, key=lambda x: x.id)
+            n.out_edges = sorted(n.out_edges, key=lambda x: x.id)
+
         return copy
 
-    def topo_sort(self, verbose=False):
+    def topo_sort(self, verbose=False, change_graph=True, resort_edges=False):
 
-        def print_if_verbose(*args,**kw):
+        def print_if_verbose(*args, **kw):
             if verbose:
                 print(*args, **kw)
-
-
-
 
         # To networkx
         G = nx.DiGraph()
@@ -661,6 +863,14 @@ class Graph():
         topo_sorted = list(topo_sorted)
         for topo_sort_id, node_id in enumerate(topo_sorted):
             self[node_id].topo_sort_id = topo_sort_id
+
+        # if resort_edges:
+        #     for node in self.nodes:
+        #         node.out_edges.sort(key=lambda x:x.topo_sort_id)
+        #         node.args.sort(key=lambda x: x.topo_sort_id)
+
+        if not change_graph:
+            return
 
         if (ids_sort := sorted(topo_sorted)) != topo_sorted:
             print("-W- topo_sort: node_ids are not topo sorted!")
@@ -702,3 +912,57 @@ class Graph():
             #             self._nodes: GraphNodes = nodes
             _nodes = {n.topo_sort_id: n for n in self.nodes}
             self._nodes = _nodes
+
+    def forward_dfs_and_check(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
+        if depth_limit is None:
+            depth_limit = len(self)
+        # dfs
+        nodes = [source]
+        visited = set()
+        for start in nodes:
+            if start in visited:
+                continue
+            if start in set_to_check:
+                return True
+            visited.add(start)
+
+            stack = [(start, depth_limit, iter(start.out_edges))]  # : List[Tuple[Node, int, Iterator[Node]]]
+            while stack:
+                parent, depth_now, children = stack[-1]
+                try:
+                    child = next(children)
+                    if child in visited:
+                        continue
+                    if child in set_to_check:
+                        return True
+                    visited.add(child)
+                    if depth_now > 1:
+                        stack.append((child, depth_now - 1, iter(child.out_edges)))
+
+                except StopIteration:
+                    stack.pop()
+        return False
+
+    def calculate_params_per_node(self, model: Module):
+        # Pytorch
+        layers = layerDict(model, self.depth, self.basic_blocks)
+        tensors = tensorDict(model)
+
+        # params_per_node = dict()
+
+        for n in self.nodes:
+            if n.scope in layers:  # n.value_type == NodeTypes.LAYER
+                x = sum(t.numel() for t in layers[n.scope].parameters())
+            elif (n.value_type is Parameter) and (n.scope in tensors):
+                x = tensors[n.scope].numel()
+            else:
+                x = 0
+            n.num_parameters = x
+
+        # return params_per_node
+
+def remove_dups(lnodes: List[Node], myself):
+    s = set(lnodes)
+    if myself in s:
+        s.remove(myself)
+    return sorted(s, key=lambda x: x.topo_sort_id)

@@ -5,8 +5,8 @@ from gettext import gettext
 
 import torch
 
-from autopipe.autopipe.model_partitioning.acyclic_partitioning import Objective, META_ALGORITH, Constraint
-from autopipe.autopipe.model_partitioning.bin_packing.partition_2dbinpack import ReminderPolicy, \
+from autopipe.autopipe.model_partitioning.acyclic import Objective, META_ALGORITH, Constraint
+from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import ReminderPolicy, \
     SecondAndOnClusterPolicy
 
 
@@ -111,15 +111,15 @@ class Parser(argparse.ArgumentParser, ABC):
             type=float,
             default=1e4,
             help=
-            "a constant to multiply weights with (usefull if weights are really small)"
+            "a constant to multiply weights with (useful if weights are really small)"
         )
 
         group.add_argument(
             "--edge_penalty",
             type=float,
-            default=1e4,
+            default=1e7,
             help=
-            "multipicative penalty for edges if `penalize_non_tensors` is set"
+            "multiplicative penalty for edges if `penalize_non_tensors` is set"
         )
 
     def _add_partitioning_args(self, group):
@@ -159,7 +159,7 @@ class Parser(argparse.ArgumentParser, ABC):
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        group.add_argument("--partitioning_method", "-m", choices=["ACYCLIC", "METIS", "2DBIN"], default="ACYCLIC")
+        group.add_argument("--partitioning_method", "-m", choices=["acyclic", "metis", "2dbin", "mpipe", "pipedream"], default="acyclic")
         group.add_argument(
             "--generate_explicit_del",
             action="store_true",
@@ -178,6 +178,8 @@ class Parser(argparse.ArgumentParser, ABC):
                            action="store_true",
                            help="Do partitioning and analysis for async pipeline")
 
+        group.add_argument("--dont_use_async_meta_alg", default=False, action="store_true",
+                           help="Explicitly avoid the async meta alg. (e.g when number of stages is big)")
 
         group.add_argument("--dot",
                            default=False,

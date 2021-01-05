@@ -622,7 +622,7 @@ class SinglePartitionManager:
         run_batch_forward = self.run_batch_forward
         futures_handler = self.futures_handler
 
-        # sets warmpup state for PipeDream. Else no-op.
+        # sets warmup state for PipeDream. Else no-op.
         self.work_scheduler.reset()
 
         if is_last_partition:

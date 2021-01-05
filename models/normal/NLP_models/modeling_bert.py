@@ -29,7 +29,7 @@ import torch
 from torch import nn
 
 from transformers.modeling_utils import prune_linear_layer
-from transformers.configuration_bert import BertConfig
+from transformers import BertConfig
 from transformers.file_utils import add_start_docstrings
 from transformers.activations import gelu, gelu_new
 

@@ -1,7 +1,6 @@
 import warnings
 from collections import deque, defaultdict
 from enum import Enum
-from itertools import count
 from pprint import pprint
 from typing import Optional, List, Dict, Any, Union, Set
 
@@ -11,9 +10,9 @@ import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 
-from autopipe.autopipe.model_partitioning.bin_packing.heap_dict import heapdict
-from autopipe.autopipe.model_partitioning.bin_packing.post_process import post_process_partition
-from autopipe.autopipe.model_partitioning.bin_packing.union_find import UnionFind
+from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
+from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
+from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
 from autopipe.autopipe.model_profiling import Graph, Node
 
@@ -388,11 +387,21 @@ def best_Fit_cluster(K: int, clusters, id_to_node: Dict[int, Node],
     return bins
 
 
-def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False):
-    stage_id_generator = count()
+def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worked_on: Dict[int, Node], verbose=False,
+                     assert_missing_in_bins=False, convert_id_to_node_to_topo=False):
+
+    if convert_id_to_node_to_topo:
+        tmp = dict()
+        for i,v in id_to_node_worked_on.items():
+            tmp[v.topo_sort_id] = v
+        id_to_node_worked_on = tmp
+        del tmp
+
+
+    # TODO: require id_to_node_worked_on to be topo sorted ids.
 
     # shallow copy bins, excluding inputs:
-    bins_to_id = {i: set(n.id for n in v if n.id in id_to_node_worked_on) for i, v in bins.items()}
+    bins_to_id = {p: set(n.topo_sort_id for n in v if n.topo_sort_id in id_to_node_worked_on) for p, v in bins.items()}
 
     nodes_with_out_edges_to_different_gpu = defaultdict(set)
     nodes_with_in_edges_from_different_gpu = defaultdict(set)
@@ -402,7 +411,7 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
         unbroken_stages = get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
                                               nodes_with_out_edges_to_different_gpu)
 
-        broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id)
+        broken_stages = break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=assert_missing_in_bins)
 
         if verbose:
             # NOTE: the prints here include inputs. Input stage is arbitrary since it will be changed.
@@ -430,11 +439,12 @@ def stages_from_bins(graph: Graph, bins: Dict[int, List[Node]], id_to_node_worke
             n = id_to_node_worked_on[nid]
             n.stage_id = i
 
+    return len(all_broken_stages)
     # re_assign_partition_indices(graph) <--- TODO: redundant
     # break cycles <--- TODO: redundant
 
 
-def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id):
+def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages, bins_to_id, assert_missing_in_bins=False):
     # Now, it is problematic if we have:
     #  a->d, b->d, c->d, b->c, and b->d
     # each on different gpu.
@@ -484,12 +494,13 @@ def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages
                     cur_set = list()
 
                     # FIXME Assert:
-                    missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
-                    for mid in missing_topo_sort_ids:
-                        in_bins = any(map(lambda v: mid in v, bins_to_id.values()))
-                        if not in_bins:
-                            print(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
-                            raise ValueError(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+                    if assert_missing_in_bins:
+                        missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
+                        for mid in missing_topo_sort_ids:
+                            in_bins = any(map(lambda v: mid in v, bins_to_id.values()))
+                            if not in_bins:
+                                print(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
+                                raise ValueError(f"missing_topo_sort_ids are not in bins {missing_topo_sort_ids}")
 
             if topo_sort_id in id_to_node_worked_on:
                 cur_set.append(topo_sort_id)
@@ -532,7 +543,11 @@ def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked
     missing_topo_sort_ids = list(range(prev_topo_sort_id + 1, topo_sort_id))
     is_ok = True
     for missing_topo_sort_id in missing_topo_sort_ids:
-        if not (missing_topo_sort_id in graph and missing_topo_sort_id in id_to_node_worked_on):
+        if missing_topo_sort_id not in id_to_node_worked_on:
+            continue
+        # check if its in graph
+
+        if id_to_node_worked_on[missing_topo_sort_id].id not in graph:
             continue
         #  Need to actually check if there is a cycle.
         cur_nodes = [id_to_node_worked_on[x] for x in cur_set]
@@ -573,17 +588,16 @@ def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked
 def get_ccs_on_same_gpu(bins_to_id, gpu_id, nodes_in_bin, nodes_with_in_edges_from_different_gpu,
                         nodes_with_out_edges_to_different_gpu):
     uf = UnionFind(elements=bins_to_id[gpu_id])
-    visited = set()
-    open = deque(sorted(nodes_in_bin, key=lambda x: x.id))
+    open = deque(sorted(nodes_in_bin, key=lambda x: x.topo_sort_id))
     while open:
         x = open.popleft()
         x: Node
         for y in x.out_edges:
-            if y.id not in uf:
+            if y.topo_sort_id not in uf:
                 nodes_with_out_edges_to_different_gpu[gpu_id].add(x)
                 nodes_with_in_edges_from_different_gpu[y.gpu_id].add(y)
                 continue
-            uf.union(x.id, y.id)
+            uf.union(x.topo_sort_id, y.topo_sort_id)
     unbroken_stages = uf.sorted_components()
     return unbroken_stages
 
@@ -651,7 +665,7 @@ def partition_2dbin_pack(graph: Graph,
     if isinstance(reminder_policy, type(next(iter(ReminderPolicy._value2member_map_.keys())))):
         reminder_policy = ReminderPolicy._value2member_map_[reminder_policy]
 
-    print(f"use_layers_graph={use_layers_graph}")
+    # print(f"use_layers_graph={use_layers_graph}")
     graph.topo_sort()
 
     if use_layers_graph:
@@ -700,7 +714,8 @@ def partition_2dbin_pack(graph: Graph,
             n.gpu_id = i
 
     # bins to stages
-    stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)
+    work_graph.topo_sort(change_graph=False)
+    stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node, convert_id_to_node_to_topo=True)
 
     work_graph = post_process_partition(work_graph)
 
@@ -768,18 +783,23 @@ def handle_missing_stages(bins, graph, node_to_stage_map, stage_to_gpu_map):
 
 
 if __name__ == '__main__':
-    from autopipe.autopipe import build_profiled_graph
+    from autopipe.autopipe.api import build_profiled_graph
     import torch
     from torch.nn import Sequential, Linear
 
     IN_FEATURES = 320
     OUT_FEATURES = 8
 
-    model = Sequential(
-        *[Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(IN_FEATURES, IN_FEATURES), Linear(
-            IN_FEATURES, IN_FEATURES),
-          Linear(IN_FEATURES, OUT_FEATURES),
-          Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES), Linear(OUT_FEATURES, OUT_FEATURES)])
+    n_encoder_decoder = 12
+
+    l = []
+    for i in range(n_encoder_decoder):
+        l.append(Linear(IN_FEATURES, IN_FEATURES))
+    l.append(Linear(IN_FEATURES, OUT_FEATURES))
+    for i in range(n_encoder_decoder):
+        l.append(Linear(OUT_FEATURES, OUT_FEATURES))
+
+    model = Sequential(*l)
 
     inputs = torch.randn(IN_FEATURES, IN_FEATURES)
 
@@ -801,7 +821,11 @@ if __name__ == '__main__':
     graph, stage_to_gpu_map = partition_2dbin_pack(graph=graph, num_gpus=2, n_clusters=2,
                                                    node_weight_function=node_weight_function,
                                                    use_layers_graph=False)
-
+    u = graph.unique_partitions_ids
+    if None in u:
+        print(len(u) - 1)
+    else:
+        print(len(u))
 # TODO: THRESHOLD hyper-parameter can be higher.
 
 #################

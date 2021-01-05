@@ -118,3 +118,12 @@ class heapdict(MutableMapping):
 
 del doc
 __all__ = ['heapdict']
+
+
+if __name__ == '__main__':
+    d = heapdict(**{"a": 1, "b": -3, "c": 0, "d": -1})
+    for i in d:
+        print(i, d[i])
+
+    for i in d.heap:
+        print(i)

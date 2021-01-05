@@ -13,7 +13,7 @@ __all__ = ["post_process_partition"]
 
 def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=True,
                            assert_output_types=False) -> Graph:
-    '''
+    """
     process the partition and optimize it
     called as part of partition_graph method
 
@@ -23,7 +23,7 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
         the Graph object that was partitioned
     verbose_on_error:
         print extra info when cycle can't be solved
-    '''
+    """
 
     re_assign_partition_indices(graph)
     if has_stage_cycles(graph):
@@ -31,20 +31,20 @@ def post_process_partition(graph: Graph, edge_weight_function, verbose_on_error=
             graph.save_as_pdf(f"{graph.model_name}_before_fix",
                               ".")
 
-        break_partition_cycles(graph)
-
-        # possibly redundent
-        try:
-            re_assign_partition_indices(graph)
-        except:
-            print(
-                "-W- ignoring exception of redundent re_assign_partition_indices(graph)")
-
-    # this is a sanity check
-    if has_stage_cycles(graph):
-        if os.environ.get("DEBUG", False):
-            graph.save_as_pdf(f"{graph.model_name}_after_fix",
-                              ".")
+    #     break_partition_cycles(graph)
+    #
+    #     # possibly redundant
+    #     try:
+    #         re_assign_partition_indices(graph)
+    #     except:
+    #         print(
+    #             "-W- ignoring exception of redundant re_assign_partition_indices(graph)")
+    #
+    # # this is a sanity check
+    # if has_stage_cycles(graph):
+    #     if os.environ.get("DEBUG", False):
+    #         graph.save_as_pdf(f"{graph.model_name}_after_fix",
+    #                           ".")
 
         if verbose_on_error:
             problems, info = get_problematic_partitions(graph)

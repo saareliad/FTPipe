@@ -42,7 +42,6 @@ the main parameters that influence such profiling are depth and basic blocks:
 
 as we are using tracing there are several limitations that come with it:
 
-- only tensors and nested lists/tuples of tensors are supported as model inputs
 - control flow must be deterministic. we can only profile the actions that were taken for the traced input.\
   for example if statement will be inlined with the path taken same for loops which will be unrolled. Limited amount of eager execution is allowed inside `basic_blocks`.
 
@@ -80,8 +79,8 @@ as we are using tracing there are several limitations that come with it:
 # Model Partitioning
 Mixed Pipe is activated automatically in everything except "acyclic".
  * METIS partKway
- * 2DBIN
- * ACYCLIC (and multililevel)
+ * mpipe - Mixed-Pipe
+ * acyclic (and multililevel)
 
 
 # Code Generation
@@ -109,3 +108,10 @@ See [environment.yml](environment.yml)
 - lstms and packed_sequences are problematic
 - string arguments for functions like nll_loss are not supported with tracing but yes with scripting
 - optional inputs problem
+
+- `t_7 = torch.where(t_4, t_8, t_7)`
+    RuntimeError: Expected condition to have ScalarType Byte, but got ScalarType Long
+- Can't resort edges
+```[id: 21, scope:BertForQuestionAnswering/BertModel[bert]/BertEmbeddings[embeddings]/Tensor::unsqueeze, type:4,
+ id: 1, scope:input1, type:1]```
+replaced `position_ids = position_ids.unsqueeze(0).expand_as(input_ids)` to `t_3 = input_ids.expand_as(t_3)`

@@ -22,10 +22,11 @@ def is_not_None(a):
     return operator.is_not(a, None)
 
 
-ExecTimes = collections.namedtuple(
+ExecTimes = namedtuple(
     'ExecTimes',
     'forward_time backward_time'
 )
+FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
 
 
 # sub_layer, scope, parent, terminal
@@ -52,7 +53,10 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
         if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
+                # TODO:
+                # is_explicit_block_limit = len(list(sub_module.children())) != 0 and (isinstance(sub_module, tuple(basic_blocks)) or depth == 0)
                 yield sub_module, scope, module, True
+
             else:
                 yield sub_module, scope, module
         else:
@@ -345,8 +349,8 @@ def convert_none_checks(input_file: str, output_file: str):
     modified = False
     with open(input_file, 'r') as f:
         for idx, original in enumerate(f.readlines()):
-            is_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is None'
-            is_not_None_pattern = r'([a-zA-Z0-9\.\(\)\[\]\-\+\*\/]+) is not None'
+            is_None_pattern = r'([a-zA-Z0-9_\.\(\)\[\]\-\+\*\/]+) is None'
+            is_not_None_pattern = r'([a-zA-Z0-9_\.\(\)\[\]\-\+\*\/]+) is not None'
             line = re.sub(is_None_pattern, r'is_None(\1)', original)
             line = re.sub(is_not_None_pattern, r'is_not_None(\1)', line)
             if line != original:
@@ -369,4 +373,3 @@ def convert_none_checks(input_file: str, output_file: str):
         f.writelines(res)
 
 
-FullExecTimes = namedtuple('FullExecTimes', 'recomputation no_recomputation')
