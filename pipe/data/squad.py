@@ -19,129 +19,7 @@ from transformers.data.processors.squad import (
     SquadV2Processor, SquadV1Processor, squad_convert_example_to_features_init,
     squad_convert_example_to_features)
 
-from .datasets import CommonDatasetHandler, register_dataset
-
-
-def train_just(just, DATA_DIR, **kw):
-    train_ds = load_and_cache_examples_just_x_or_y(just=just,
-                                                   DATA_DIR=DATA_DIR,
-                                                   evaluate=False,
-                                                   output_examples=False,
-                                                   **kw)
-    return train_ds
-
-
-def dev_just(just, DATA_DIR, **kw):
-    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
-        just=just,
-        DATA_DIR=DATA_DIR,
-        evaluate=True,
-        output_examples=True,
-        **kw)
-    return dev_ds, examples, features
-
-
-def getitem(t):
-    if isinstance(t, dict):
-        res = {i: getitem(v) for i, v in t.items()}
-    else:
-        try:
-            res = t.item()
-        except:
-            res = t
-    return res
-
-
-def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
-    """ get x or y datset. """
-    # NOTE: called with just=just, DATA_DIR=DATA_DIR, **dataset_keywords
-    train_ds = load_and_cache_examples_just_x_or_y(just=just,
-                                                   DATA_DIR=DATA_DIR,
-                                                   evaluate=False,
-                                                   output_examples=False,
-                                                   **kw)
-    print("squad", "version_2_with_negative", kw["version_2_with_negative"])
-    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
-        just=just,
-        DATA_DIR=DATA_DIR,
-        evaluate=True,
-        output_examples=True,
-        **kw)
-
-    if len(dev_ds.tensors) == 0:
-        warnings.warn("setting dev_ds to None since pytorch TensorDataset can handle empty datasets")
-        dev_ds = None
-
-    # extra = (examples, features)
-
-    tokenizer = kw['tokenizer']
-    # TODO: config = kw['config']
-    args = SimpleNamespace(**kw)
-
-    partial_evaluate = partial(evaluate, examples, features, tokenizer, args)
-
-    def evaluate_squad(self):
-        global_step = self.fit_res.num_epochs  # TODO
-        result = partial_evaluate(self.all_results, prefix=global_step)
-        print(
-            dict((k + ("_{}".format(global_step) if global_step else ""),
-                  getitem(v)) for k, v in result.items()))
-        if not hasattr(self.fit_res, 'squad_results'):
-            self.fit_res.squad_results = dict()
-
-        self.fit_res.squad_results[global_step] = getitem(result)
-
-    def set_features(trainer):
-        trainer.features = features
-        trainer.statistics.evaluate_squad = types.MethodType(
-            evaluate_squad, trainer.statistics)
-
-    # NOTE: (examples, features) are needed for evaluation
-    return train_ds, dev_ds, set_features
-
-
-# FIXME: using version_2_with_negative to check for squad2
-def get_squad_dir(DATA_DIR, version_2_with_negative: bool):
-    # See downaload_dataset.py script.
-    if version_2_with_negative:
-        res = os.path.join(DATA_DIR, "squad2")
-    else:
-        res = os.path.join(DATA_DIR, "squad1")
-    return res
-
-
-# FIXME: using version_2_with_negative to check for squad2
-def get_train_file(squad_dir, version_2_with_negative):
-    # See downaload_dataset.py script.
-    if version_2_with_negative:
-        res = os.path.join(squad_dir, "train-v2.0.json")
-    else:
-        res = os.path.join(squad_dir, "train-v1.1.json")
-    return res
-
-
-# FIXME: using version_2_with_negative to check for squad2
-def get_predict_file(squad_dir, version_2_with_negative):
-    # See downaload_dataset.py script.
-    if version_2_with_negative:
-        res = os.path.join(squad_dir, "dev-v2.0.json")
-    else:
-        res = os.path.join(squad_dir, "dev-v1.1.json")
-    return res
-
-
-# FIXME: using version_2_with_negative to check for squad2
-def make_examples(DATA_DIR, train_file, predict_file, evaluate,
-                  version_2_with_negative):
-    """ In case we not loading them """
-    processor = SquadV2Processor(
-    ) if version_2_with_negative else SquadV1Processor()
-    if evaluate:
-        examples = processor.get_dev_examples(DATA_DIR, filename=predict_file)
-    else:
-        examples = processor.get_train_examples(DATA_DIR, filename=train_file)
-
-    return examples
+from pipe.data.datasets import CommonDatasetHandler, register_dataset
 
 
 def load_and_cache_examples_just_x_or_y(
@@ -194,14 +72,10 @@ def load_and_cache_examples_just_x_or_y(
             features_and_dataset["dataset"],
             features_and_dataset["examples"],
         )
-        save = False
     else:
         # generate them ourselves.
         examples = make_examples(DATA_DIR, train_file, predict_file, evaluate,
                                  version_2_with_negative)
-
-        # TODO: decide on the correct version to use.
-        # PROBLEM: this returns a dataloader, we want to delay that.
 
         # TODO: model name or path to doall args
         do_all_lw = dict(do_all_cls_index=False,
@@ -239,7 +113,6 @@ def load_and_cache_examples_just_x_or_y(
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
-
 
 def squad_convert_examples_to_features_just_x_or_y(just,
                                                    examples,
@@ -302,14 +175,13 @@ def squad_convert_examples_to_features_just_x_or_y(just,
     with Pool(threads,
               initializer=squad_convert_example_to_features_init,
               initargs=(tokenizer,)) as p:
-        # TODO: take care of squad_convert_example_to_features
         annotate_ = partial(
             squad_convert_example_to_features,
             max_seq_length=max_seq_length,
             doc_stride=doc_stride,
             max_query_length=max_query_length,
             is_training=is_training,
-            padding_strategy='max_length'
+            padding_strategy='max_length',
         )
         features = list(
             tqdm(
@@ -353,9 +225,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         [f.is_impossible for f in features],
         dtype=torch.float) if do_all_is_impossible else None
 
-    # TODO: better dtypes can help..
-    all_example_index = torch.arange(all_input_ids.size(0), dtype=torch.long)
-    if not is_training:
+    if not is_training: # handle eval
         if just == 'x':
             # We load just the model inputs
             # TODO: also adds lang for XLM and etc..
@@ -438,7 +308,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         else:
             raise ValueError(f"just should be x or y, got {just}")
 
-    else:
+    else: # handle training
         if just == 'x':
             dataset = TensorDataset(*filter(
                 lambda x: x is not None,
@@ -496,9 +366,128 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             dataset = TensorDataset(*[x for x in d.values()])
 
         else:
-            raise ValueError(f"just should be x or y, got {just}")
+            raise ValueError(f"got {just}")
 
     return features, dataset
+
+
+def train_just(just, DATA_DIR, **kw):
+    train_ds = load_and_cache_examples_just_x_or_y(just=just,
+                                                   DATA_DIR=DATA_DIR,
+                                                   evaluate=False,
+                                                   output_examples=False,
+                                                   **kw)
+    return train_ds
+
+
+def dev_just(just, DATA_DIR, **kw):
+    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
+        just=just,
+        DATA_DIR=DATA_DIR,
+        evaluate=True,
+        output_examples=True,
+        **kw)
+    return dev_ds, examples, features
+
+
+def getitem(t):
+    if isinstance(t, dict):
+        res = {i: getitem(v) for i, v in t.items()}
+    else:
+        try:
+            res = t.item()
+        except:
+            res = t
+    return res
+
+
+def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
+    """ get x or y datset. """
+    # NOTE: called with just=just, DATA_DIR=DATA_DIR, **dataset_keywords
+    train_ds = load_and_cache_examples_just_x_or_y(just=just,
+                                                   DATA_DIR=DATA_DIR,
+                                                   evaluate=False,
+                                                   output_examples=False,
+                                                   **kw)
+    print("squad", "version_2_with_negative", kw["version_2_with_negative"])
+    dev_ds, examples, features = load_and_cache_examples_just_x_or_y(
+        just=just,
+        DATA_DIR=DATA_DIR,
+        evaluate=True,
+        output_examples=True,
+        **kw)
+
+    if len(dev_ds.tensors) == 0:
+        warnings.warn("setting dev_ds to None since pytorch TensorDataset can handle empty datasets")
+        dev_ds = None
+
+    # extra = (examples, features)
+
+    tokenizer = kw['tokenizer']
+    # TODO: config = kw['config']
+    args = SimpleNamespace(**kw)
+
+    partial_evaluate = partial(evaluate, examples, features, tokenizer, args)
+
+    def evaluate_squad(self):
+        global_step = self.fit_res.num_epochs  # TODO
+        result = partial_evaluate(self.all_results, prefix=global_step)
+        print(
+            dict((k + ("_{}".format(global_step) if global_step else ""),
+                  getitem(v)) for k, v in result.items()))
+        if not hasattr(self.fit_res, 'squad_results'):
+            self.fit_res.squad_results = dict()
+
+        self.fit_res.squad_results[global_step] = getitem(result)
+
+    def set_features(trainer):
+        trainer.features = features
+        trainer.statistics.evaluate_squad = types.MethodType(
+            evaluate_squad, trainer.statistics)
+
+    # NOTE: (examples, features) are needed for evaluation
+    return train_ds, dev_ds, set_features
+
+
+def get_squad_dir(DATA_DIR, version_2_with_negative: bool):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(DATA_DIR, "squad2")
+    else:
+        res = os.path.join(DATA_DIR, "squad1")
+    return res
+
+
+def get_train_file(squad_dir, version_2_with_negative):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(squad_dir, "train-v2.0.json")
+    else:
+        res = os.path.join(squad_dir, "train-v1.1.json")
+    return res
+
+
+def get_predict_file(squad_dir, version_2_with_negative):
+    # See downaload_dataset.py script.
+    if version_2_with_negative:
+        res = os.path.join(squad_dir, "dev-v2.0.json")
+    else:
+        res = os.path.join(squad_dir, "dev-v1.1.json")
+    return res
+
+
+def make_examples(DATA_DIR, train_file, predict_file, evaluate,
+                  version_2_with_negative):
+    """ In case we not loading them """
+    processor = SquadV2Processor(
+    ) if version_2_with_negative else SquadV1Processor()
+    if evaluate:
+        examples = processor.get_dev_examples(DATA_DIR, filename=predict_file)
+    else:
+        examples = processor.get_train_examples(DATA_DIR, filename=train_file)
+
+    return examples
+
 
 
 def update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw):
@@ -592,39 +581,6 @@ def evaluate(
     return results
 
 
-if __name__ == "__main__":
-    from transformers import AutoTokenizer
-
-    # import ptvsd
-    # port = 3000 + 0
-    # # args.num_data_workers = 0  # NOTE: it does not work without this.
-    # address = ('127.0.0.1', port)
-    # print(f"-I- rank {0} waiting for attachment on {address}")
-    # ptvsd.enable_attach(address=address)
-    # ptvsd.wait_for_attach()
-
-    model_name_or_path = "bert-large-uncased"
-    tokenizer = AutoTokenizer.from_pretrained(
-        "bert-large-uncased",
-        do_lower_case=False,
-        cache_dir=None,
-    )
-
-    train_ds = load_and_cache_examples_just_x_or_y(
-        just='y',
-        model_name_or_path=model_name_or_path,
-        max_seq_length=384,
-        doc_stride=128,
-        max_query_length=64,
-        threads=80,
-        tokenizer=tokenizer,
-        DATA_DIR="/home_local/saareliad/data",
-        evaluate=True,
-        output_examples=False,
-        overwrite_cache=False,
-        save=False,  # Ranks
-        version_2_with_negative=False,
-    )
 
 
 def get_extended_attention_mask(attention_mask,
@@ -724,7 +680,43 @@ def extract_needed_keywords(**kw):
              null_score_diff_threshold=null_score_diff_threshold,
              model_type=model_type,
              output_dir=output_dir,
-             is_last_partition=args.stage == args.num_stages - 1)
+             is_last_partition=args.stage == args.num_stages - 1)  # FIXME:
 
     dataset_keywords.update(d)
     return dataset_keywords
+
+
+
+if __name__ == "__main__":
+    from transformers import AutoTokenizer
+
+    # import ptvsd
+    # port = 3000 + 0
+    # # args.num_data_workers = 0  # NOTE: it does not work without this.
+    # address = ('127.0.0.1', port)
+    # print(f"-I- rank {0} waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
+
+    model_name_or_path = "bert-large-uncased"
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name_or_path,
+        do_lower_case=False,
+        cache_dir=None,
+    )
+
+    train_ds = load_and_cache_examples_just_x_or_y(
+        just='x',
+        model_name_or_path=model_name_or_path,
+        max_seq_length=384,
+        doc_stride=128,
+        max_query_length=64,
+        threads=80,
+        tokenizer=tokenizer,
+        DATA_DIR="/home_local/saareliad/data",
+        evaluate=True,
+        output_examples=False,
+        overwrite_cache=True,
+        save=False,  # Ranks
+        version_2_with_negative=False,
+    )

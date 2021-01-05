@@ -187,7 +187,7 @@ def bert_8p():
 
 def bert_base_uncaseds_384_2p_bw12_pipedream():
     return dict(model_type='bert_squad_old',
-                model_name_or_path='bert-large-uncased-whole-word-masking',
+                model_name_or_path='bert-base-uncased',
                 do_lower_case=True,
                 output_past=False,
                 stateless_tied=False,
