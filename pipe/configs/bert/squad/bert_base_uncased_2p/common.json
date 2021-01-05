@@ -15,9 +15,9 @@
     },
     "nprocs": 2,
     "statistics": "squad_loss_per_batch",
-    "bs_train": 1,
-    "bs_test": 1,
-    "num_data_workers": 6,
+    "bs_train": 24,
+    "bs_test": 24,
+    "num_data_workers": 0,
     "optimizer": {
         "type": "adam",
         "args": {
@@ -49,7 +49,7 @@
     "work_scheduler": "1F1B",
     "cudnn_benchmark": true,
     "max_buffers": 1,
-    "step_every": 24,
+    "step_every": 1,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
@@ -58,10 +58,11 @@
     "do_lower_case": true,
     "doc_stride": 128,
     "max_query_length": 64,
-    "threads": 60,
+    "threads": 80,
     "overwrite_cache": false,
     "dont_drop_last": false,
     "model_type": "bert",
     "output_dir": "results/squad/out_dir/",
-    "load_model_one_by_one": false
+    "load_model_one_by_one": false,
+    "load_extra_inputs": true
 }
