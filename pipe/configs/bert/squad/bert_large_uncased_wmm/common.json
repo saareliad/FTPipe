@@ -63,5 +63,6 @@
     "dont_drop_last": true,
     "model_type": "bert",
     "output_dir": "results/squad/out_dir/",
-    "load_model_one_by_one": false
+    "load_model_one_by_one": false,
+    "load_extra_inputs": true
 }

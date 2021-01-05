@@ -508,7 +508,9 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
 
     work_scheduler = get_work_scheduler(args, pipe_config=pipe_config)
 
+
     dataset_keywords = {}
+    dataset_keywords['pipe_config'] = pipe_config
     # Do heavy ram part one by one to save memory.
     # TODO this can be done better, e.g by local ranks or in parallel.
     for i in range(args.world_size):
