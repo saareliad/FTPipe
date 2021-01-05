@@ -53,7 +53,7 @@
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
     "log_frequency": 200,
-    "model_name_or_path": "bert-large-uncased-whole-word-masking",
+    "model_name_or_path": "bert-base-uncased",
     "max_seq_length": 384,
     "do_lower_case": true,
     "doc_stride": 128,

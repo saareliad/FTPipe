@@ -190,7 +190,12 @@ def bert_base_uncaseds_384_2p_bw12_pipedream():
                 model_name_or_path='bert-large-uncased-whole-word-masking',
                 do_lower_case=True,
                 output_past=False,
-                stateless_tied=False)
+                stateless_tied=False,
+                explicitly_set_dict={
+                    'return_dict': False
+                },
+                do_resize_token_embedding=False,
+                )
 
 
 

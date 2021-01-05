@@ -1,6 +1,7 @@
 # Based on hugginface transformers commit-id: 33ef7002e17fe42b276dc6d36c07a3c39b1f09ed
 import os
 import types
+import warnings
 from functools import partial
 from multiprocessing import Pool, cpu_count
 from types import SimpleNamespace
@@ -8,7 +9,7 @@ from types import SimpleNamespace
 import torch
 from torch.utils.data import TensorDataset
 from tqdm import tqdm
-# NOTE: this import is in order to evluate squad with pipeline
+# to evaluate squad with pipeline:
 from transformers.data.metrics.squad_metrics import (
     compute_predictions_log_probs,
     compute_predictions_logits,
@@ -66,6 +67,10 @@ def get_just_x_or_y_train_dev_dataset(just, DATA_DIR, **kw):
         evaluate=True,
         output_examples=True,
         **kw)
+
+    if len(dev_ds.tensors) == 0:
+        warnings.warn("setting dev_ds to None since pytorch TensorDataset can handle empty datasets")
+        dev_ds = None
 
     # extra = (examples, features)
 
@@ -403,20 +408,18 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 input3=all_cls_index,
                 input4=all_p_mask,
                 # input5=all_is_impossible,
+                # New:
+                attention_mask=all_attention_masks,
+                input_ids=all_input_ids,
+                token_type_ids=all_token_type_ids,
+                cls_index=all_cls_index,
+                p_mask=all_p_mask
+
             )
             d = {i: v for i, v in dd.items() if i in just}
             print(d.keys())
-            if "input1" in d:
-                if kw.get('precompute_attention_mask', False):
-                    print("-I- precomputing attention mask")
-                    # b1 = torch.tensor(d['attention_mask'])
-                    # if 'input_ids' in d:
-                    #     b0 = torch.tensor(d['input_ids'])
-                    # else:
-                    #     b0 = torch.tensor([feature.input_ids for feature in ds])
-                    attetion_mask = get_extended_attention_mask(
-                        all_attention_masks, all_input_ids)
-                    d['input1'] = attetion_mask
+
+            update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw)
 
             if kw['is_last_partition']:
                 all_start_positions = torch.tensor(
@@ -471,20 +474,15 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 input3=all_cls_index,
                 input4=all_p_mask,
                 input5=all_is_impossible,
+                attention_mask=all_attention_masks,
+                input_ids=all_input_ids,
+                token_type_ids=all_token_type_ids,
+                cls_index=all_cls_index,
+                p_mask=all_p_mask
             )
             d = {i: v for i, v in dd.items() if i in just}
-            print(d.keys())
-            if "input1" in d:
-                if kw.get('precompute_attention_mask', False):
-                    print("-I- precomputing attention mask")
-                    # b1 = torch.tensor(d['attention_mask'])
-                    # if 'input_ids' in d:
-                    #     b0 = torch.tensor(d['input_ids'])
-                    # else:
-                    #     b0 = torch.tensor([feature.input_ids for feature in ds])
-                    attetion_mask = get_extended_attention_mask(
-                        all_attention_masks, all_input_ids)
-                    d['input1'] = attetion_mask
+            print("keys in dataset", d.keys())
+            update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw)
 
             if kw['is_last_partition']:
                 all_start_positions = torch.tensor(
@@ -501,6 +499,20 @@ def squad_convert_examples_to_features_just_x_or_y(just,
             raise ValueError(f"just should be x or y, got {just}")
 
     return features, dataset
+
+
+def update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw):
+    if "input1" or 'attention_mask' in d:
+        if kw.get('precompute_attention_mask', False):
+            name = "attention_mask"
+            if "input1" in d:
+                warnings.warn("name input1 is deprecated.")
+                name = "input1"
+                assert "attention_mask" not in d
+            print(
+                "-I- precomputing attention mask to save data-transfers. (pre-processing should be outside the model)")
+            d[name] = get_extended_attention_mask(
+                all_attention_masks, all_input_ids)
 
 
 #########################################
