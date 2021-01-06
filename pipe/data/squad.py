@@ -113,7 +113,7 @@ def load_and_cache_examples_just_x_or_y(
 
 # TODO: can remove this to create lightweight Feature
 # start_position, end_position are 'y', but its just int.
-
+# from transformers import squad_convert_examples_to_features
 def squad_convert_examples_to_features_just_x_or_y(just,
                                                    examples,
                                                    tokenizer,

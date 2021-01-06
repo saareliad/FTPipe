@@ -1,7 +1,6 @@
 import argparse
 import importlib
 import os
-import pathlib
 import sys
 from argparse import Namespace
 from collections import defaultdict
@@ -85,8 +84,6 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         if trace_cache_name and os.path.exists(trace_cache_name) and overwrite_trace_cache:
             os.remove(trace_cache_name)
 
-
-
         # apply partitioning
         graph = pipe_model(model, partitioner.batch_dim, model_args=args, model_kwargs=kwargs,
                            n_iter=cmd_args.n_iter, nparts=cmd_args.n_partitions, depth=cmd_args.depth,
@@ -125,6 +122,9 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         with open(f"{cmd_args.output_file}.py", "a") as f:
             f.write("\n")
             f.write(f"model_args = {model_args}")
+
+        if hasattr(partitioner, "record_transformer_cfg"):
+            partitioner.record_transformer_cfg(cmd_args=cmd_args)
 
         # record overridden args as a override_dict variable
         if override_dict:
