@@ -232,7 +232,7 @@ class BertPartitioner(PartitioningTask):
         record_transformer_cfg(
             python_output_file=f"{cmd_args.output_file}.py",
             args=cmd_args,
-            model_type='bert',
+            model_type='bert_squad',
             explicitly_set_dict={
                 "precompute_attention_mask": cmd_args.precompute_attention_mask,
                 'return_dict': False
