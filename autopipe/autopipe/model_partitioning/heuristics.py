@@ -8,7 +8,8 @@ import torch
 from autopipe.autopipe.utils import ExecTimes, flatten
 from ..model_profiling import Node, NodeTypes
 
-__all__ = ["get_weight_functions"]
+
+# __all__ = ["get_weight_functions"]
 
 
 def get_weight_functions(args, verbose=True):
@@ -36,7 +37,7 @@ def get_weight_functions(args, verbose=True):
     return node, edge
 
 
-class NodeWeightFunction():
+class NodeWeightFunction:
     def __init__(self, bwd_to_fwd_ratio=-1, MULT_FACTOR=1e4):
         self.ratio = bwd_to_fwd_ratio
         self.MULT_FACTOR = MULT_FACTOR
@@ -53,7 +54,7 @@ class NodeWeightFunction():
             return self.MULT_FACTOR * (self.ratio * node.weight.backward_time + node.weight.forward_time)
 
 
-class EdgeWeightFunction():
+class EdgeWeightFunction:
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -148,7 +149,7 @@ class EdgeWeightFunction():
 #############
 
 
-class NodeWeightFunctionWithRatioAutoInfer():
+class NodeWeightFunctionWithRatioAutoInfer:
     def __init__(self, MULT_FACTOR=1e4):
         self.MULT_FACTOR = MULT_FACTOR
 
@@ -170,7 +171,7 @@ class NodeWeightFunctionWithRatioAutoInfer():
 #############
 
 
-class CoarsenedWeightFunction():
+class CoarsenedWeightFunction:
     def __init__(self,
                  edge_weight_function: EdgeWeightFunction,
                  node_weight_function: NodeWeightFunction,
@@ -289,12 +290,6 @@ class CoarsenedWeightFunction():
 
         return is_comm_fwd, is_comm_bwd
 
-    # def is_comm_bounded_forward(self, nodes: Set[Node],
-    #                             boarders: Optional[Tuple[Set[Tuple[Node, Node]], Set[Node], Set[Tuple[Node, Node]], Set[Node]]] = None):
-    #
-    #
-    #     is_comm_fwd = overlaped_comp_fwd <= comm_fwd
-
     def calculate_comm_forward_and_backward(self, incomming_edges, outgoing_edges):
         comm_bwd = self.calculate_comm_backward(incomming_edges)
         comm_fwd = self.calculate_comm_forward(outgoing_edges)
@@ -312,3 +307,42 @@ class CoarsenedWeightFunction():
         comm_bwd = sum(self.ewf(*e) for e in incomming_edges)
         self.ewf.ratio = tmp
         return comm_bwd
+
+
+class NodeMemoryEstimator:
+    def __init__(self, optimizer_multiply=3):
+        self.optimizer_multiply = optimizer_multiply
+
+    @staticmethod
+    def cuda_activations_and_grads_mem(u: Node):
+        if u.value_type in [int, bool, float, torch.Size, type(None)]:
+            return 0
+        if u.type is NodeTypes.CONSTANT or u.value_type in [torch.device, torch.dtype, str, slice]:
+            return 0
+
+        # its a tensor, calculate the volume
+        bwd_volume = 0
+        volume = 0
+        for shape, dtype in zip(flatten(u.tensor_shape),
+                                flatten(u.tensor_dtype)):
+            if isinstance(shape, torch.Size):
+                tmp = reduce(operator.mul, shape, 1)
+                # include dtype size
+                tmp *= torch.empty(1, dtype=dtype).element_size()  # maybe use cache?
+                if u.req_grad:
+                    bwd_volume += tmp
+                volume += tmp
+            else:
+                warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. ignoring volume!")
+
+        return volume + bwd_volume
+
+    def __call__(self, node: Node):
+        # cuda_memory_estimation_naive
+        byte_per_parameter = 4  # TODO: more accurate
+        parameter_size = node.num_parameters * byte_per_parameter * self.optimizer_multiply
+        # activations_size = self.cuda_activations_and_grads_mem(node)
+        # max(activations+activation_grads + param grads, ...)
+        activations_size = node.max_memory_bytes
+
+        return activations_size + parameter_size

@@ -33,7 +33,7 @@ def coarsening(graph,
                                                     edge_weight_function,
                                                     L,
                                                     uf,
-                                                    verbose=True,
+                                                    verbose=False,
                                                     record_history=True,
                                                     threshold=0
                                                     )

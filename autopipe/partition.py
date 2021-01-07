@@ -63,13 +63,10 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
 
     del sample
 
-    if not cmd_args.save_memory_mode:
-        with torch.no_grad():
-            model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
+
 
     node_weight_function, edge_weight_function = get_weight_functions(cmd_args, verbose=True)
 
-    cmd_args.basic_blocks = choose_blocks(model, cmd_args)
 
     profiles_cache_name = cmd_args.profiles_cache_name
     trace_cache_name = cmd_args.trace_cache_name
@@ -84,6 +81,10 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         if trace_cache_name and os.path.exists(trace_cache_name) and overwrite_trace_cache:
             os.remove(trace_cache_name)
 
+        if not cmd_args.save_memory_mode:
+            with torch.no_grad():
+                model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
+        cmd_args.basic_blocks = choose_blocks(model, cmd_args)
         # apply partitioning
         graph = pipe_model(model, partitioner.batch_dim, model_args=args, model_kwargs=kwargs,
                            n_iter=cmd_args.n_iter, nparts=cmd_args.n_partitions, depth=cmd_args.depth,

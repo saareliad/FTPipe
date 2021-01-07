@@ -39,6 +39,7 @@ class Node:
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
+        self.max_memory_bytes: float = 0
         self.num_parameters: Optional[int] = 0
         self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
@@ -137,6 +138,7 @@ class Node:
         node.req_grad = other.req_grad
 
         node.constant_value = other.constant_value
+        node.max_memory_bytes = other.max_memory_bytes
 
         return node
 
@@ -217,6 +219,7 @@ class Graph():
 
         # merge node parameters
         u.num_parameters += v.num_parameters
+        u.max_memory_bytes += v.max_memory_bytes
 
         # TODO: dynamic topo_sort
         if dynamic_topo_sort:
@@ -579,7 +582,8 @@ class Graph():
                          tensor_dtype=node.tensor_dtype,
                          tensor_shape=node.tensor_shape,
                          req_grad=node.req_grad,
-                         compound_edge_weights=deepcopy(node.compound_edge_weights))
+                         compound_edge_weights=deepcopy(node.compound_edge_weights),
+                         max_memory_bytes=node.max_memory_bytes)
             node_states[node.id] = state
 
         return {"node_data": node_states,
@@ -608,7 +612,7 @@ class Graph():
             node.stage_id = state['stage_id']
             node.gpu_id = state['gpu_id']
             node.weight = state['weight']
-            node.args = [nodes[n] for n in state['args']]
+            node.args = [nodes[n] for n in state['args']]  # NOTE: must be same order!
             node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
             node.constant_value = state['constant_value']
             node.value_type = state['value_type']
@@ -617,6 +621,7 @@ class Graph():
             node.req_grad = state['req_grad']
             node.compound_edge_weights = state['compound_edge_weights']
             node.num_parameters = state['num_parameters']
+            node.max_memory_bytes = state['max_memory_bytes']
 
         for node in nodes.values():
             node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)

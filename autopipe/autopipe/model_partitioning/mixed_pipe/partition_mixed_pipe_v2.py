@@ -4,7 +4,7 @@ from collections import defaultdict
 from pprint import pprint
 from typing import Optional
 
-from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction
+from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, NodeMemoryEstimator
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.coarsening import coarsening
 from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
@@ -12,8 +12,8 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import
     convert_handle_missing_print
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_partitioning.mixed_pipe.refine import refine
-from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph
+from autopipe.autopipe.union_find import UnionFind
 
 
 def _lworker(args):
@@ -21,7 +21,8 @@ def _lworker(args):
     return times, work_graph.state(), best_objective
 
 
-def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges):
+def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
+            node_mem_estimator):
     work_graph = Graph.from_state(saved_work_graph_without_par_edges)
     # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
@@ -30,7 +31,7 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
     last_graph: Graph = hierarchy[-1][-2]
     print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
     # greedy load balance
-    bins = greedy_best_fit(last_graph, P, node_weight_function)
+    bins = greedy_best_fit(last_graph, P, node_weight_function, node_mem_estimator)
     # TODO: print more stats, e.g comp/comm ratio, its interesting
     times = {i: sum(node_weight_function(x) for x in bins[i]) for i in bins}
     print("bin times:")
@@ -60,8 +61,9 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
             a.stage_id = b.stage_id
             a.gpu_id = b.gpu_id
     # Refinement
-    best_objective = refine(work_graph, node_weight_function=node_weight_function, edge_weight_function=edge_weight_function,
-           round_limit=round_limit)
+    best_objective = refine(work_graph, node_weight_function=node_weight_function,
+                            edge_weight_function=edge_weight_function,
+                            round_limit=round_limit)
 
     return times, work_graph, best_objective
 
@@ -70,6 +72,7 @@ def partition_mpipe(graph: Graph,
                     num_gpus: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
+                    node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(optimizer_multiply=3),
                     use_layers_graph: bool = True,
                     round_limit=-1,
                     nprocs=1,
@@ -97,13 +100,13 @@ def partition_mpipe(graph: Graph,
     # L_list = [2*P, 4*P, 8*P, 16*P]
     if L_list is None:
         # L_list=[P, 2*P, 3*P, 4*P, 5*P, 6*P, 7*P, 8*P]
-        L_list=[3*P]
+        L_list = [3*P, 4 * P]
         warnings.warn(f"no L_list given. using mine {L_list}")
 
     if nprocs > 1 and len(L_list) > 1:
         # Parallel version
         worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph_without_par_edges.state()) for L in L_list]
+                        saved_work_graph_without_par_edges.state(), node_mem_estimator) for L in L_list]
 
         with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
             results = pool.map(_lworker, worker_args)
@@ -115,7 +118,7 @@ def partition_mpipe(graph: Graph,
         # sequential version
         for L in L_list:
             times, work_graph, best_objective = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
-                                        saved_work_graph_without_par_edges.state())
+                                                        saved_work_graph_without_par_edges.state(), node_mem_estimator)
 
             # save res
             L_to_res[L] = (work_graph, times, best_objective)
@@ -137,7 +140,6 @@ def partition_mpipe(graph: Graph,
     L_to_best_objective = dict()
 
     L_to_num_stages = dict()
-
 
     for L, (work_graph, times, best_objective) in L_to_res.items():
         # s2
@@ -198,7 +200,7 @@ def partition_mpipe(graph: Graph,
 # Heavy edge matching: in communications.
 
 
-def greedy_best_fit(graph: Graph, P, node_weight_function, ):
+def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: NodeMemoryEstimator):
     bins = {i: list() for i in range(P)}
     bin_weights = heapdict({i: 0 for i in range(P)})
     bin_memory = heapdict({i: 0 for i in range(P)})
@@ -206,8 +208,14 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, ):
     node_to_weight = {n: node_weight_function(n) for n in graph.non_input_nodes}
     node_to_weight = dict(sorted(node_to_weight.items(), key=lambda item: item[1], reverse=True))
 
+    gpu_mem_threshold_bytes = {i: 10 * 1e9 for i in bins}
+    node_to_mem = {n: node_mem_estimator(n) for n in graph.non_input_nodes}
+
     def check_memory_fit(candidate, bin_id):
-        # TODO: implement after PoC
+        # TODO:  PoC
+        if node_to_mem[candidate] + bin_memory[bin_id] > gpu_mem_threshold_bytes[bin_id]:
+            print(f"-v- failed to add candidate to GPU {bin_id}")
+            return False
         return True
 
     def choose_bin(node):
@@ -224,8 +232,7 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, ):
         bin_id = choose_bin(node)
         bins[bin_id].append(node)
         bin_weights[bin_id] += node_weight
-        # TODO: update memory
-        bin_memory[bin_id] += 0
+        bin_memory[bin_id] += node_to_mem[node]
 
     return bins
 
