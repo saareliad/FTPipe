@@ -9,7 +9,8 @@ import pandas as pd
 
 
 def alg(fn):
-    for a in ["msnag", "aggmsnag", "stale"]:
+    all_algs =["msnag", "aggmsnag", "stale","pipedream"]
+    for a in all_algs:
         ga_alg = f"{a}_ws_ga"
         if ga_alg in fn:
             return ga_alg
@@ -17,7 +18,8 @@ def alg(fn):
         if ws_alg + "_" in fn:
             return ws_alg
 
-    return "gpipe" if "gpipe" in fn else "aggmsnag" if "aggmsnag" in fn else "msnag" if "msnag" in fn else "stale" if "stale" in fn else "BUG"
+
+    return "gpipe" if "gpipe" in fn else "aggmsnag" if "aggmsnag" in fn else "msnag" if "msnag" in fn else "stale_ws" if "stale_ws" in fn else "stale" if "stale" in fn else "BUG"
 
 
 def read_desc_df(path="desc.csv"):
@@ -103,14 +105,14 @@ def write_lm_desc_df():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Squad results analysis')
-    parser.add_argument("--task",
+    parser.add_argument('-t', "--task",
                         choices=["squad", "lm"],
                         default="squad",
                         help="Learning Task")
 
-    parser.add_argument('--write', action='store_true', default=False)
-    parser.add_argument('--read', action='store_true', default=False)
-    parser.add_argument('--filter', action='store_true', default=False)
+    parser.add_argument('-w', '--write', action='store_true', default=False)
+    parser.add_argument('-r', '--read', action='store_true', default=False)
+    parser.add_argument('-f', '--filter', action='store_true', default=False)
 
     args = parser.parse_args()
 
