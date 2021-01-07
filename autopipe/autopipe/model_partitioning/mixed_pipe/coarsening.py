@@ -6,12 +6,16 @@ from sortedcollections import ValueSortedDict
 
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, NodeWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
+from autopipe.autopipe.model_partitioning.mixed_pipe.detect_p_rep import full_alg
 from autopipe.autopipe.model_partitioning.mixed_pipe.systematic_block_ratio_creation import RatioBlockCreator
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
 
-def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_function: NodeWeightFunction, L) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
+def coarsening(graph,
+               edge_weight_function: EdgeWeightFunction,
+               node_weight_function: NodeWeightFunction,
+               L, P) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
     uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
 
     print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
@@ -54,7 +58,7 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     # TODO: systematic-block-ratio-creation
     DO_SYSTEMATIC = True
     if DO_SYSTEMATIC:
-        p, _, g, uf, uf2 = comm_comp_ratio_matching(
+        p, _, g, uf, uf2 = systematic_comm_comp_ratio_matching(
             p,
             node_weight_function,
             edge_weight_function,
@@ -67,6 +71,9 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
 
         hierarchy.append((p, uf2, g, deepcopy(uf)))
         p = g
+
+
+    # full_alg(p, P, L, node_weight_function, edge_weight_function, uf, rtol=2e-3)
 
     p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
                                                           node_weight_function,
@@ -129,8 +136,8 @@ def adjacent_and_same_size_matching(graph: Graph):
     pass
 
 
-def comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
-                             verbose=False):
+def systematic_comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
+                                        verbose=False):
     prev_graph = Graph.from_other(graph)
 
     rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,

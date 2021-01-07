@@ -25,7 +25,7 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
     work_graph = Graph.from_state(saved_work_graph_without_par_edges)
     # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
-    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L)
+    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L, P)
     # the output here should be L stages,
     last_graph: Graph = hierarchy[-1][-2]
     print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")

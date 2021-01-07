@@ -7,6 +7,7 @@ from sortedcollections import ValueSortedDict, SortedDict
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
+import torch
 
 
 def full_alg(graph, P, L, node_weight_function, edge_weight_function, uf, rtol=2e-3):
@@ -18,31 +19,34 @@ def full_alg(graph, P, L, node_weight_function, edge_weight_function, uf, rtol=2
                                                                                rtol=rtol,
                                                                                verbose=False)
 
+    torch.save(history, "history.tmp")
+    print("Saved history to file history.tmp")
+    repetitive_adjacent_analysis(history, L, P)
+
 
 def repetitive_adjacent_analysis(history: List[List[Set[Node]]], L, P):
     # TODO:
-    for found_sets in history:
+    for i, found_sets in enumerate(history):
         lengths = [len(x) for x in found_sets]
-        print("Found set lengths {lengths}")
-
+        print(f"-I- merge {i} Found set lengths {lengths}")
         # TODO: have to think about this
 
         for l in lengths:
             if l % P == 0:
                 k = l // P
-                print(f"Found set of size {l} splitting it to {k}*{P} groups")
+                print(f"    Found set of size {l} splitting it to {k}*{P} groups")
                 # TODO: split to sets of K
                 # TODO: there should be ability to undo the splitting to increase k. (or to do a dry run, 1st and 2nd passes)
             elif l > P:
-                print(f"Found set of size {l}, currently ignoring")
+                print(f"    Found set of size {l}, currently ignoring")
                 # TODO: should track if the set size increases of decreases,
                 # when ts starts decreasing: consider doing the merge.
 
 
-def record_repetitive_adjacent(graph, rtol=2e-3, do_topo_sort=True):
+def record_repetitive_adjacent(graph, node_weight_function, rtol=2e-3, do_topo_sort=True):
     if do_topo_sort:
         graph.topo_sort(change_graph=False)
-    topo_sorted_nodes_to_weight = SortedDict({n.topo_sort_id for n in graph.non_input_nodes})
+    topo_sorted_nodes_to_weight = SortedDict({n.topo_sort_id: node_weight_function(n) for n in graph.non_input_nodes})
 
     found_sets = []
     cur = None
@@ -58,8 +62,9 @@ def record_repetitive_adjacent(graph, rtol=2e-3, do_topo_sort=True):
             cur_set.add(node)
             cur = rsum / len(cur_set)
         else:
-            # check how am I so far
-            found_sets.append(cur_set)
+            if cur_set:
+                # check how am I so far
+                found_sets.append(cur_set)
 
             # clear search,
             cur = weight
@@ -71,7 +76,7 @@ def record_repetitive_adjacent(graph, rtol=2e-3, do_topo_sort=True):
 
 def get_rep_analysis_history_with_online_smallest_comp_node_matching(graph: Graph, node_weight_function,
                                                                      edge_weight_function, L, uf: UnionFind,
-                                                                     verbose=False, rtol=2e-3):
+                                                                     verbose=True, rtol=2e-3):
     prev_graph = Graph.from_other(graph)
     # switch: work on the dummy version
     graph, prev_graph = prev_graph, graph
@@ -107,7 +112,7 @@ def get_rep_analysis_history_with_online_smallest_comp_node_matching(graph: Grap
         merged_something, weight_of_u = inner_loop()
         if not merged_something:
             break
-        found_sets = record_repetitive_adjacent(graph, rtol=rtol, do_topo_sort=True)
+        found_sets = record_repetitive_adjacent(graph, node_weight_function, rtol=rtol, do_topo_sort=True)
         rep_analysis_history.append(found_sets)
         if verbose:
             print(f"Nodes: {len(hd)}, Smallest: {weight_of_u}")
