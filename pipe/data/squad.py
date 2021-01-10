@@ -54,11 +54,12 @@ def load_and_cache_examples_just_x_or_y(
 
     cached_features_file = os.path.join(
         input_dir,
-        "cached_just_{}_{}_{}_{}".format(
+        "cached_just_{}_{}_{}_{}_{}".format(
             just_name_for_cached,
             "dev" if evaluate else "train",
             list(filter(None, model_name_or_path.split("/"))).pop(),
             str(max_seq_length),
+            "lp" if kw['is_last_partition'] else "p"
         ),
     )
 
@@ -225,7 +226,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
         [f.is_impossible for f in features],
         dtype=torch.float) if do_all_is_impossible else None
 
-    if not is_training: # handle eval
+    if not is_training:  # handle eval
         if just == 'x':
             # We load just the model inputs
             # TODO: also adds lang for XLM and etc..
@@ -304,11 +305,11 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 d['all_end_positions'] = all_end_positions
                 d['all_example_index'] = all_example_index
 
-            dataset = TensorDataset(*[x for x in d.values()])
+            dataset = get_dataset_by_just(d, just)
         else:
             raise ValueError(f"just should be x or y, got {just}")
 
-    else: # handle training
+    else:  # handle training
         if just == 'x':
             dataset = TensorDataset(*filter(
                 lambda x: x is not None,
@@ -351,6 +352,7 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 p_mask=all_p_mask
             )
             d = {i: v for i, v in dd.items() if i in just}
+            # TODO: sort by just?
             print("keys in dataset", d.keys())
             update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw)
 
@@ -363,12 +365,26 @@ def squad_convert_examples_to_features_just_x_or_y(just,
                 d['all_start_positions'] = all_start_positions
                 d['all_end_positions'] = all_end_positions
 
-            dataset = TensorDataset(*[x for x in d.values()])
+            dataset = get_dataset_by_just(d, just)
 
         else:
             raise ValueError(f"got {just}")
 
     return features, dataset
+
+
+def get_dataset_by_just(d, just):
+    l = []
+    for name in just:
+        l.append(d[name])
+    if 'all_start_positions' in d:
+        l.append(d['all_start_positions'])
+    if 'all_end_positions' in d:
+        l.append(d['all_end_positions'])
+    if 'all_example_index' in d:
+        l.append(d['all_example_index'])
+    dataset = TensorDataset(*l)
+    return dataset
 
 
 def train_just(just, DATA_DIR, **kw):
@@ -489,9 +505,8 @@ def make_examples(DATA_DIR, train_file, predict_file, evaluate,
     return examples
 
 
-
 def update_on_precomputed_attention_mask(all_attention_masks, all_input_ids, d, kw):
-    if "input1" or 'attention_mask' in d:
+    if "input1" in d or 'attention_mask' in d:
         if kw.get('precompute_attention_mask', False):
             name = "attention_mask"
             if "input1" in d:
@@ -581,8 +596,6 @@ def evaluate(
     return results
 
 
-
-
 def get_extended_attention_mask(attention_mask,
                                 input_ids,
                                 dtype=torch.float32):
@@ -660,7 +673,9 @@ def extract_needed_keywords(**kw):
         threads=args.threads,
         version_2_with_negative=version_2_with_negative,
         save=True,  # TODO: according to Ranks for stage replication
-        overwrite_cache=overwrite_cache)
+        overwrite_cache=overwrite_cache,
+        precompute_attention_mask=getattr(args, "precompute_attention_mask", False),
+    )
 
     # For evaluate
     n_best_size = getattr(args, "n_best_size", 20)
@@ -684,7 +699,6 @@ def extract_needed_keywords(**kw):
 
     dataset_keywords.update(d)
     return dataset_keywords
-
 
 
 if __name__ == "__main__":

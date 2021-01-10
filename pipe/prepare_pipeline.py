@@ -523,8 +523,8 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
             if isinstance(extra_kw, dict):
                 dataset_keywords.update(extra_kw)
             # delete to save mem, in contains original model
-    del handler
-    gc.collect()
+            del handler
+            gc.collect()
 
     training_tensor_dtypes = parsed_config.training_tensor_dtypes
     eval_tensor_shapes = parsed_config.eval_tensor_shapes

@@ -13,7 +13,7 @@
         "args": {
         }
     },
-    "nprocs": 2,
+    "nprocs": 8,
     "statistics": "squad_loss_per_batch",
     "bs_train": 24,
     "bs_test": 1,
@@ -59,10 +59,11 @@
     "doc_stride": 128,
     "max_query_length": 64,
     "threads": 80,
-    "overwrite_cache": false,
+    "overwrite_cache": true,
     "dont_drop_last": false,
     "model_type": "bert",
     "output_dir": "results/squad/out_dir/",
     "load_model_one_by_one": false,
-    "load_extra_inputs": true
+    "load_extra_inputs": true,
+    "precompute_attention_mask": true
 }

@@ -17,9 +17,9 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "step_every": 2,
-    "bs_train": 4,
-    "bs_test": 4,
+    "step_every": 8,
+    "bs_train": 1,
+    "bs_test": 1,
     "max_seq_length": 512,
     "answer_max_seq_length": 4,
     "num_data_workers": 5,
@@ -66,6 +66,6 @@
     "save_checkpoints":  true,
     "checkpoints_save_name_prefix": "stale_adafactor",
     "checkpoints_save_dir": "/nfs_Disk2/virtual_stages/checkpoints/t5/3b/multirc/stale/",
-    "load_model_one_by_one": false,
+    "load_model_one_by_one": true,
     "single_worker_eval_batch_size": 16
 }

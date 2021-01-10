@@ -207,7 +207,7 @@ def bert_large_uncased_whole_word_maskings_384_2p_bw12_pipedream():
               do_lower_case=True,
               output_past=False,
               stateless_tied=False,
-              explicitly_set_dict={'precompute_attention_mask': False, 'return_dict': False},
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
               do_resize_token_embedding=False,
               )
 
@@ -218,12 +218,9 @@ def bert_large_uncased_whole_word_maskings_384_2p_bw12_async_pipedream():
                 do_lower_case=True,
                 output_past=False,
                 stateless_tied=False,
-                explicitly_set_dict={'precompute_attention_mask': False, 'return_dict': False},
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
                 do_resize_token_embedding=False,
                 )
-
-
-
 
 
 def bert_large_uncased_whole_word_maskings_384_8p_bw12_pipedream():
@@ -232,7 +229,7 @@ def bert_large_uncased_whole_word_maskings_384_8p_bw12_pipedream():
               do_lower_case=True,
               output_past=False,
               stateless_tied=False,
-              explicitly_set_dict={'precompute_attention_mask': False, 'return_dict': False},
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
               do_resize_token_embedding=False,
               )
 
@@ -243,7 +240,7 @@ def bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream():
                 do_lower_case=True,
                 output_past=False,
                 stateless_tied=False,
-                explicitly_set_dict={'precompute_attention_mask': False, 'return_dict': False},
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
                 do_resize_token_embedding=False,
                 )
 

@@ -29,7 +29,7 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
             )
 
         if is_depth_first_stage_by_depth and not is_first_partition:
-            warnings.warn("experimentaly allowing is_depth_first_stage_by_depth and not is_first_partition")
+            warnings.warn("experimentally allowing is_depth_first_stage_by_depth and not is_first_partition")
 
         # Determine unpack_cls
         if is_last_partition:

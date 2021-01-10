@@ -129,6 +129,7 @@ def compile_partitioned_model(graph: Graph,
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if path.exists():
+        warnings.warn(f"Overriding previous path {path}")
         os.remove(path)
     with open(path, 'w') as f:
         f.write('\n'.join(lines))
