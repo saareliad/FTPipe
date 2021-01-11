@@ -22,6 +22,7 @@ dependencies:
     - git+https://github.com/networkx/networkx-metis.git  # For partitioning
     - timm
     - sortedcollections
+    - graphviz
 
 
 

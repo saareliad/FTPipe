@@ -176,7 +176,6 @@ def bert_large_uncased_squad_8p():
                 output_past=False,
                 stateless_tied=False)
 
-
 def bert_base_uncaseds_384_2p_bw12_pipedream():
     return dict(model_type='bert_squad_old',
                 model_name_or_path='bert-base-uncased',
@@ -243,6 +242,29 @@ def bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream():
                 explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
                 do_resize_token_embedding=False,
                 )
+
+
+def bert_large_uncased_whole_word_maskings_384_4p_bw12_pipedream():
+    return dict(model_type='bert_squad',
+              model_name_or_path='bert-large-uncased-whole-word-masking',
+              do_lower_case=True,
+              output_past=False,
+              stateless_tied=False,
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+              do_resize_token_embedding=False,
+              )
+
+
+def bert_large_uncased_whole_word_maskings_384_4p_bw12_async_pipedream():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+                do_resize_token_embedding=False,
+                )
+
 
 # GPipe version for the functions, as it has different balance.
 def gpt2_p4_lm_tied_gpipe():

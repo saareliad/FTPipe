@@ -112,7 +112,8 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
 
         if cmd_args.dot:
             try:
-                graph.save_as_pdf(cmd_args.output_file, ".")
+                graph.save_as_pdf(cmd_args.output_file, "graphs",
+                                  node_weight_function=node_weight_function, edge_weight_function=edge_weight_function)
             except Exception as e:
                 print("Error saving graph as pdf")
                 raise e
