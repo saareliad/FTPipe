@@ -56,7 +56,7 @@ def write_squad_desc_df():
             agg = d['agg']
             mb = r['config']['bs_train']
             d['batch'] = agg * mb
-            d['total_time'] = r['config']['exp_total_time']
+            d['total_time'] = sum(r['config']['train_epochs_times'])
             d['f1'] = r['results']['squad_results']['2']['f1']
             d['em'] = r['results']['squad_results']['2']['exact']
 
