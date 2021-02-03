@@ -1,10 +1,15 @@
 import json
 
 import ml_collections
+from ml_collections import ConfigDict
+
+
+def empty_config():
+    return ml_collections.ConfigDict()
 
 
 def _convert_dict_to_python_config(dd, prefix="config"):
-    print(f"{prefix} = ml_collections.ConfigDict()")
+    print(f"{prefix} = ConfigDict()")
 
     for i in dd:
         if isinstance(dd[i], str):
@@ -174,6 +179,11 @@ def get_t5_t5_3b_p8_virtual_stages_boolq_common_config():
     config.checkpoints_save_dir = '/nfs_Disk2/virtual_stages/checkpoints/t5/3b/boolq/stale/'
     config.load_model_one_by_one = False
     return config
+
+if __name__ == '__main__':
+    # _convert_json_to_to_python_config(path="pipe/configs/t5/t5_mpipe/boolq/stale.json")
+    _convert_json_to_to_python_config(path="pipe/configs/t5/t5_mpipe/boolq/common.json")
+
 
 # from absl import app
 # def main(_):

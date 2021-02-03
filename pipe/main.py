@@ -12,7 +12,7 @@ import torch.multiprocessing as mp
 
 # Avoid annoying import of tensorflow caused by HF transformers.
 os.environ['USE_TORCH'] = "1"
-from pipe.configs.parse_json_config import parse_json_config
+from pipe.configs.parse_json_config import parse_json_config, add_parsed_config_to_args
 from pipe.data import add_dataset_argument
 from pipe.eval import get_all_eval_results
 from pipe.experiments import save_experiment, load_experiment_for_update
@@ -232,7 +232,7 @@ def parse_cli():
     return args
 
 
-def parse_mpi_env_vars(args):
+def maybe_parse_mpi_env_vars(args):
     """
     Parses env vars (e.g from mpirun) and push them into args (overriding).
     This allows completing some "incomplete" cli-argument parsing.
@@ -360,10 +360,10 @@ def multiprocessing_worker(rank, args, share):
     # sys.exit(0)
 
 
-def start_distributed():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
-    parse_mpi_env_vars(args)
+def start_distributed(python_args_dict=None):
+    args = get_basic_args(python_args_dict)
+
+    maybe_parse_mpi_env_vars(args)
     args.world_size = get_world_size(args.distributed_backend)
     args.is_multiprocessing_worker = False
     main(args)
@@ -430,9 +430,9 @@ def main(args, shared_ctx=None):
     # torch.distributed.destroy_process_group()
 
 
-def start_mutiprocessing():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
+def start_mutiprocessing(python_args_dict=None):
+    args = get_basic_args(python_args_dict)
+
     args.world_size = args.nprocs
     # should be able to fork here as well, but something calls poison_fork() and I didn't find it...
     start_method = 'spawn'
@@ -450,9 +450,9 @@ def start_mutiprocessing():
                        start_method=start_method)
 
 
-def start_preproc():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
+def start_preproc(python_args_dict=None):
+    args = get_basic_args(python_args_dict)
+
     args.world_size = args.nprocs  # HACK
     cache = None
     for rank in range(args.world_size):
@@ -464,9 +464,8 @@ def start_preproc():
         cache = preproc_data(args, cache, save_cache=True)
 
 
-def start_eval_checkpoint():
-    args = parse_cli()
-    parse_json_config(args, args.config, first=True)
+def start_eval_checkpoint(python_args_dict=None):
+    args = get_basic_args(python_args_dict)
     # args.single_worker_eval_batch_size = 64
 
     all_results = get_all_eval_results(args)
@@ -485,22 +484,32 @@ def start_eval_checkpoint():
     print("-I- Done")
 
 
-def start():
+def get_basic_args(python_args_dict=None):
+    args = parse_cli()
+    if python_args_dict:
+        add_parsed_config_to_args(args, python_args_dict)
+    else:
+        parse_json_config(args, args.config, first=True)
+    return args
+
+
+def start(python_args_dict=None):
     # TODO set OMP_NUM_THREADS automatically
     print(f"Using {torch.get_num_threads()} Threads")
+
     args = parse_cli()
     if args.mode == "mp":
         print("Running in multiprocessing mode")
-        start_mutiprocessing()
+        start_mutiprocessing(python_args_dict=python_args_dict)
     elif args.mode == 'preproc':
         print("Running in preproc mode: Preprocessing data...")
-        start_preproc()
+        start_preproc(python_args_dict=python_args_dict)
     elif args.mode == 'eval':
         print("Running in eval mode: Evaluating checkpoints...")
-        start_eval_checkpoint()
+        start_eval_checkpoint(python_args_dict=python_args_dict)
     else:
         print("Running in distributed mode")
-        start_distributed()
+        start_distributed(python_args_dict=python_args_dict)
 
 
 if __name__ == "__main__":

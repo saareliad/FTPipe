@@ -1,14 +1,12 @@
-from .sutskever_modified_sgd import SGD as SutskeverSGD
-
+from .adafactor import Adafactor
+from .adam import Adam
+from .adam_record import Adam as AdamGA
+from .adamw import AdamW
+from .adamw_record import AdamW as AdamWGA
 # .data parameter update is only change (pytorch 1.5)
 from .sgd import SGD as PytorchSGD
-from .adam import Adam
-from .adamw import AdamW
+from .sutskever_modified_sgd import SGD as SutskeverSGD
 
-from .adam_record import Adam as AdamGA
-from .adamw_record import AdamW as AdamWGA
-
-from .adafactor import Adafactor
 # from .utils import linear_lr_scaling
 
 AVAILBALE_OPTIMIZERS = {
@@ -19,5 +17,4 @@ AVAILBALE_OPTIMIZERS = {
     'adam_record_step': AdamGA,
     'adamw_record_step': AdamWGA,
     'adafactor': Adafactor
-
 }
