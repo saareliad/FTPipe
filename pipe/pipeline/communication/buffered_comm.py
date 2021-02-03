@@ -344,11 +344,16 @@ class FuturesHandler(FuturesHandlerBase):
         #     self.sent_object_patience = 1
 
         patience = pipe_config.max_send_depth_for_stage(my_stage_id)
+        self.true_patience = patience
+        self.warmup_patience = patience
         pipeline_depth = pipe_config.pipeline_depth
         if patience > 1:
             warnings.warn(
-                f"stage {my_stage_id}: Got max_send_depth_for_stage {patience}, but setting to pipeline_depth={pipeline_depth} for safety")
+                f"stage {my_stage_id}: Got max_send_depth_for_stage {patience}, but setting to pipeline_depth={pipeline_depth} at warmup, for safety")
+            self.warmup_patience = pipeline_depth
+            # self.true_patience = pipeline_depth   # FIXME
             patience = pipeline_depth
+
         # TODO: it depends on scheduler.
         # TODO: we should let activations run without this blocking it
         # GPIPE: min(depth diff for activations, num micro batches)
@@ -358,6 +363,7 @@ class FuturesHandler(FuturesHandlerBase):
 
         print(f"-V- stage: {my_stage_id}, sent_object_patience: {patience}")
         self.sent_object_patience = patience
+        self.warmup_count = patience
 
         # Holds Async handle objects (for isends)
         self.async_fwd_objects = OrderedDict()
@@ -373,6 +379,10 @@ class FuturesHandler(FuturesHandlerBase):
             if self.async_fwd_objects:
                 self.wait_on_sent_object(is_fwd=True)
             self.async_fwd_objects[done_fwds] = sent_request_objects
+        if self.warmup_count > 0:
+            self.warmup_count -= 1
+            if self.warmup_count == 0:
+                self.sent_object_patience = self.true_patience  # reduce
 
     def after_backward(self, sent_request_objects, done_bwds):
         # NOTE: its actually after the step too
@@ -394,11 +404,17 @@ class FuturesHandler(FuturesHandlerBase):
         while len(async_bwd_objects) > 0:
             wait_on_sent_object(is_fwd=False, fin=True)
 
+        self.sent_object_patience = self.warmup_patience
+        self.warmup_count = self.warmup_patience
+
     def clean_eval(self):
         async_fwd_objects = self.async_fwd_objects
         wait_on_sent_object = self.wait_on_sent_object
         while len(async_fwd_objects) > 0:
             wait_on_sent_object(is_fwd=True, fin=True)
+
+        self.sent_object_patience = self.warmup_patience
+        self.warmup_count = self.warmup_patience
 
     def wait_on_sent_object(self, is_fwd, fin=False, clean_first=True):
         obj_holder = self.async_fwd_objects if is_fwd else self.async_bwd_objects
