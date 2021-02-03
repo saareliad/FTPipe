@@ -30,7 +30,7 @@ class NodeTypes(IntEnum):
 
 
 class Node:
-    def __init__(self, node_type, idx, scope):
+    def __init__(self, node_type: NodeTypes, idx, scope):
         self.type = node_type
         self.id = idx
         self.scope = scope

@@ -149,20 +149,7 @@ def run_analysis(sample,
     n_partitions = config.n_stages
     num_real_stages = n_partitions - num_dummy_stages
 
-    pipeline_representation_stage_to_device_map = list()
-    for stage_id in range(n_partitions):
-        seen_devices = set()
-        if stage_id in stages_on_same_gpu:
-            device_id = min(stages_on_same_gpu[stage_id])
-        else:
-            device_id = len(seen_devices)
-        seen_devices.add(device_id)
-        pipeline_representation_stage_to_device_map.append(device_id)
-
-    # Canonize
-    tmp = sorted(set(pipeline_representation_stage_to_device_map))
-    tmp = {v: i for i, v in enumerate(tmp)}
-    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
+    pipeline_representation_stage_to_device_map = sorted_stage_to_device_map(n_partitions, stages_on_same_gpu)
 
     if n_partitions != num_real_stages:
         # TODO: shrink everything
@@ -378,6 +365,23 @@ def run_analysis(sample,
     #     metric_to_maximize = expected_speedup
 
     return metric_to_maximize, s
+
+
+def sorted_stage_to_device_map(n_partitions, stages_on_same_gpu):
+    pipeline_representation_stage_to_device_map = list()
+    for stage_id in range(n_partitions):
+        seen_devices = set()
+        if stage_id in stages_on_same_gpu:
+            device_id = min(stages_on_same_gpu[stage_id])
+        else:
+            device_id = len(seen_devices)
+        seen_devices.add(device_id)
+        pipeline_representation_stage_to_device_map.append(device_id)
+    # Canonize
+    tmp = sorted(set(pipeline_representation_stage_to_device_map))
+    tmp = {v: i for i, v in enumerate(tmp)}
+    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
+    return pipeline_representation_stage_to_device_map
 
 
 def data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,
