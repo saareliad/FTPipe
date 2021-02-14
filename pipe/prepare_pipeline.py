@@ -533,7 +533,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
     # NOTE: here its the sliced model.
     model = parsed_config.model
 
-    model.device = device
+    model.to(device)
 
     stage_depth = pipe_config.get_depth_for_stage(args.stage)
     pipeline_depth = pipe_config.pipeline_depth
