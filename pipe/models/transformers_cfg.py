@@ -26,7 +26,7 @@ MODEL_TYPES = {
     'gpt2_lm': (GPT2Config, GPT2LMHeadModel, GPT2Tokenizer),
     'gpt2_lm_stateless': (GPT2Config, StatelessGPT2LMHeadModel, GPT2Tokenizer),
     'bert_squad_old': (BertConfig, BertForQuestionAnswering, BertTokenizer),
-    'bert_squad_new': (BertConfig, BertForQuestionAnsweringNew, BertTokenizer),
+    'bert_squad': (BertConfig, BertForQuestionAnsweringNew, BertTokenizer),
     'bert_glue': (BertConfig, BertForSequenceClassification, BertTokenizer),
     'roberta_glue':
         (RobertaConfig, RobertaForSequenceClassification, RobertaTokenizer),
@@ -176,15 +176,6 @@ def bert_large_uncased_squad_8p():
                 output_past=False,
                 stateless_tied=False)
 
-
-def bert_8p():
-    return dict(model_type='bert_squad_new',
-                model_name_or_path='bert-large-uncased-whole-word-masking',
-                do_lower_case=True,
-                output_past=False,
-                stateless_tied=False)
-
-
 def bert_base_uncaseds_384_2p_bw12_pipedream():
     return dict(model_type='bert_squad_old',
                 model_name_or_path='bert-base-uncased',
@@ -197,6 +188,82 @@ def bert_base_uncaseds_384_2p_bw12_pipedream():
                 do_resize_token_embedding=False,
                 )
 
+def bert_base_uncaseds_384_2p_bw12_async_pipedream():
+    return dict(model_type='bert_squad_old',
+                model_name_or_path='bert-base-uncased',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={
+                    'return_dict': False
+                },
+                do_resize_token_embedding=False,
+                )
+
+def bert_large_uncased_whole_word_maskings_384_2p_bw12_pipedream():
+    return dict(model_type='bert_squad',
+              model_name_or_path='bert-large-uncased-whole-word-masking',
+              do_lower_case=True,
+              output_past=False,
+              stateless_tied=False,
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+              do_resize_token_embedding=False,
+              )
+
+
+def bert_large_uncased_whole_word_maskings_384_2p_bw12_async_pipedream():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+                do_resize_token_embedding=False,
+                )
+
+
+def bert_large_uncased_whole_word_maskings_384_8p_bw12_pipedream():
+    return dict(model_type='bert_squad',
+              model_name_or_path='bert-large-uncased-whole-word-masking',
+              do_lower_case=True,
+              output_past=False,
+              stateless_tied=False,
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+              do_resize_token_embedding=False,
+              )
+
+
+def bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+                do_resize_token_embedding=False,
+                )
+
+
+def bert_large_uncased_whole_word_maskings_384_4p_bw12_pipedream():
+    return dict(model_type='bert_squad',
+              model_name_or_path='bert-large-uncased-whole-word-masking',
+              do_lower_case=True,
+              output_past=False,
+              stateless_tied=False,
+              explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+              do_resize_token_embedding=False,
+              )
+
+
+def bert_large_uncased_whole_word_maskings_384_4p_bw12_async_pipedream():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+                do_resize_token_embedding=False,
+                )
 
 
 # GPipe version for the functions, as it has different balance.
@@ -319,8 +386,73 @@ def t5_3b_tied_lmheads_64_4_8p_bw12_squad1_virtual_stages():
                 },
                 stateless_tied=True)
 
+def t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+def t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
 
 def t5_3b_tied_lmheads_512_4_8p_bw12_squad1_virtual_stages():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+def t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_L32():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-3b',
                 do_lower_case=False,

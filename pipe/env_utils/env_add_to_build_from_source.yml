@@ -10,18 +10,19 @@ dependencies:
   - sympy
   - networkx
   - matplotlib
+  - pip
   - pip:
     - ptvsd
     - flake8
     - autopep8
     - transformers
     - yapf
-    - t5=0.7.1
-    - nlp # TODO: replace with datasets
+    - t5==0.7.1
     - datasets
     - git+https://github.com/networkx/networkx-metis.git  # For partitioning
     - timm
     - sortedcollections
+    - graphviz
 
 
 

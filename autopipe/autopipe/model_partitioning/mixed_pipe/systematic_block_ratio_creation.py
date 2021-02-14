@@ -7,7 +7,7 @@ from sortedcollections import ValueSortedDict
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, EdgeWeightFunction, \
     CoarsenedWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
-from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
+from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node, NodeTypes
 from autopipe.autopipe.union_find import UnionFind
 
 
@@ -270,7 +270,7 @@ class RatioBlockCreator:
                 if child not in visited:
                     visited.add(child)
                     # TODO: check if we can merge without cycles
-                    if child.id in self.protected_nodes:
+                    if child.id in self.protected_nodes or child.type == NodeTypes.IN:
                         continue
 
                     can_merge_without_cycles = not check_cycle2(self.graph, child, cur_merged)

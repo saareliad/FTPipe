@@ -509,16 +509,21 @@ def get_profiles(graph: Graph, model: nn.Module,
         if save_memory_mode:
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
 
-        torch.cuda.reset_max_memory_allocated()
+        # torch.cuda.reset_max_memory_allocated()
         profiler = GraphProfiler(recomputation=recomputation, n_iter=n_iter, profile_ops=profile_ops,
                                  force_no_recomp_scopes=force_no_recomp_scopes, save_memory_mode=save_memory_mode)
         pre_hook = pre_hook_factory(profiler.time_forward)
         post_hook = post_hook_factory(profiler.time_backward)
         execute_graph(model, graph, model_args=model_args, model_kwargs=model_kwargs,
                       pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
-        print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
+
+        # print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
+
         weights = profiler.get_weights()
+
+
     elif use_network_profiler:
+        warnings.warn("network profiler is deprecated, use graph profiler")
         print(
             f"-I- using network profiler with save_memory_mode = {save_memory_mode}")
         assert not profile_ops, "op profiling is not supported in the network profiler"

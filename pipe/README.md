@@ -270,4 +270,6 @@ Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipe
 To see how pytorch is compiled, use
 ```
 torch.__config__.show()
+
+#  0.6.4 T5
 ```

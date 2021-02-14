@@ -16,7 +16,7 @@
     "nprocs": 2,
     "statistics": "squad_loss_per_batch",
     "bs_train": 24,
-    "bs_test": 24,
+    "bs_test": 1,
     "num_data_workers": 0,
     "optimizer": {
         "type": "adam",
@@ -51,7 +51,7 @@
     "max_buffers": 1,
     "step_every": 1,
     "keep_buffers_alive": false,
-    "train_batches_limit": -1,
+    "train_batches_limit": 1,
     "log_frequency": 200,
     "model_name_or_path": "bert-base-uncased",
     "max_seq_length": 384,

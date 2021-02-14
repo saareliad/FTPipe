@@ -1,3 +1,4 @@
+import math
 from collections import deque
 from typing import Dict
 
@@ -119,4 +120,15 @@ def add_dicts(d1, d2):
     for (i1, v1), (i2, v2) in zip(d1.items(), d2.items()):
         assert i1 == i2
         d[i1] = v1 + v2
+    return d
+
+def add_stds_dicts(d1,d2):
+    """ var(x+y) = var(x)+var(y) + cov(x,y)
+        we assume for simplicity cov(x,y) is 0.
+    """
+    assert len(d1) == len(d2)
+    d = {}
+    for (i1, v1), (i2, v2) in zip(d1.items(), d2.items()):
+        assert i1 == i2
+        d[i1] = math.sqrt(v1**2 + v2**2)
     return d

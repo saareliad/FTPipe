@@ -5,6 +5,7 @@ import torch
 from torch import Tensor
 
 from .tracer import NodeTypes
+from .control_flow_graph import Graph, Node
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes, \
     force_out_of_place
 
@@ -12,8 +13,11 @@ from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplac
 class GraphProfiler():
     def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True,
                  save_memory_mode=False):
+        self.profile_memory = True
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
+        self.forward_mem = defaultdict(list)
+        self.backward_mem = defaultdict(list)
         self.recomputation = recomputation
         NUM_OUTLIERS = 2
         assert n_iter > 0
@@ -31,6 +35,10 @@ class GraphProfiler():
 
     def time_forward(self, node, function, args, kwargs):
         if self.save_memory_mode:
+            if self.profile_memory:
+                torch.cuda.reset_peak_memory_stats()
+                base_mem = torch.cuda.max_memory_allocated()
+
             function, args, kwargs = move_tensors((function, args, kwargs),
                                                   'cuda')
 
@@ -48,6 +56,9 @@ class GraphProfiler():
                         function(*args, **kwargs)
                         end.record()
                         torch.cuda.synchronize(device='cuda')
+                        if self.profile_memory:
+                            peak_usage = torch.cuda.max_memory_allocated()
+                            self.forward_mem[node].append(peak_usage - base_mem)
                         self.forward_times[node].append(start.elapsed_time(end))
                 # NOTE we do not move the the inputs to the cpu
                 # because the graph executor stores them on the cpu anyway
@@ -58,6 +69,7 @@ class GraphProfiler():
             return detach_tensors((args, kwargs))
 
     def time_backward(self, node, function, args, kwargs, output):
+
         with force_out_of_place(function):
             if self.should_profile(node, function, args, kwargs, output=output):
                 recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
@@ -89,6 +101,9 @@ class GraphProfiler():
             tensors = self.only_tensors_that_require_grad(output)
             grads = GraphProfiler.get_grads(tensors)
             torch.cuda.synchronize(device='cuda')
+            if self.profile_memory:
+                torch.cuda.reset_peak_memory_stats()
+                base_mem = torch.cuda.max_memory_allocated()
             start.record()
             torch.autograd.backward(tensors=tensors,
                                     grad_tensors=grads,
@@ -97,7 +112,9 @@ class GraphProfiler():
             torch.cuda.synchronize(device='cuda')
 
             self.backward_times[node].append(start.elapsed_time(end))
-
+            if self.profile_memory:
+                peak_usage = torch.cuda.max_memory_allocated()
+                self.backward_mem[node].append(peak_usage - base_mem)
             GraphProfiler.delete_grads(node, function, (args, kwargs))
 
     def backward_recomputation(self, node, function, args, kwargs, output):
@@ -109,6 +126,9 @@ class GraphProfiler():
                 end = torch.cuda.Event(enable_timing=True)
                 grads = GraphProfiler.pre_get_grads(function, args, kwargs)
                 torch.cuda.synchronize(device='cuda')
+                if self.profile_memory:
+                    torch.cuda.reset_peak_memory_stats()
+                    base_mem = torch.cuda.max_memory_allocated()
 
                 start.record()
                 output = function(*args, **kwargs)
@@ -120,7 +140,9 @@ class GraphProfiler():
 
                 torch.cuda.synchronize(device='cuda')
                 self.backward_times[node].append(start.elapsed_time(end))
-
+                if self.profile_memory:
+                    peak_usage = torch.cuda.max_memory_allocated()
+                    self.forward_mem[node].append(peak_usage - base_mem)
                 GraphProfiler.delete_grads(node, function, (args, kwargs))
 
     def get_weights(self):
@@ -135,6 +157,15 @@ class GraphProfiler():
             weights[node.scope] = ExecTimes(f_time, b_time)
 
         return weights
+
+    def set_max_memory_usage(self, graph: Graph):
+        for node in graph.nodes:
+            if node not in self.forward_mem or node not  in self.backward_mem:
+                continue
+            fwd = self.forward_mem[node]
+            bwd = self.backward_times[node]
+            max_usage = max(max(fwd), max(bwd))
+            node.max_memory_bytes = max(node.max_memory_bytes, max_usage)
 
     def print_times(self, backward=False):
         if backward:

@@ -4,8 +4,8 @@ from torch.nn import Module
 from torch.optim import Optimizer
 from transformers.data.processors.squad import SquadResult
 
+from pipe.pipeline.trainers.statistics import SquadStats
 from .interface import ScheduledOptimizationStepMultiPartitionTrainer
-from pipe.pipeline.trainers.statistics import Stats
 
 
 def SQUAD_loss(logits, start_positions, end_positions):
@@ -40,7 +40,7 @@ class SquadTrainer(ScheduledOptimizationStepMultiPartitionTrainer):
     def __init__(self, model: Module,
                  optimizer: Optimizer,
                  scheduler,
-                 statistics: Stats,
+                 statistics: SquadStats,
                  step_every=1):
         super().__init__(model, optimizer, scheduler, statistics)
         self.step_every = step_every

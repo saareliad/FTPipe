@@ -5,13 +5,17 @@ from typing import List, Optional, Tuple
 from sortedcollections import ValueSortedDict
 
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, NodeWeightFunction
+from autopipe.autopipe.model_partitioning.mixed_pipe.centers import stochastic_centers_matching
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_partitioning.mixed_pipe.systematic_block_ratio_creation import RatioBlockCreator
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 from autopipe.autopipe.union_find import UnionFind
 
 
-def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_function: NodeWeightFunction, L) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
+def coarsening(graph,
+               edge_weight_function: EdgeWeightFunction,
+               node_weight_function: NodeWeightFunction,
+               L, P) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
     uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
 
     print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
@@ -22,14 +26,16 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     g = contract(p, matching, edge_weight_function, uf=uf)
     hierarchy.append((p, matching, g, deepcopy(uf)))
     p = g
+    print(f"merged {len(matching)} nodes with penatly edges")
 
     # Merge nodes with weight 0
+    print(f"merging nodes with weight <=0")
     p, _, g, uf, uf2 = nodes_leq_threshold_matching(p,
                                                     node_weight_function,
                                                     edge_weight_function,
                                                     L,
                                                     uf,
-                                                    verbose=True,
+                                                    verbose=False,
                                                     record_history=True,
                                                     threshold=0
                                                     )
@@ -37,24 +43,29 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
     hierarchy.append((p, uf2, g, deepcopy(uf)))
     p = g
 
-    # heavy edge matching on percentile
-    p, _, g, uf, uf2 = online_heavy_edge_matching(p,
-                                                  node_weight_function,
-                                                  edge_weight_function,
-                                                  L,
-                                                  uf,
-                                                  verbose=True,
-                                                  record_history=True,
-                                                  pecentile_to_filter=0.95)
 
-    # it is the last so we dont deepcopy(uf)
-    hierarchy.append((p, uf2, g, deepcopy(uf)))
-    p = g
 
     # TODO: systematic-block-ratio-creation
     DO_SYSTEMATIC = True
+    DO_STOCHASTIC_CENTERS = True
+    DO_HEAVY_EDGES = not DO_STOCHASTIC_CENTERS
     if DO_SYSTEMATIC:
-        p, _, g, uf, uf2 = comm_comp_ratio_matching(
+        if DO_HEAVY_EDGES:
+            # heavy edge matching on percentile
+            p, _, g, uf, uf2 = online_heavy_edge_matching(p,
+                                                          node_weight_function,
+                                                          edge_weight_function,
+                                                          L,
+                                                          uf,
+                                                          verbose=True,
+                                                          record_history=True,
+                                                          pecentile_to_filter=0.95)
+
+            hierarchy.append((p, uf2, g, deepcopy(uf)))
+            p = g
+
+        # systematic
+        p, _, g, uf, uf2 = systematic_comm_comp_ratio_matching(
             p,
             node_weight_function,
             edge_weight_function,
@@ -68,6 +79,17 @@ def coarsening(graph, edge_weight_function: EdgeWeightFunction, node_weight_func
         hierarchy.append((p, uf2, g, deepcopy(uf)))
         p = g
 
+    # full_alg(p, P, L, node_weight_function, edge_weight_function, uf, rtol=2e-3)
+
+    if DO_STOCHASTIC_CENTERS:
+        p, _, g, uf, uf2 = stochastic_centers_matching(p, node_weight_function,
+                                                       edge_weight_function,
+                                                       L, P, uf, verbose=True, record_history=False)
+
+        hierarchy.append((p, uf2, g, deepcopy(uf)))
+        p = g
+
+    # handle the rest.
     p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
                                                           node_weight_function,
                                                           edge_weight_function,
@@ -129,8 +151,8 @@ def adjacent_and_same_size_matching(graph: Graph):
     pass
 
 
-def comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
-                             verbose=False):
+def systematic_comm_comp_ratio_matching(graph: Graph, node_weight_function, edge_weight_function, L, uf: UnionFind,
+                                        verbose=False):
     prev_graph = Graph.from_other(graph)
 
     rbc = RatioBlockCreator(graph, edge_weight_function=edge_weight_function, node_weight_function=node_weight_function,
@@ -196,13 +218,14 @@ def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight
     hd = ValueSortedDict({
         n: node_weight_function(n) for n in graph.non_input_nodes
     })
+    total_merged = 0
 
     def inner_loop():
         # optimization: can use the index of new item to skip initial checks if there is no match in them.
         # But it works good enough without it.
         for u, weight_of_u in hd.items():
             if weight_of_u > threshold:
-                print(f"done with  nodes <= threshold {threshold}, breaking (last weight: {weight_of_u})")
+                print(f"done with  nodes <= threshold {threshold}, breaking (last weight: {weight_of_u}). merged {total_merged}")
                 return False, None, True
             # Try to find match:
             for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
@@ -227,6 +250,8 @@ def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight
             break
         if not merged_something:
             break
+
+        total_merged += 1
         if record_history:
             history_sizes.append(len(hd) + 1)
             history_weights.append(weight_of_u)

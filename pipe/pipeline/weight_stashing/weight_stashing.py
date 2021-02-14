@@ -1,5 +1,6 @@
 import os
 import types
+import warnings
 from collections import OrderedDict
 from enum import Enum, auto
 
@@ -157,11 +158,20 @@ class WeightStasher:
                 # assert not (self.dirty_mark[batch_index-1])  # check for bug...
                 if (self.dirty_mark[batch_index -
                                     1]) and not self.has_weight_predictor:
+
                     s = f"Attemted to use dirty buff as stash: rank:\
                         {rank} b:{batch_index}, mb:{micro_batch}, prev b:{batch_index - 1} \
                           expected_updates:{expected_updates}"
+                    warnings.warn(s)
+                    warnings.warn(f"replacing get mb function, making mb {micro_batch} 0")
+                    def get_micro_batch(self, batch_index):
+                        # my prev is dirty,
+                        # meaning I'm micro batch 0!
+                        return ((batch_index % self.step_every) - micro_batch) % self.step_every
+                    self.get_micro_batch_forward = types.MethodType(get_micro_batch, self)
+                    buff = self._create_current_cloned_buff()
 
-                    raise RuntimeError(s)
+                    # raise RuntimeError(s)
 
             self.theta_buffer[batch_index] = buff
 

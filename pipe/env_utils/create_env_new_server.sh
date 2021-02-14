@@ -52,7 +52,7 @@ conda install -y -c pytorch magma-cuda102
 
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch || exit 1
-git checkout --recurse-submodules v1.7.0
+git checkout --recurse-submodules v1.7.1
 git submodule sync
 git submodule update --init --recursive
 

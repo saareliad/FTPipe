@@ -13,13 +13,12 @@ from transformers import (
 from transformers.data.processors.squad import SquadV1Processor, SquadV2Processor
 
 from autopipe.autopipe.model_profiling import register_new_explicit_untraced_function, register_new_traced_function
-
-from models.normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
-
-# from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
-
+from models.normal.NLP_models.modeling_bert import BertForQuestionAnswering, get_extended_attention_mask
 # from models.normal.NLP_models.modeling_bert_4_1_converted import BertForQuestionAnswering
 # from transformers.modeling_utils import get_extended_attention_mask
+from ..partitioning_scripts.partition_scripts_utils import record_transformer_cfg
+
+# from models.normal.NLP_models.modeling_bert_old import BertForQuestionAnswering
 
 logger = logging.getLogger(__name__)
 
@@ -228,6 +227,18 @@ class BertPartitioner(PartitioningTask):
         register_new_explicit_untraced_function(operator.is_, operator)
         register_new_explicit_untraced_function(operator.is_not, operator)
         register_new_traced_function(math.sqrt, math)
+
+    def record_transformer_cfg(self, cmd_args):
+        record_transformer_cfg(
+            python_output_file=f"{cmd_args.output_file}.py",
+            args=cmd_args,
+            model_type='bert_squad',
+            explicitly_set_dict={
+                "precompute_attention_mask": cmd_args.precompute_attention_mask,
+                'return_dict': False
+            },
+            do_resize_token_embedding=False
+        )
 
 
 def get_inputs_squad(args, tokenizer, analysis=False):

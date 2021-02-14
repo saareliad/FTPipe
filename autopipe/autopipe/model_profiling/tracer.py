@@ -20,6 +20,8 @@ from .control_flow_graph import Node, NodeTypes, Graph
 from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
     tensor_creation_ops
 
+override_dict = get_overridable_functions()
+
 ##############################
 # Tracing Metadata
 ##############################
@@ -156,7 +158,7 @@ class TracedFunction():
 
 def used_namespaces():
     return {namespace.__name__ for namespace in
-            chain(get_overridable_functions().keys(), TracedFunctions.traced_namespaces()) if
+            chain(override_dict.keys(), TracedFunctions.traced_namespaces()) if
             (hasattr(namespace, "__name__") and inspect.ismodule(namespace))}
 
 
@@ -245,7 +247,7 @@ class TracedValue(object):
         self.node = Node(node_type, self.id, self.scope)
         NODES[self.id] = self.node
 
-        self.creation_site = get_call_site(__file__)
+        # self.creation_site = get_call_site(__file__)
 
     def set_data(self, data):
         assert is_traceable(
@@ -854,7 +856,7 @@ def trace_registered_functions():
     TracedFunctions.enable_tracing()
 
     global FUNCTION_NAMESPACE
-    FUNCTION_NAMESPACE = {f: ns for ns, funcs in get_overridable_functions().items()
+    FUNCTION_NAMESPACE = {f: ns for ns, funcs in override_dict.items()
                           for f in funcs}
 
 

@@ -1,0 +1,69 @@
+{
+
+    "logdir": "logs/squad/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir": "results/squad/",
+    "auto_file_name": true,
+    "out_filename": "tst",
+    "distributed_backend": "mpi",
+    "model": "bert_large_uncased_whole_word_maskings_384_8p_bw12_pipedream",
+    "dataset": "squad1",
+    "trainer": {
+        "type": "squad",
+        "args": {
+        }
+    },
+    "nprocs": 8,
+    "statistics": "squad_loss_per_batch",
+    "bs_train": 24,
+    "bs_test": 1,
+    "step_every": 1,
+    "num_data_workers": 6,
+    "optimizer": {
+        "type": "adam",
+        "args": {
+            "lr": 3e-5,
+            "weight_decay": 0,
+            "eps": 1e-8
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_linear_schedule_with_warmup",
+        "preproc_args": {
+            "num_training_steps": "epochs_to_steps",
+            "num_warmup_steps": "epochs_to_steps"
+        },
+        "args": {
+            "num_warmup_steps": 0,
+            "num_training_steps": -1,
+            "last_epoch": -1
+        }
+    },
+    "epochs": 2,
+    "steps": -1,
+    "seed_from_cmd": true,
+    "bs_train_from_cmd": false,
+    "bs_test_from_cmd": false,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "work_scheduler": "1F1B",
+    "cudnn_benchmark": true,
+    "max_buffers": 1,
+    "keep_buffers_alive": false,
+    "train_batches_limit": -1,
+    "log_frequency": 200,
+    "model_name_or_path": "bert-large-uncased-whole-word-masking",
+    "max_seq_length": 384,
+    "do_lower_case": true,
+    "doc_stride": 128,
+    "max_query_length": 64,
+    "threads": 80,
+    "overwrite_cache": true,
+    "dont_drop_last": false,
+    "model_type": "bert",
+    "output_dir": "results/squad/out_dir/",
+    "load_model_one_by_one": false,
+    "load_extra_inputs": true,
+    "precompute_attention_mask": true
+}

@@ -39,6 +39,10 @@ def parse_json_config(args, config=None, first=False):
     if not os.path.exists(config):
         raise ValueError(f"Config {config} does not exists")
 
+    add_parsed_config_to_args(args, output)
+
+
+def add_parsed_config_to_args(args, output:dict):
     for key, value in output.items():
 
         # Allow skipping some options and loading them from cmd.
