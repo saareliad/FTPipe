@@ -78,6 +78,7 @@ class WDSympySGD(SympySGD):
 
 
 class WDSympySGDMsnag(WDSympySGD):
+    collect_order = ["v", 'theta', '\phi']
     def __init__(self):
         super().__init__()
         self.first_grad = Symbol('\phi')
