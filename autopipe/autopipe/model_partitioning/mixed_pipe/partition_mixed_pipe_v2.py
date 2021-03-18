@@ -21,12 +21,14 @@ def _lworker(args):
     return times, work_graph.state(), best_objective
 
 
-def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
-            node_mem_estimator):
+def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
+            node_mem_estimator,
+            basic_blocks, special_blocks, depth
+            ):
     work_graph = Graph.from_state(saved_work_graph_without_par_edges)
     # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
-    hierarchy = coarsening(work_graph, edge_weight_function, node_weight_function, L, P)
+    hierarchy = coarsening(model, work_graph, edge_weight_function, node_weight_function, L, P, basic_blocks, special_blocks, depth)
     # the output here should be L stages,
     last_graph: Graph = hierarchy[-1][-2]
     print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
@@ -74,7 +76,7 @@ def lworker(L, P, edge_weight_function, node_weight_function, round_limit, saved
     return times, work_graph, best_objective
 
 
-def partition_mpipe(graph: Graph,
+def partition_mpipe(model, graph: Graph,
                     num_gpus: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
@@ -83,6 +85,9 @@ def partition_mpipe(graph: Graph,
                     round_limit=-1,
                     nprocs=1,
                     L_list=None,
+                    basic_blocks=(),
+                    special_blocks=(),
+                    depth=1000,
                     **kwargs
                     ):
     print("mpipe got kwargs:", kwargs.keys())
@@ -110,9 +115,10 @@ def partition_mpipe(graph: Graph,
         warnings.warn(f"no L_list given. using mine {L_list}")
 
     if nprocs > 1 and len(L_list) > 1:
+        warnings.warn("experimental: parallel run on L.")
         # Parallel version
-        worker_args = [(L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph_without_par_edges.state(), node_mem_estimator) for L in L_list]
+        worker_args = [(model, L, P, edge_weight_function, node_weight_function, round_limit,
+                        saved_work_graph_without_par_edges.state(), node_mem_estimator, basic_blocks, special_blocks, depth) for L in L_list]
 
         with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
             results = pool.map(_lworker, worker_args)
@@ -123,8 +129,9 @@ def partition_mpipe(graph: Graph,
     else:
         # sequential version
         for L in L_list:
-            times, work_graph, best_objective = lworker(L, P, edge_weight_function, node_weight_function, round_limit,
-                                                        saved_work_graph_without_par_edges.state(), node_mem_estimator)
+            times, work_graph, best_objective = lworker(model, L, P, edge_weight_function, node_weight_function, round_limit,
+                                                        saved_work_graph_without_par_edges.state(), node_mem_estimator,
+                                                        basic_blocks, special_blocks, depth)
 
             # save res
             L_to_res[L] = (work_graph, times, best_objective)

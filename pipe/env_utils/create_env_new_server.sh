@@ -56,6 +56,15 @@ git checkout --recurse-submodules v1.7.1
 git submodule sync
 git submodule update --init --recursive
 
+
+conda install -y -c pytorch magma-cuda102
+
+git clone --recursive https://github.com/pytorch/pytorch
+cd pytorch || exit 1
+git checkout --recurse-submodules v1.6.0
+git submodule sync
+git submodule update --init --recursive
+
 export TORCH_CUDA_ARCH_LIST="7.5+PTX"
 export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
 export CMAKE_PREFIX_PATH=${CONDA_PREFIX:-"$(dirname $(which conda))/../"}
@@ -73,3 +82,4 @@ pip uninstall pillow
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 # (2) Install torchvision from source.
 pip install git+https://github.com/pytorch/vision.git@v0.8.1
+# '4.1.1'

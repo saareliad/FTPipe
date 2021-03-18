@@ -27,6 +27,7 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                METIS_opt: Optional[Dict] = None,
                acyclic_opt: Optional[Dict] = None,
                binpack_opt: Optional[Dict] = None,
+               mpipe_opt: Optional[Dict] = None,
                force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                save_memory_mode: bool = False,
                trace_on_gpu=False,
@@ -117,7 +118,7 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                             max_depth=depth, basic_blocks=basic_blocks, node_weight_function=node_weight_function,
                             edge_weight_function=edge_weight_function, use_layers_only_graph=use_layers_only_graph,
                             recomputation=recomputation, partitioning_method=partitioning_method, METIS_opt=METIS_opt,
-                            acyclic_opt=acyclic_opt, binpack_opt=binpack_opt,
+                            acyclic_opt=acyclic_opt, binpack_opt=binpack_opt, mpipe_opt=mpipe_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes, use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler, profile_ops=profile_ops,
                             save_memory_mode=save_memory_mode, trace_on_gpu=trace_on_gpu, graph=graph,
@@ -140,8 +141,11 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                     basic_blocks: Optional[Union[List[nn.Module], Tuple[nn.Module]]] = None,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None, use_layers_only_graph: bool = True,
-                    recomputation: bool = True, partitioning_method: str = "ACYCLIC", METIS_opt: Optional[Dict] = None,
-                    acyclic_opt: Optional[Dict] = None, binpack_opt: Optional[Dict] = None,
+                    recomputation: bool = True, partitioning_method: str = "ACYCLIC",
+                    METIS_opt: Optional[Dict] = None,
+                    acyclic_opt: Optional[Dict] = None,
+                    binpack_opt: Optional[Dict] = None,
+                    mpipe_opt: Optional[Dict] = None,
                     force_no_recomp_scopes: Optional[Callable[[str], bool]] = None, use_graph_profiler: bool = True,
                     use_network_profiler: bool = False, profile_ops: bool = True, save_memory_mode: bool = False,
                     trace_on_gpu=False,
@@ -215,6 +219,8 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         acyclic_opt = dict()
     if binpack_opt is None:
         binpack_opt = dict()
+    if mpipe_opt is None:
+        mpipe_opt = dict()
 
     if not async_pipe or not recomputation or dont_use_async_meta_alg:
         if graph is None:
@@ -233,7 +239,7 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         if nparts > 1:
             graph = partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function,
                                              edge_weight_function, use_virtual_stages, use_layers_only_graph, METIS_opt,
-                                             acyclic_opt, binpack_opt)
+                                             acyclic_opt, binpack_opt, mpipe_opt)
 
     else:
         # This requires heterogeneous profiling.
@@ -256,7 +262,8 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                                         use_virtual_stages=use_virtual_stages,
                                                         use_layers_only_graph=use_layers_only_graph,
                                                         METIS_opt=METIS_opt,
-                                                        acyclic_opt=acyclic_opt, binpack_opt=binpack_opt)
+                                                        acyclic_opt=acyclic_opt, binpack_opt=binpack_opt,
+                                                        mpipe_opt=mpipe_opt)
 
         graph = partition_and_match_weights_until_last_partition_is_with_no_recomputation(graph, weights,
                                                                                           partitioning_method,
@@ -308,7 +315,7 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
 
 
 def partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function, edge_weight_function,
-                             use_virtual_stages, use_layers_only_graph, METIS_opt, acyclic_opt, binpack_opt):
+                             use_virtual_stages, use_layers_only_graph, METIS_opt, acyclic_opt, binpack_opt, mpipe_opt):
     partitioning_method = partitioning_method.lower()
     if partitioning_method == "metis":
         print("-I- using METIS partitioning algorithm")
@@ -339,10 +346,10 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
                                                        node_weight_function=node_weight_function,
                                                        **binpack_opt)
     elif partitioning_method == "mpipe":
-        graph, stage_to_gpu_map = partition_mpipe(graph, num_gpus=nparts,
+        graph, stage_to_gpu_map = partition_mpipe(model, graph, num_gpus=nparts,
                                                   node_weight_function=node_weight_function,
                                                   edge_weight_function=edge_weight_function,
-                                                  **binpack_opt)
+                                                  **mpipe_opt)
 
     elif partitioning_method == "pipedream":
         t1 = node_weight_function.MULT_FACTOR
@@ -375,11 +382,15 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
 def build_profiled_graph(model: nn.Module,
                          model_args: tuple = (),
                          model_kwargs: Optional[Dict] = None,
-                         use_network_profiler: bool = False, use_graph_profiler: bool = True,
+                         use_network_profiler: bool = False,
+                         use_graph_profiler: bool = True,
                          save_memory_mode: bool = False,
                          trace_on_gpu=False,
-                         profile_ops: bool = True, recomputation: bool = False,
-                         n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None,
+                         profile_ops: bool = True,
+                         recomputation: bool = False,
+                         n_iter: int = 10,
+                         max_depth: int = 1000,
+                         basic_blocks: Optional[List[nn.Module]] = None,
                          force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                          trace_cache_name=None) -> Graph:
     """
@@ -428,6 +439,7 @@ def build_profiled_graph(model: nn.Module,
 
     graph = build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth,
                                                    basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
+
 
     print("-I- profiling model")
     weights = get_profiles(graph,

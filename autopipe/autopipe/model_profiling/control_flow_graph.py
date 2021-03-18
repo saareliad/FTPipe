@@ -35,7 +35,7 @@ class Node:
         self.id = idx
         self.scope = scope
 
-        self.topo_sort_id = id  # hack: start with ID. (potential danger)
+        self.topo_sort_id = idx  # hack: start with ID. (potential danger)
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
@@ -151,7 +151,7 @@ NodeWeightFunction = Callable[[Node], int]
 EdgeWeightFunction = Callable[[Node, Node], int]
 
 
-class Graph():
+class Graph:
     def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]],
                  output_ids: Optional[List[int]], depth: Optional[int],
                  basic_blocks: Optional[Tuple[Type[nn.Module], ...]]):

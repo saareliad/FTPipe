@@ -12,23 +12,26 @@ from autopipe.autopipe.union_find import UnionFind
 def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFunction,
                                 edge_weight_function: EdgeWeightFunction,
                                 L, P, uf: UnionFind,
-                                verbose=False, record_history=False):
+                                verbose=False, record_history=False,
+                                special_blocks=None,
+                                sb_names=None):
     print("stochastic_centers_matching")
     prev_graph = Graph.from_other(graph)
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
-
     all_nodes = {n for n in graph.non_input_nodes}
 
     # choose L_centers()
     # get basic blocks names
-    bb = graph.basic_blocks
-    bb_names = [c.__name__ for c in bb]
-    # find nodes which are basic blocks.
+    if special_blocks is None:
+        special_blocks = ()
 
+    bb = special_blocks
+    bb_names = [c.__name__ for c in bb]
     found_nodes = {b: list() for b in bb_names}
     total_found = 0
 
+    # find nodes which are basic blocks.
     for n in graph.non_input_nodes:
         for b in bb_names:
             if b in n.scope:
@@ -37,6 +40,11 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
 
     print(f"Found {total_found} basic blocks")
     pprint(found_nodes)
+
+    # if sb_names is not None:
+    # TODO: I'm fixing the merging of special blocks.
+    # need to make names compact e.g 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[15]'
+    # we need to use "special blocks cmd_arg for the matther as I use basic blocks from the graph.
 
     if total_found < L:
         raise NotImplementedError("random")
@@ -74,9 +82,7 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
         if to_assign == 0:
             break
 
-
     if to_assign > 0:
-        # raise NotImplementedError("need to randomize")
         print(f"choosing {to_assign} random centers")
         # TODO: choose nodes with maximal distance from graph input and last node.
         additional_centers = random.sample(all_nodes - centers, to_assign)

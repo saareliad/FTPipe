@@ -1,3 +1,4 @@
+import warnings
 from collections import defaultdict
 from itertools import chain
 
@@ -13,7 +14,9 @@ from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplac
 class GraphProfiler():
     def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True,
                  save_memory_mode=False):
-        self.profile_memory = True
+        self.profile_memory = save_memory_mode # TODO: profile memroy without save memory mode.
+        if not save_memory_mode:
+            warnings.warn("Will not profile memory (since save_memory_mode=False)")
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.forward_mem = defaultdict(list)

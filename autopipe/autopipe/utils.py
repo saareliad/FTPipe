@@ -65,6 +65,73 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
             yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
 
 
+# sub_layer, scope, parent, terminal
+def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
+                   basic_blocks: Tuple[Type[nn.Module]] = (), special_blocks: Tuple[Type[nn.Module]] = (), next_special_bb_id=None,
+                           full: bool = False, mark = False) -> Iterator[
+    Tuple[nn.Module, str, nn.Module, Optional[bool], Optional[int]]]:
+    """
+    iterate over model layers yielding the layer,layer_scope,encasing_module
+    Parameters:
+    -----------
+    model:
+        the model to iterate over
+    depth:
+        how far down in the model tree to go
+    basic_blocks:
+        a list of modules that if encountered will not be broken down
+    full:
+        whether to yield only layers specified by the depth and basic_block options or to yield all layers
+    """
+    if next_special_bb_id is None:
+        next_special_bb_id = 0
+
+    if prefix is None:
+        prefix = type(module).__name__
+
+    for name, sub_module in module.named_children():
+        scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
+        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
+            if full:
+                if mark:
+                    yield sub_module, scope, module, True, None
+                else:
+                    yield sub_module, scope, module, True
+
+            else:
+                yield sub_module, scope, module
+        elif isinstance(sub_module, tuple(special_blocks)):
+            # if it is a part of module which is a basic block, it will get parent's mark.
+
+            # TODO: do we want to mark it?
+            if mark:
+                if not hasattr(module, "_next_special_bb_id"):
+                    next_special_bb_id += 1
+                sub_module._next_special_bb_id = next_special_bb_id
+
+            if full:
+                if mark:
+                    yield sub_module, scope, module, False, next_special_bb_id
+                else:
+                    yield sub_module, scope, module, False
+            yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
+                                              next_special_bb_id, full, mark=mark)
+
+        else:
+            if full:
+                if mark:
+                    yield sub_module, scope, module, False, None
+                else:
+                    yield sub_module, scope, module, False
+
+            yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
+                                              next_special_bb_id, full, mark=mark)
+
+    # clear the mess
+    if mark and hasattr(module, "_next_special_bb_id"):
+        delattr(module, "_next_special_bb_id")
+
+
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
     """
     iterate over model's buffers and parameters yielding obj,obj_scope

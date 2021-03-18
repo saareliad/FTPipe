@@ -41,6 +41,9 @@ class Parser(argparse.ArgumentParser, ABC):
         binpack_args = self.add_argument_group("binpack_args")
         self._add_binpack_args(binpack_args)
 
+        mpipe_args = self.add_argument_group("mpipe_args")
+        self._add_mpipe_args(mpipe_args)
+
         analysis_args = self.add_argument_group("analysis_args")
         self._add_analysis_args(analysis_args)
 
@@ -287,6 +290,13 @@ class Parser(argparse.ArgumentParser, ABC):
         group.add_argument("--THRESHOLD", type=float, default=0,
                            help="values <= threshold will be contagious with closest stage")
 
+    def _add_mpipe_args(self, group):
+        group.add_argument('--special_blocks', nargs='*', default=[])
+        # group.add_argument('round_limit', type=int, default=-1, help="local search round limit")
+
+
+
+
     def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",
                            default=0.1,
@@ -375,6 +385,7 @@ class Parser(argparse.ArgumentParser, ABC):
         args.acyclic_opt = self._acyclic_opts_dict_from_parsed_args(args)
         args.METIS_opt = self._metis_opts_dict_from_parsed_args(args)
         args.binpack_opt = self._binpack_opts_dict_from_parsed_args(args)
+        args.mpipe_opt = self._mpipe_opts_dict_from_parsed_args(args)
 
         if not args.output_file:
             args.output_file = self._auto_file_name(args)
@@ -464,6 +475,7 @@ class Parser(argparse.ArgumentParser, ABC):
         return METIS_opt
 
     def _binpack_opts_dict_from_parsed_args(self, args):
+        # TODO: DEPRECATED
         d = dict()
         d['n_clusters'] = args.n_clusters
         d['analyze_n_clusters'] = args.analyze_n_clusters
@@ -477,3 +489,14 @@ class Parser(argparse.ArgumentParser, ABC):
         d['THRESHOLD'] = args.THRESHOLD
 
         return d
+
+    def _mpipe_opts_dict_from_parsed_args(self, args):
+        d = dict()
+        d['depth'] = args.depth
+        return d
+        # NOTE: d['special_blocks']  updated outside.
+        # NOTE: d['basic_blocks']  updated outside.
+
+        # round_limit = -1,
+        # nprocs = 1,
+        # L_list = None,

@@ -84,7 +84,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         if not cmd_args.save_memory_mode:
             with torch.no_grad():
                 model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
-        cmd_args.basic_blocks = choose_blocks(model, cmd_args)
+        cmd_args.basic_blocks = choose_blocks(model, cmd_args, blocks_arg_name="basic_blocks")
+
+        cmd_args.mpipe_opt['special_blocks'] = choose_blocks(model, cmd_args, blocks_arg_name="special_blocks")
+        cmd_args.mpipe_opt['basic_blocks'] = cmd_args.basic_blocks
+
         # apply partitioning
         graph = pipe_model(model, partitioner.batch_dim, model_args=args, model_kwargs=kwargs,
                            n_iter=cmd_args.n_iter, nparts=cmd_args.n_partitions, depth=cmd_args.depth,
@@ -94,8 +98,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            generate_explicit_del=cmd_args.generate_explicit_del,
                            generate_activation_propagation=not cmd_args.no_activation_propagation,
                            recomputation=not cmd_args.no_recomputation,
-                           partitioning_method=cmd_args.partitioning_method, METIS_opt=cmd_args.METIS_opt,
-                           acyclic_opt=cmd_args.acyclic_opt, binpack_opt=cmd_args.binpack_opt,
+                           partitioning_method=cmd_args.partitioning_method,
+                           METIS_opt=cmd_args.METIS_opt,
+                           acyclic_opt=cmd_args.acyclic_opt,
+                           binpack_opt=cmd_args.binpack_opt,
+                           mpipe_opt=cmd_args.mpipe_opt,
                            force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
                            save_memory_mode=cmd_args.save_memory_mode,
                            trace_on_gpu=cmd_args.trace_on_gpu,

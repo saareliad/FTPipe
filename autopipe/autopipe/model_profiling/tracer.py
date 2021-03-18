@@ -17,8 +17,7 @@ else:
 
 from autopipe.autopipe.utils import traverse_model
 from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, get_call_site, \
-    tensor_creation_ops
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, tensor_creation_ops
 
 override_dict = get_overridable_functions()
 
@@ -226,7 +225,7 @@ class TracedValue(object):
     a wrapper that traces operations done on a value
     for Tensor values we leverage the __torch_function__ API
     for other values we trace all instance methods invoked
-    and methods that are patched in trace_registered_functions
+    and methods that are patched in enable_tracing_registered_functions
 
     functions and attributes are delegated to the wrapped value
     by delegating the __getattr__ of the wrapped to the __getattribute__ of the value
@@ -614,7 +613,7 @@ class TracedInstanceFunction(object):
 
 class TracedLayer(nn.Module):
     """ Traced layer is a wrapper around all model layers used for tracing operations
-        a traced layer can be terminal as is a layer which will be profiled according to depth and basic  blocks
+        a traced layer can be terminal as is a layer which will be profiled according to depth and basic blocks
         and a non terminal layer which is not profiled but still traced
 
         terminal layers will pass actual non wrapped values to their module
@@ -653,14 +652,14 @@ class TracedLayer(nn.Module):
             # for terminal layer the layer itself is the creating operation
             out = TracedValue(NodeTypes.LAYER, "")
 
-            disable_function_tracing()
+            disable_tracing_registered_functions()
 
             connect_inputs_to_output(out.id, args, kwargs)
             args, kwargs = unpack_traced_args_and_kwargs(*args, **kwargs)
 
             out.set_data(self._module(*args, **kwargs))
 
-            trace_registered_functions()
+            enable_tracing_registered_functions()
 
         else:
             with record_free_floating_parameters_and_buffers(self._module):
@@ -730,9 +729,10 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     args, kwargs = prepare_args_and_kwargs(args=args, kwargs=kwargs)
 
     _wrap_traced_layers(module, depth=depth,
-                        basic_blocks=basic_blocks)
+                        basic_blocks=basic_blocks,
+                        )
 
-    trace_registered_functions()
+    enable_tracing_registered_functions()
     ExplicitUntracedFunctions.enable()
     traced_module = TracedLayer(module,
                                 name=f"{type(module).__name__}",
@@ -741,7 +741,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     # explicit no grad as we only need the control flow
     with torch.no_grad():
         output = traced_module(*args, **kwargs)
-    disable_function_tracing()
+    disable_tracing_registered_functions()
     ExplicitUntracedFunctions.disable()
 
     output_id = output.id
@@ -847,7 +847,7 @@ def register_torch_functions():
         register_new_traced_function(f, namespace=namespace)
 
 
-def trace_registered_functions():
+def enable_tracing_registered_functions():
     """enable tracing of functions registered functions
     """
 
@@ -860,20 +860,23 @@ def trace_registered_functions():
                           for f in funcs}
 
 
-def disable_function_tracing():
-    """revert the patching done by trace_registered_functions
+def disable_tracing_registered_functions():
+    """revert the patching done by enable_tracing_registered_functions
     """
     FUNCTION_NAMESPACE.clear()
     TracedFunctions.disable_tracing()
 
 
-def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_ModuleList_ModuleDict=True):
+def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_ModuleList_ModuleDict=True,
+                        ):
     layers_dict = dict()
     layers_to_patch = dict()
     patched_layers_to_scope = dict()
+
+
     for sub_layer, scope, parent, terminal in traverse_model(module, depth=depth,
-                                                             basic_blocks=basic_blocks,
-                                                             full=True):
+                       basic_blocks=basic_blocks,
+                       full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
         patch_direct_children = False
@@ -931,7 +934,7 @@ def _unwrap_layers(module: nn.Module):
 def reset_tracing_state():
     global CURRENT_SCOPE
     CURRENT_SCOPE = ""
-    disable_function_tracing()
+    disable_tracing_registered_functions()
     ExplicitUntracedFunctions.disable()
     NODES.clear()
     FUNCTION_NAMESPACE.clear()

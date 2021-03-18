@@ -175,8 +175,7 @@ def like_mtf(mixture_or_task_name: str,
                                          feature_keys=feature_keys,
                                          ensure_eos=True)
 
-    ds = ds.map(_map_fn,
-                num_parallel_calls=t5.data.preprocessors.num_parallel_calls())
+    ds = ds.map(_map_fn)
     """
     # https://github.com/tensorflow/mesh/blob/6f5e3f10b5fe2bbd613bbe11b18a63d52f2749f4/mesh_tensorflow/transformer/utils.py
             encoder_sequence_id=mtf_features.get("inputs_segmentation", None),

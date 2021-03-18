@@ -9,7 +9,7 @@ from typing import Tuple, Dict
 import torch
 
 
-def choose_blocks(model, args) -> Tuple[torch.nn.Module]:
+def choose_blocks(model, args, blocks_arg_name="basic_blocks") -> Tuple[torch.nn.Module]:
     blocks = dict()
 
     for m in model.modules():
@@ -17,12 +17,12 @@ def choose_blocks(model, args) -> Tuple[torch.nn.Module]:
         blocks.update(m_superclasses)
 
     blocks: Dict[str, torch.nn.Module]
-    if args.basic_blocks is None:
-        args.basic_blocks = []
+    if getattr(args, blocks_arg_name) is None:
+        setattr(args, blocks_arg_name, [])
     try:
-        return tuple([blocks[name] for name in args.basic_blocks])
+        return tuple([blocks[name] for name in getattr(args, blocks_arg_name)])
     except KeyError:
-        raise ValueError(f"invalid basic blocks possible blocks are {list(blocks.keys())}")
+        raise ValueError(f"invalid {blocks_arg_name} possible blocks are {list(blocks.keys())}")
 
 
 def record_cmdline(output_file):
