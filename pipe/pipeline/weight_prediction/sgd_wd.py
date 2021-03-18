@@ -1,7 +1,7 @@
 import torch
 
 from .interface import WeightPredictor
-from .sym_pred_optimizers import auto_lambdify, WDSympySGD
+from .sym_pred_optimizers import auto_lambdify, WDSympySGD, WDSympySGDMsnag
 
 
 class SGDWDClonedWeightPrediction(WeightPredictor):
@@ -23,7 +23,7 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
 
         # Automaticallty create functions to compute coeffs given staleness
         res, _ = auto_lambdify(MAX_ALLOWEDD_STALENESS,
-                               WDSympySGD,
+                               WDSympySGDMsnag,
                                simplify=True)
         self.res = res
 
@@ -80,8 +80,11 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                 coeff_v = f_v(*[d[a] for a in fs_v])
                 coeff_theta = f_theta(*[d[a] for a in fs_theta])
                 for p in pg['params']:
-                    p.mul_(coeff_theta).add_(coeff_v,
-                                             os_state[p]["momentum_buffer"])
+                    p.mul_(coeff_theta).add_(os_state[p]["momentum_buffer"], alpha=coeff_v)
+
+                    # Partially accumulated gradient. aiding in the first step.
+                    if p.grad is not None:
+                        p.add_(p.grad, alpha=-d['\\eta'])
 
     def revert(self):
         if not self.n_steps:
