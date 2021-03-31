@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from torch.nn import Module
 
-from autopipe.autopipe import Graph
+from autopipe.autopipe.model_profiling.control_flow_graph import Graph
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.utils import special_traverse_model
