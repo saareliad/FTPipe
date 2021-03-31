@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Optional, Dict
 
 from .post_process import post_process_partition
-from ..mixed_pipe.partition_mixed_pipe import stages_from_bins, convert_handle_missing_print
+from ..mixed_pipe.partition_mixed_pipe_v1_clusters import stages_from_bins, convert_handle_missing_print
 from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
 

@@ -8,7 +8,7 @@ from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, 
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction
 from autopipe.autopipe.model_partitioning.mixed_pipe.assignment import greedy_best_fit
 from autopipe.autopipe.model_partitioning.mixed_pipe.coarsening import coarsening
-from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import stages_from_bins, \
+from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe_v1_clusters import stages_from_bins, \
     convert_handle_missing_print
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_partitioning.mixed_pipe.refine import refine

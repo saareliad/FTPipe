@@ -1,2 +1,2 @@
-from .partition_mixed_pipe import partition_2dbin_pack, analyze_n_clusters
+from .partition_mixed_pipe_v1_clusters import partition_2dbin_pack, analyze_n_clusters
 from .partition_mixed_pipe_v2 import partition_mpipe

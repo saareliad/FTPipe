@@ -6,7 +6,7 @@ from gettext import gettext
 import torch
 
 from autopipe.autopipe.model_partitioning.acyclic import Objective, META_ALGORITH, Constraint
-from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe import ReminderPolicy, \
+from autopipe.autopipe.model_partitioning.mixed_pipe.partition_mixed_pipe_v1_clusters import ReminderPolicy, \
     SecondAndOnClusterPolicy
 
 
