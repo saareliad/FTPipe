@@ -28,8 +28,8 @@ def coarsen_prefixes(model: Module, graph: Graph, node_weight_function, edge_wei
 
         did_something = True
         while did_something and len(set_sb_nodes) > 1:
+            did_something = False
             for u in sb_nodes:
-                did_something = False
                 if u not in set_sb_nodes:
                     continue
 
@@ -41,6 +41,8 @@ def coarsen_prefixes(model: Module, graph: Graph, node_weight_function, edge_wei
                         # can't merge without breaking topo sort
                         continue
                     graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
+                    # graph.topo_sort(change_graph=False)
+
                     uf.union(u.id, v.id)
                     uf2.union(u.id, v.id)
                     set_sb_nodes.discard(v)
