@@ -45,9 +45,9 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                         continue
                     momentum = pg['momentum']
                     for p in pg['params']:
-                        p.add_(-lr * momentum, os_state[p]["momentum_buffer"])
+                        p.data.add_(-lr * momentum, os_state[p]["momentum_buffer"])
                         if p.grad is not None:
-                            p.add_(p.grad, alpha=-lr)
+                            p.data.add_(p.grad, alpha=-lr)
             return
 
         if not self.n_steps:
@@ -88,11 +88,11 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                 coeff_theta = f_theta(*[d[a] for a in fs_theta])
                 coeff_first_grad = f_first_grad(*[d[a] for a in fs_first_grad])
                 for p in pg['params']:
-                    p.mul_(coeff_theta).add_(os_state[p]["momentum_buffer"], alpha=coeff_v)
+                    p.data.mul_(coeff_theta).add_(os_state[p]["momentum_buffer"], alpha=coeff_v)
 
                     # Partially accumulated gradient. aiding in the first step.
                     if p.grad is not None:
-                        p.add_(p.grad, alpha=coeff_first_grad)
+                        p.data.add_(p.grad, alpha=coeff_first_grad)
 
     def revert(self):
         if not self.n_steps:
