@@ -253,23 +253,14 @@ When possible, a data-loading script/code will be added to `download_datasets.py
 
 ## Misc Systems stuff
 
-After talk with Amit Nadav
+- Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipeline).
 
-- Can do fork to share pinned memory. (need to be done before cuda context initialization)
-- `sudo ./pcm.x` to check data transfers between cpus. (git clone <https://github.com/opcm/pcm.git>)
-- use node 0 : `numactl --cpunodebind=0` (sudo apt install numactl)
-  - checking this: either `lstopo` or `lspci -vvv | less`.
-- `less /proc/$PID/maps` to check memory mapping
-- check allocated sutff with `strace -f python -v`
-- There was
-  - `sudo apt install hwloc` for something.
-  - `modprobe msr` for something.
-
-Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipeline).
-
-To see how pytorch is compiled, use
+- To see how pytorch is compiled, use
 ```
 torch.__config__.show()
+
+- use node 0 : `numactl --cpunodebind=0` (sudo apt install numactl)
+  - checking this: either `lstopo` or `lspci -vvv | less`.
 
 #  0.6.4 T5
 ```

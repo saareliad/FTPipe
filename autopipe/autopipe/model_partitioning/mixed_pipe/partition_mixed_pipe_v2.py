@@ -248,7 +248,7 @@ def main():
     # plt.show()
 
     # analyze_n_clusters(nodes=nodes, node_weight_function=node_weight_function, max_k=4)
-    graph, stage_to_gpu_map = partition_mpipe(graph=graph, num_gpus=2,
+    graph, stage_to_gpu_map = partition_mpipe(model, graph=graph, num_gpus=2,
                                               node_weight_function=node_weight_function,
                                               edge_weight_function=edge_weight_function,
                                               use_layers_graph=True)
