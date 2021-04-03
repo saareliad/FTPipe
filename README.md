@@ -18,6 +18,8 @@ This repository is used to automatically partition and train neural networks wit
     python -m autopipe.partition vision --crop 32 --no_recomputation -b 256 -p 4 --save_memory_mode --partitioning_method pipedream --model wrn_28x10_ c100_dr03_gn
     ```
     This will create, compile, and autogenerate the partitioned model and place it [here](models/partitioned).
+    
+    _Note: some hyper-parameters in mpipe partitioning method are still hardcoded and not available as cmd options._
 
 3. Register the partitioned model to the pipeline runtime. 
 
