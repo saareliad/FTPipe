@@ -1,0 +1,8 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "weight_stashing": false,
+    "model": "t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream",
+    "step_every": 5,
+    "bs_train": 8
+}
