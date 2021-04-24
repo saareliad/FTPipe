@@ -3,6 +3,7 @@
     "base_config_path_is_relative": true,
     "weight_stashing": false,
     "model": "t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream",
-    "step_every": 5,
-    "bs_train": 8
+    "step_every": 4,
+    "bs_train": 10,
+    "save_checkpoint_every_x_steps": 500
 }
