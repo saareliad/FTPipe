@@ -1,15 +1,16 @@
 {
-    "logdir": "logs/t5/no_virtual_stages/",
+    "logdir": "logs/t5/virtual_stages/",
     "data_dir": "/home_local/saareliad/data",
-    "out_dir": "results/t5/super_glue/wic",
+    "out_dir": "results/t5/super_glue/multirc",
     "auto_file_name": true,
-    "out_filename": "no_virtual_stages_benchmark",
+    "out_filename": "test_vs",
     "distributed_backend": "mpi",
-    "model": "t5_3b_tied_lmheads_64_4_8p_bw12_squad1_acyclic",
-    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7],
-    "nprocs": 8,
+    "model": "t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe",
+    "prevvvvvv": [0, 1, 2, 3, 4, 5, 6, 7, 2, 4, 3, 1, 6, 5, 0],
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 2, 4, 3, 1, 6, 5, 0],
+    "nprocs": 15,
     "dataset": "t5_tfds",
-    "mixture_or_task_name": "super_glue_wic_v102",
+    "mixture_or_task_name": "super_glue_multirc_v102",
     "preproc_batch_size": 128,
     "trainer": {
         "type": "t5",
@@ -17,10 +18,10 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 32,
-    "bs_test": 32,
-    "step_every": 4,
-    "max_seq_length": 64,
+    "step_every": 2,
+    "bs_train": 4,
+    "bs_test": 4,
+    "max_seq_length": 512,
     "answer_max_seq_length": 4,
     "num_data_workers": 5,
     "optimizer": {
@@ -51,6 +52,7 @@
     "verbose_comm": false,
     "flush_rate": -1,
     "work_scheduler": "1f1b",
+    "supremum_staleness": 100,
     "cudnn_benchmark": true,
     "max_buffers": 1,
     "keep_buffers_alive": false,
@@ -64,10 +66,6 @@
     "model_type": "t5",
     "precomputed_masks": true,
     "save_checkpoints":  true,
-    "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/3b/wic/stale/",
     "load_model_one_by_one": false,
-    "save_checkpoint_every_x_steps": 500
-
-
+    "single_worker_eval_batch_size": 16
 }

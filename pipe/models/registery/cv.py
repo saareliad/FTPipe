@@ -34,6 +34,15 @@ register_cv_hardcoded_model(name='wrn_28x10_c100_dr03_p4_group_norm',
                                              drop_rate=0.3),
                             model_class=WideResNet_GN)
 
+
+register_cv_hardcoded_model(name="wrn_28x10_c100_dr03_gnc32_4p_bw12_pipedream",
+                            dict_params=dict(depth=28,
+                                             num_classes=100,
+                                             widen_factor=10,
+                                             drop_rate=0.3),
+                            model_class=WideResNet_GN)
+
+
 register_cv_hardcoded_model(name='resnet50_imagenet_p8',
                             dict_params=dict(block=Bottleneck, layers=[3, 4, 6, 3], num_classes=1000),
                             model_class=ResNet)

@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple, Any
 from tqdm import tqdm
 
 from autopipe.autopipe.model_partitioning.heuristics import NodeWeightFunction, \
-    EdgeWeightFunction
+    EdgeWeightFunction, NodeMemoryEstimator
 from autopipe.autopipe.model_partitioning.mixed_pipe.post_process import post_process_partition
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph
 
@@ -32,9 +32,11 @@ def partition_pipedream(
         edge_weight_function: Optional[EdgeWeightFunction] = None,
         use_layers_graph: bool = True,
         num_machines_in_first_level=None,
-        # memory_size = math.inf,
+        memory_size = 10e9 ,#math.inf,
         verbose=True,
         force_stright_pipeline=True,
+        node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(optimizer_multiply=3),
+
 ):
     print("PipeDream Partitioning")
     num_machines = num_gpus
@@ -63,20 +65,22 @@ def partition_pipedream(
 
     print("-I- Initializing data-parallel stage T_i_j")
     cum_sum = 0.0
-    # cum_activation_size = 0.0
+    cum_activation_size = 0.0
     cum_parameter_size = 0.0
     for i, node in enumerate(work_graph.non_input_nodes):
         cum_sum += node_weight_function(node)
-        # cum_activation_size += profile_data[i][1]
+        cum_activation_size += node_mem_estimator(node)  # FIXME: misleading name, it is aggregation
         cum_parameter_size += node.num_parameters
         # if force_stright_pipeline:
         max_m = 1 if force_stright_pipeline else num_machines
         for j in range(max_m):
             # stashed_data_size = math.ceil((num_machines - (j+1)) / (j+1)) * cum_activation_size
             # stashed_data_size += cum_parameter_size
-            # if stashed_data_size > memory_size:
-            #     A[i][j] = (None, None)
-            #     continue
+            stashed_data_size = cum_activation_size
+            if stashed_data_size > memory_size:
+                A[i][j] = (None, None)
+                print("skipping OOM solution")
+                continue
 
             data_parallel_communication_time = calc_data_parall_comm_time(num_machines=j + 1,
                                                                           total_parameter_size=cum_parameter_size,
@@ -96,10 +100,12 @@ def partition_pipedream(
         if i == 0:
             cum_times.append(node_weight_function(node))
             # cum_activation_sizes.append(profile_data[i][1])
+            cum_activation_sizes.append(node_mem_estimator(node))
             cum_parameter_sizes.append(node.num_parameters)
         else:
             cum_times.append(cum_times[-1] + node_weight_function(node))
             # cum_activation_sizes.append(cum_activation_sizes[-1] + profile_data[i][1])
+            cum_activation_sizes.append(cum_activation_sizes[-1] + node_mem_estimator(node))
             cum_parameter_sizes.append(cum_parameter_sizes[-1] + node.num_parameters)
 
     assert edge_weight_function.ratio == 0
@@ -127,11 +133,14 @@ def partition_pipedream(
 
                     last_stage_time = cum_times[i] - cum_times[j]
                     last_stage_parameter_size = cum_parameter_sizes[i] - cum_parameter_sizes[j]
+                    last_stage_activation = cum_activation_sizes[i] - cum_activation_sizes[j]
+                    stashed_data_size = last_stage_activation # param is included
                     # stashed_data_size = (cum_activation_sizes[i] - cum_activation_sizes[j])
                     # stashed_data_size *= math.ceil((num_machines - (m+1)) / m_prime)
                     # stashed_data_size += last_stage_parameter_size
-                    # if stashed_data_size > memory_size:
-                    #     continue
+                    if stashed_data_size > memory_size:
+                        print("skipping OOM solution")
+                        continue
 
                     last_stage_time = max(last_stage_time,
                                           calc_data_parall_comm_time(num_machines=m_prime,
