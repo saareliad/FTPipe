@@ -162,7 +162,8 @@ class Parser(argparse.ArgumentParser, ABC):
             default=False,
             action="store_true",
             help="weheter to not profile ops when using the GraphProfiler")
-        group.add_argument("--partitioning_method", "-m", choices=["acyclic", "metis", "2dbin", "mpipe", "pipedream"], default="acyclic")
+        group.add_argument("--partitioning_method", "-m", choices=["acyclic", "metis", "2dbin", "mpipe", "pipedream"],
+                           default="acyclic")
         group.add_argument(
             "--generate_explicit_del",
             action="store_true",
@@ -294,9 +295,6 @@ class Parser(argparse.ArgumentParser, ABC):
         group.add_argument('--special_blocks', nargs='*', default=[])
         # group.add_argument('round_limit', type=int, default=-1, help="local search round limit")
 
-
-
-
     def _add_acyclic_args(self, group):
         group.add_argument("--epsilon",
                            default=0.1,
@@ -334,7 +332,8 @@ class Parser(argparse.ArgumentParser, ABC):
                            "maximum constraint value a single stage can have,for example for memory constraint this is the maximum number of parameters a stage can have")
 
     def _add_presets_args(self, group):
-        group.add_argument("--preset", choices=['ftpipe', 'pipedream', 'gpipe'], required=False, help="set preset partitioning and analysis arguments")
+        group.add_argument("--preset", choices=['ftpipe', 'pipedream', 'gpipe'], required=False,
+                           help="set preset partitioning and analysis arguments")
 
     def parse_presets(self, args):
         if args.preset == 'ftpipe':
@@ -397,7 +396,6 @@ class Parser(argparse.ArgumentParser, ABC):
 
         args.force_no_recomputation_scopes_fn = lambda scope: any(
             s in scope for s in args.force_no_recomputation_scopes)
-
 
         return self._post_parse(args, extra)
 

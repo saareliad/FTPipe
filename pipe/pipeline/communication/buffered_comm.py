@@ -196,7 +196,7 @@ class BufferSimpleCommBase(SimpleCommBase):
 
             # Backward buffers:
             if self.changed_shapes_last_batch_bwd:
-                self.changed_shapes_last_batch_fwd = False
+                self.changed_shapes_last_batch_bwd = False
                 self.bwd_recv_buffers = self._bwd_recv_buffers()  # create=True
             else:
                 self.bwd_recv_buffers.reset_state()

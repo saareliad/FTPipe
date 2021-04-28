@@ -5,7 +5,6 @@ from .wrapper import TensorWrapper
 from .buffered_comm import BufferSimpleCommBase
 
 
-
 # filter_none = partial(filter, lambda t: t is not None)
 # TODO: maybe avoid reversed if problems
 # TODO: can avoid synchronized?
