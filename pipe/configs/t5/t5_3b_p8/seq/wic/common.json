@@ -60,7 +60,7 @@
     "model_name_or_path": "t5-3b",
     "do_lower_case": true,
     "overwrite_cache": false,
-    "dont_drop_last": false,
+    "dont_drop_last": true,
     "model_type": "t5",
     "precomputed_masks": true,
     "save_checkpoints":  true,

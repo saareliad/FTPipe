@@ -56,7 +56,7 @@
     "answer_max_seq_length": 8,
     "do_lower_case": true,
     "overwrite_cache": false,
-    "dont_drop_last": false,
+    "dont_drop_last": true,
     "model_type": "t5",
     "precomputed_masks": true,
     "save_checkpoints":  true,

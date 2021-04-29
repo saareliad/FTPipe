@@ -36,7 +36,8 @@ class SmallerLastBatchPolicy(Enum):
     DropReminder = auto()
 
 
-DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
+# DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
+DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
 
 
 # from data import AVAILABLE_DATASETS
@@ -780,8 +781,8 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
             eval_dl.dataset)
         # TODO: support replicated
 
-        if args.steps < 0 or args.steps >= (train_dataset_len // args.bs_train):
-            last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        if args.steps < 0 or args.steps >= (train_dataset_len // args.bs_train):  #5428 // 64 = floor(84.8125) == 84
+            last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0  # 5428 % 64
         else:
             last_batch_diff_train = 0
         
@@ -791,7 +792,9 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
                  last_batch_diff_train=last_batch_diff_train, last_batch_diff_eval=last_batch_diff_eval)
         logger.info(f"Synchronized: {d}")
         data = [
-            train_dl_len, eval_dl_len, last_batch_diff_train,
+            train_dl_len,
+            eval_dl_len,
+            last_batch_diff_train,
             last_batch_diff_eval
         ]
         data = torch.tensor(data, dtype=torch.long)
@@ -802,6 +805,24 @@ def synchronize_dataloaders_length(args, is_first_partition: bool, logger, eval_
     eval_dl_len = data[1].item()
     last_batch_diff_train = data[2].item()
     last_batch_diff_eval = data[3].item()
+
+    # check with me.
+
+    def calc_shapes_for_train(train_dl):
+        assert train_dl is not None
+        # del eval_dl
+        train_dl_len = len(train_dl)
+        train_dataset_len = len(train_dl.dataset)
+        if args.steps < 0 or args.steps >= (train_dataset_len // args.bs_train):
+            last_batch_diff_train = train_dataset_len % args.bs_train if not train_dl.drop_last else 0
+        else:
+            last_batch_diff_train = 0
+
+        return last_batch_diff_train, eval_dl_len, train_dl_len
+
+    if train_dl is not None:
+        assert calc_shapes_for_train(train_dl) == (last_batch_diff_train, eval_dl_len, train_dl_len)
+
 
     return last_batch_diff_eval, last_batch_diff_train, eval_dl_len, train_dl_len
 

@@ -290,18 +290,18 @@ def create_pipeline_configuration(DEBUG=False, batch_size=4):
                         'req_grad': False,
                         'is_batched': True,
                         'created_by': -1},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/Tensor::size_117': {
-                        'shape': torch.Size([2]),
-                        'dtype': torch.Size,
-                        'req_grad': False,
-                        'is_batched': False,
-                        'created_by': 0},
                     'inverted_encoder_attention_mask': {
                         'shape': torch.Size([4, 1, 1, 320]),
                         'dtype': torch.float32,
                         'req_grad': False,
                         'is_batched': True,
                         'created_by': -1},
+                    'T5ForConditionalGeneration/T5Stack[decoder]/Tensor::size_117': {
+                        'shape': torch.Size([2]),
+                        'dtype': torch.Size,
+                        'req_grad': False,
+                        'is_batched': False,
+                        'created_by': 0},
                     'T5ForConditionalGeneration/Parameter[shared_embed_weight]': {
                         'shape': torch.Size([32100, 1024]),
                         'dtype': torch.float32,

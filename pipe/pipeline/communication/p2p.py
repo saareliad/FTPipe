@@ -100,6 +100,8 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
+        # if self.rank == 0:
+        #     print("send_activations", self.rank, batch_idx, [a.shape if isinstance(a,torch.Tensor) else None for a in x])
         return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
 
     def send_gradients(self, x, batch_idx):

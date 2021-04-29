@@ -106,6 +106,7 @@ class BufferSimpleCommBase(SimpleCommBase):
         self._last_pre_recv_gradients = None
 
     def get_data_forward(self, batch_idx, num_batches, last_due_end):
+        # print(self.rank, batch_idx, num_batches, last_due_end)
         self._ensure_fwd_recv_buffers_size_set(last_due_end)
         fwd_recv_buffers = self.fwd_recv_buffers
         fwd_recv_buffers.recv_next(batch_idx)
@@ -173,7 +174,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.changed_shapes_last_batch_fwd = False
                 self.fwd_recv_buffers = self._fwd_recv_buffers_eval(
                     create=True)
-            elif self.fwd_recv_buffers.is_initialized():
+            elif not self.fwd_recv_buffers.is_initialized():
                 self.fwd_recv_buffers.create()
 
     def train(self):
@@ -191,7 +192,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.changed_shapes_last_batch_fwd = False
                 self.fwd_recv_buffers = self._fwd_recv_buffers_train(
                     create=True)
-            elif self.fwd_recv_buffers.is_initialized():
+            elif not self.fwd_recv_buffers.is_initialized():
                 self.fwd_recv_buffers.create()
 
             # Backward buffers:
@@ -223,6 +224,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                                              is_bwd=False,
                                              create=False)
                 self.fwd_recv_buffers = fwd_recv_buffers
+                # print(f"rank: {self.rank}: new buffer sizes: {shapes}")
 
             else:
                 fwd_recv_buffers = self.fwd_recv_buffers
@@ -241,6 +243,7 @@ class BufferSimpleCommBase(SimpleCommBase):
 
         if not fwd_recv_buffers.is_initialized():
             fwd_recv_buffers.create()
+
 
     def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
         # Special case: Last batch with different size

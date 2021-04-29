@@ -112,6 +112,13 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         self.grad_rcv_dict = OrderedDict(self.grad_rcv_items)
 
         tag_info = tensor_tags_from_config(pipe_config)
+
+        # if rank == 0:
+        #     print("="*40)
+        #     print("TAG INFO")
+        #     print(tag_info)
+        #     print("=" * 40)
+
         self.tensor_tags, self.TOTAL_TAGS = tag_info
 
         if target_tensor_names:
@@ -180,6 +187,9 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
 
         self.changed_shapes_last_batch_fwd = False
         self.changed_shapes_last_batch_bwd = False
+
+
+        # print("last_batch_train_shapes", last_batch_train_shapes)
 
 
     def fix_after_recv(self, x, is_grad=False):
