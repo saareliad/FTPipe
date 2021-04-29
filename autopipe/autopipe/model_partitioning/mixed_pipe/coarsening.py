@@ -21,101 +21,177 @@ def coarsening(model, graph,
                special_blocks,
                depth) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
     uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
-
     print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
-    hierarchy = []
 
-    p = graph
+    mgr = CoarseningMgr(model, graph,
+                        edge_weight_function,
+                        node_weight_function,
+                        L, P,
+                        basic_blocks,
+                        special_blocks,
+                        depth)
+    mgr.add_method("prefixes")
+    mgr.add_method("forbidden_edges")
+    mgr.add_method("node_weight_0")
+    # mgr.add_method("heavy_edges", 0.95)
+    mgr.add_method("cco")
+    mgr.add_method("stochastic_centers")
+    mgr.add_method("smallest_nodes")
 
-    p, _, g, uf, uf2 = coarsen_prefixes(model=model, graph=p, node_weight_function=node_weight_function,
-                                                  edge_weight_function=edge_weight_function, uf=uf,
-                                                  basic_blocks=basic_blocks,
-                                                  special_blocks=special_blocks,
-                                                  depth=depth)
-    hierarchy.append((p, uf2, g, deepcopy(uf)))
-    p = g
-    print(f"merged {len(p) - len(g)} nodes with common prefixes")
+    mgr.execute()
+
+    return mgr.hierarchy
 
 
-    matching = penalty_edges_matching(graph=p, edge_weight_function=edge_weight_function)
-    g = contract(p, matching, edge_weight_function, uf=uf)
-    hierarchy.append((p, matching, g, deepcopy(uf)))
-    p = g
-    print(f"merged {len(matching)} nodes with penalty edges")
+class CoarseningMgr:
+    def __init__(self,
+                 model,
+                 graph: Graph,
+                 edge_weight_function: EdgeWeightFunction,
+                 node_weight_function: NodeWeightFunction,
+                 L,
+                 P,
+                 basic_blocks,
+                 special_blocks,
+                 depth
+                 ):
 
-    # Merge nodes with weight 0
-    print(f"merging nodes with weight <=0")
-    p, _, g, uf, uf2 = nodes_leq_threshold_matching(p,
-                                                    node_weight_function,
-                                                    edge_weight_function,
-                                                    L,
-                                                    uf,
-                                                    verbose=False,
-                                                    record_history=True,
-                                                    threshold=0
-                                                    )
-    # only when it is the last we dont deepcopy(uf)
-    hierarchy.append((p, uf2, g, deepcopy(uf)))
-    p = g
+        # load args
+        self.model = model
+        self.graph = graph
+        self.edge_weight_function = edge_weight_function
+        self.node_weight_function = node_weight_function
+        self.L = L
+        self.P = P
+        self.basic_blocks = basic_blocks
+        self.special_blocks = special_blocks
+        self.depth = depth
 
-    # TODO: systematic-block-ratio-creation
-    DO_SYSTEMATIC = True
-    DO_STOCHASTIC_CENTERS = True
-    DO_HEAVY_EDGES = not DO_STOCHASTIC_CENTERS
-    if DO_SYSTEMATIC:
-        if DO_HEAVY_EDGES:
-            # heavy edge matching on percentile
-            p, _, g, uf, uf2 = online_heavy_edge_matching(p,
-                                                          node_weight_function,
-                                                          edge_weight_function,
-                                                          L,
-                                                          uf,
-                                                          verbose=True,
-                                                          record_history=True,
-                                                          pecentile_to_filter=0.95)
+        print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
 
+        # Load internal state
+        self.uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
+        self.p = graph
+        self.pipeline = []
+        self.kwargs_pipeline = []
+        self.hierarchy = []
+
+    def add_method(self, name, *method_args, **method_kwargs):
+        self.pipeline.append(name)
+        self.kwargs_pipeline.append((*method_args, method_kwargs))
+
+    def execute(self):
+        for i, (method, (method_args, method_kwargs)) in enumerate(zip(self.pipeline, self.kwargs_pipeline)):
+            is_last_op_in_pipe = i == len(self.pipeline) - 1
+
+            if method == "prefixes":
+                self.coarsen_prefixes(is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "forbidden_edges":
+                self.forbidden_edges(is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "node_weight_0":
+                self.node_weight_0(is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "heavy_edges":
+                self.heavy_edges(*method_args, **method_kwargs, is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "stochastic_centers":
+                self.stochastic_centers(is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "smallest_nodes":
+                self.smallest_nodes(is_last_op_in_pipe=is_last_op_in_pipe)
+            else:
+                raise NotImplementedError(method)
+
+    def append_to_hierarchy(self, p, uf2, g, uf, is_last_op_in_pipe=False):
+        hierarchy = self.hierarchy
+        if not is_last_op_in_pipe:
             hierarchy.append((p, uf2, g, deepcopy(uf)))
-            p = g
+        else:
+            hierarchy.append((p, uf2, g, uf))
 
+    def coarsen_prefixes(self, is_last_op_in_pipe=False):
+        p, _, g, uf, uf2, sb_names = coarsen_prefixes(model=self.model,
+                                                      graph=self.p,
+                                                      node_weight_function=self.node_weight_function,
+                                                      edge_weight_function=self.edge_weight_function,
+                                                      uf=self.uf,
+                                                      basic_blocks=self.basic_blocks,
+                                                      special_blocks=self.special_blocks,
+                                                      depth=self.depth)
+        print(sb_names)
+        print(f"merged {len(p) - len(g)} nodes with common prefixes")
+
+        self.append_to_hierarchy(p, uf2, g, uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
+
+    def forbidden_edges(self, is_last_op_in_pipe=False):
+        matching = penalty_edges_matching(graph=self.p, edge_weight_function=self.edge_weight_function)
+        g = contract(self.p, matching, self.edge_weight_function, uf=self.uf)
+        print(f"merged {len(matching)} nodes with penalty edges")
+
+        # FIXME: matching arg should instead uf2.
+        self.append_to_hierarchy(self.p, matching, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
+
+    def node_weight_0(self, is_last_op_in_pipe=False):
+        print(f"merging nodes with weight <=0")
+        p, _, g, uf, uf2 = nodes_leq_threshold_matching(self.p,
+                                                        self.node_weight_function,
+                                                        self.edge_weight_function,
+                                                        self.L,
+                                                        self.uf,
+                                                        verbose=False,
+                                                        record_history=True,
+                                                        threshold=0)
+        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
+
+    def heavy_edges(self, percentile_to_filter=0.95, is_last_op_in_pipe=False):
+        p, _, g, uf, uf2 = online_heavy_edge_matching(self.p,
+                                                      self.node_weight_function,
+                                                      self.edge_weight_function,
+                                                      self.L,
+                                                      self.uf,
+                                                      verbose=True,
+                                                      record_history=True,
+                                                      pecentile_to_filter=percentile_to_filter)
+
+        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
+
+    def cco(self, is_last_op_in_pipe=False):
         # systematic
         p, _, g, uf, uf2 = systematic_comm_comp_ratio_matching(
-            p,
-            node_weight_function,
-            edge_weight_function,
-            L,
-            uf,
+            self.p,
+            self.node_weight_function,
+            self.edge_weight_function,
+            self.L,
+            self.uf,
             verbose=True,
         )
         if uf2 is None:
             warnings.warn("can't restore single step of systematic max blocks")
 
-        hierarchy.append((p, uf2, g, deepcopy(uf)))
-        p = g
+        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
 
-    # full_alg(p, P, L, node_weight_function, edge_weight_function, uf, rtol=2e-3)
+    def stochastic_centers(self, is_last_op_in_pipe=False):
+        p, _, g, uf, uf2 = stochastic_centers_matching(self.p, self.node_weight_function,
+                                                       self.edge_weight_function,
+                                                       self.L, self.P, self.uf, verbose=True, record_history=False,
+                                                       special_blocks=self.special_blocks)
 
-    if DO_STOCHASTIC_CENTERS:
-        p, _, g, uf, uf2 = stochastic_centers_matching(p, node_weight_function,
-                                                       edge_weight_function,
-                                                       L, P, uf, verbose=True, record_history=False,
-                                                       special_blocks=special_blocks)
+        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
 
-        hierarchy.append((p, uf2, g, deepcopy(uf)))
-        p = g
-
-    # handle the rest.
-    p, _, g, uf, uf2 = online_smallest_comp_node_matching(p,
-                                                          node_weight_function,
-                                                          edge_weight_function,
-                                                          L,
-                                                          uf,
-                                                          verbose=True,
-                                                          record_history=True
-                                                          )
-    # it is the last so we dont deepcopy(uf)
-    hierarchy.append((p, uf2, g, uf))
-    p = g
-    return hierarchy
+    def smallest_nodes(self, is_last_op_in_pipe=False):
+        p, _, g, uf, uf2 = online_smallest_comp_node_matching(self.p,
+                                                              self.node_weight_function,
+                                                              self.edge_weight_function,
+                                                              self.L,
+                                                              self.uf,
+                                                              verbose=True,
+                                                              record_history=True
+                                                              )
+        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.p = g
 
 
 def contract(graph: Graph, matching: List[List[Node]], edge_weight_function: EdgeWeightFunction,
@@ -354,5 +430,3 @@ def online_heavy_edge_matching(graph: Graph, node_weight_function, edge_weight_f
     # Note: matching is pretty much meaningless.
     matching = None
     return prev_graph, matching, graph, uf, uf2
-
-
