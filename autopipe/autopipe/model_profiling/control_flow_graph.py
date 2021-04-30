@@ -895,6 +895,7 @@ class Graph:
 
             # Fix graph:
             #             self.input_kw_ids = input_kw_ids
+            # FIXME: this sometimes assign  larger ids to inputs than non-inputs.
             input_kw_ids = {}
             for i, v in self.input_kw_ids.items():
                 topo_sort_id = self[i].topo_sort_id

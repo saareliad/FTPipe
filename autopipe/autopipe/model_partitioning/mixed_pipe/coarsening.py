@@ -78,7 +78,7 @@ class CoarseningMgr:
 
     def add_method(self, name, *method_args, **method_kwargs):
         self.pipeline.append(name)
-        self.kwargs_pipeline.append((*method_args, method_kwargs))
+        self.kwargs_pipeline.append((method_args, method_kwargs))
 
     def execute(self):
         for i, (method, (method_args, method_kwargs)) in enumerate(zip(self.pipeline, self.kwargs_pipeline)):
@@ -92,6 +92,8 @@ class CoarseningMgr:
                 self.node_weight_0(is_last_op_in_pipe=is_last_op_in_pipe)
             elif method == "heavy_edges":
                 self.heavy_edges(*method_args, **method_kwargs, is_last_op_in_pipe=is_last_op_in_pipe)
+            elif method == "cco":
+                self.cco(is_last_op_in_pipe=is_last_op_in_pipe)
             elif method == "stochastic_centers":
                 self.stochastic_centers(is_last_op_in_pipe=is_last_op_in_pipe)
             elif method == "smallest_nodes":
@@ -318,7 +320,23 @@ def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight
                 print(
                     f"done with  nodes <= threshold {threshold}, breaking (last weight: {weight_of_u}). merged {total_merged}")
                 return False, None, True
-            # Try to find match:
+
+            u: Node
+            for v in sorted(u.in_edges, key=lambda n: node_weight_function(n)):
+                if v in graph.inputs:
+                    continue
+                if check_cycle2(graph, v, u):
+                    # can't merge without breaking topo sort
+                    continue
+                graph.merge(uid=v.id, vid=u.id, edge_weight_function=edge_weight_function, uf=uf)
+                uf.union(v.id, u.id)
+                uf2.union(v.id, u.id)
+                hd.pop(v)
+                hd.pop(u)
+                hd[v] = node_weight_function(v)
+                return True, weight_of_u, False
+
+            # Try to find match, forward
             for v in sorted(u.out_edges, key=lambda n: node_weight_function(n)):
                 if check_cycle2(graph, u, v):
                     # can't merge without breaking topo sort
@@ -329,6 +347,7 @@ def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight
                 hd.pop(u)
                 hd.pop(v)
                 hd[u] = node_weight_function(u)
+                warnings.warn(f"can't merge small node {u} backward, will merge forward and lose the name of {v}")
                 return True, weight_of_u, False
         return False, None, False
 

@@ -38,7 +38,7 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
                 found_nodes[b].append(n)
                 total_found += 1
 
-    print(f"Found {total_found} basic blocks")
+    print(f"-I- Found {total_found} special blocks")
     pprint(found_nodes)
 
     # if sb_names is not None:
@@ -49,12 +49,12 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
     if total_found < L:
         raise NotImplementedError("random")
 
-    print("assigning centers from basic blocks")
+    print("-I- assigning centers from special blocks")
     lengths = {b: math.floor(L * (len(nodes) / total_found)) for b, nodes in found_nodes.items()}
-    total_basic_block_centers = sum(lengths.values())
-    print(f"total_basic_block_centers: {total_basic_block_centers}")
-    print("centers per basic block:")
-    pprint(lengths)
+    total_basic_block_centers = sum(lengths.values())  # TODO: rename to special blocks
+    print(f"-I- total_basic_block_centers: {total_basic_block_centers}")
+    print(f"-I- centers to assign in each basic block: {lengths}")
+    # pprint(lengths)
 
     # split L to each bb size
 
@@ -65,9 +65,9 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
     to_assign = L
     sorted_iter = sorted(list(found_nodes.items()), key=lambda x: len(x[1]))
     for b_name, nodes in sorted_iter:
-
+        print(f"-I- Assigning centers in block {b_name}")
         L_tag = len(nodes)
-        L_prop_int = lengths[b_name]
+        L_prop_int = lengths[b_name]   # The proportion of centers this block gets
         jump = math.ceil(L_tag / L_prop_int)  # FIXME: see above
         if jump <= 0:
             continue
@@ -81,9 +81,11 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
 
         if to_assign == 0:
             break
+    print(f"-I- Assigned total of {len(centers)} centers:")
+    pprint(centers)
 
     if to_assign > 0:
-        print(f"choosing {to_assign} random centers")
+        print(f"-I- Now, choosing {to_assign} more random centers")
         # TODO: choose nodes with maximal distance from graph input and last node.
         additional_centers = random.sample(all_nodes - centers, to_assign)
 
@@ -93,7 +95,7 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
         to_assign -= len(additional_centers)
         assert to_assign == 0
 
-    print("centers")
+    print("-I- final centers:")
     print(hd)
 
     def inner_loop():

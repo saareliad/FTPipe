@@ -292,7 +292,8 @@ class Parser(argparse.ArgumentParser, ABC):
                            help="values <= threshold will be contagious with closest stage")
 
     def _add_mpipe_args(self, group):
-        group.add_argument('--special_blocks', nargs='*', default=[])
+        group.add_argument('--special_blocks', type=str, nargs='*', default=[])
+        group.add_argument('--L', nargs='*', type=int, default=[])
         # group.add_argument('round_limit', type=int, default=-1, help="local search round limit")
 
     def _add_acyclic_args(self, group):
@@ -491,6 +492,7 @@ class Parser(argparse.ArgumentParser, ABC):
     def _mpipe_opts_dict_from_parsed_args(self, args):
         d = dict()
         d['depth'] = args.depth
+        d['L_list'] = args.L
         return d
         # NOTE: d['special_blocks']  updated outside.
         # NOTE: d['basic_blocks']  updated outside.
