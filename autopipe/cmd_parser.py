@@ -205,7 +205,7 @@ class Parser(argparse.ArgumentParser, ABC):
 
         group.add_argument("--force_no_recomputation_scopes", nargs="*", default=[])
 
-        group.add_argument("-c", "--profiles_cache_name", default="", type=str,
+        group.add_argument("--cp", "--profiles_cache_name", default="", type=str, dest="profiles_cache_name",
                            help="Profile cache to use in case of multiple runs")
 
         group.add_argument("--overwrite_profiles_cache", action="store_true", default=False,

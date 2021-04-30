@@ -191,7 +191,7 @@ class ParsePartitioningOptsGlue(Parser):
         model_str = str(args.model_name_or_path).replace("-", "_")
         seq_len_str = f"s_{args.max_seq_length}"
         model_str += seq_len_str
-        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+        output_file = f"{args.output_file}{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
             output_file += "_async"

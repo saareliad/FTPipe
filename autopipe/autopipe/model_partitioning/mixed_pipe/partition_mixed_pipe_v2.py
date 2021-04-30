@@ -28,7 +28,8 @@ def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit
     work_graph = Graph.from_state(saved_work_graph_without_par_edges)
     # work_graph = Graph.from_other(saved_work_graph_without_par_edges)
     # coarsening
-    hierarchy = coarsening(model, work_graph, edge_weight_function, node_weight_function, L, P, basic_blocks, special_blocks, depth)
+    hierarchy = coarsening(model, work_graph, edge_weight_function, node_weight_function, L, P, basic_blocks,
+                           special_blocks, depth)
     # the output here should be L stages,
     last_graph: Graph = hierarchy[-1][-2]
     print(f"After coarsening: got best effort graph with {len(last_graph)} nodes (required: L={L})")
@@ -58,7 +59,7 @@ def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit
     post_process_partition(last_graph, edge_weight_function=edge_weight_function, verbose_check_outputs=False)
     print(f"Got {n_stages} stages after initial assignment.")
     # un-coarsening
-    first_graph = hierarchy[0][0] # FIXME: ^ this is hack, it shouldn't have changed.
+    first_graph = hierarchy[0][0]  # FIXME: ^ this is hack, it shouldn't have changed.
     work_graph = first_graph
     # first_graph = work_graph
     full_uf: UnionFind = hierarchy[-1][-1]
@@ -71,11 +72,11 @@ def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit
             a.stage_id = b.stage_id
             a.gpu_id = b.gpu_id
     # Refinement
-    best_objective = refine(work_graph, node_weight_function=node_weight_function,
-                            edge_weight_function=edge_weight_function,
-                            round_limit=round_limit)
+    best_objective, refine_improvement = refine(work_graph, node_weight_function=node_weight_function,
+                                                edge_weight_function=edge_weight_function,
+                                                round_limit=round_limit)
 
-    return times, work_graph, best_objective
+    return times, work_graph, best_objective, refine_improvement
 
 
 def partition_mpipe(model, graph: Graph,
@@ -122,23 +123,26 @@ def partition_mpipe(model, graph: Graph,
         warnings.warn("experimental: parallel run on L.")
         # Parallel version
         worker_args = [(model, L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph_without_par_edges.state(), node_mem_estimator, basic_blocks, special_blocks, depth) for L in L_list]
+                        saved_work_graph_without_par_edges.state(), node_mem_estimator, basic_blocks, special_blocks,
+                        depth) for L in L_list]
 
         with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
             results = pool.map(_lworker, worker_args)
 
-        for L, (times, work_graph_state, best_objective) in zip(L_list, results):
+        for L, (times, work_graph_state, best_objective, refine_improvement) in zip(L_list, results):
             work_graph = Graph.from_state(work_graph_state)
-            L_to_res[L] = (work_graph, times, best_objective)
+            L_to_res[L] = (work_graph, times, best_objective, refine_improvement)
     else:
         # sequential version
         for L in L_list:
-            times, work_graph, best_objective = lworker(model, L, P, edge_weight_function, node_weight_function, round_limit,
-                                                        saved_work_graph_without_par_edges.state(), node_mem_estimator,
-                                                        basic_blocks, special_blocks, depth)
+            times, work_graph, best_objective, refine_improvement = lworker(model, L, P, edge_weight_function,
+                                                                            node_weight_function, round_limit,
+                                                                            saved_work_graph_without_par_edges.state(),
+                                                                            node_mem_estimator,
+                                                                            basic_blocks, special_blocks, depth)
 
             # save res
-            L_to_res[L] = (work_graph, times, best_objective)
+            L_to_res[L] = (work_graph, times, best_objective, refine_improvement)
 
     # TODO: choose best L times
     # TODO: fix the assert to torch.allclose, it fails due float round error even though same number.
@@ -155,10 +159,11 @@ def partition_mpipe(model, graph: Graph,
 
     best_objective_so_far = None
     L_to_best_objective = dict()
+    L_to_refinement_improvement = dict()
 
     L_to_num_stages = dict()
 
-    for L, (work_graph, times, best_objective) in L_to_res.items():
+    for L, (work_graph, times, best_objective, refine_improvement) in L_to_res.items():
         # s2
         worstcase = max(times.values())
         if best_Ls2 is None:
@@ -178,6 +183,7 @@ def partition_mpipe(model, graph: Graph,
             best_objective_so_far = best_objective
 
         L_to_best_objective[L] = best_objective
+        L_to_refinement_improvement[L] = refine_improvement
 
         # stages
         nstages = work_graph.num_partitions
@@ -190,6 +196,7 @@ def partition_mpipe(model, graph: Graph,
     # TODO: SAVE THIS. (also save the graphs and run full exp)
     print(f"Best L is {L}")
     print("L_to_minmax (stage2):", L_to_minmax)
+    print("L to refinement improvement", L_to_refinement_improvement)
     print("L_to_num_stages:", L_to_num_stages)
     print("L_to_best_objective", L_to_best_objective)
 

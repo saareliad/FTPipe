@@ -73,33 +73,10 @@ def mark_nodes_for_prefix_coarsening(module, nodes, basic_blocks, special_blocks
         if sb_id is not None:
             all_sbs.append(packed)
 
-    pprint(list((a[1], a[4]) for a in all_sbs))
+    # pprint(list((a[1], a[4]) for a in all_sbs))
 
     for packed in all_sbs:
         _, scope, _, _, sb_id = packed
         l = [node for node in nodes if node.scope.startswith(scope)]
         sb_id_to_nodes[scope] = l
     return sb_id_to_nodes
-
-    #
-    #
-    #     if node.scope.startswith(scope):
-    #         l.append(node)
-    #
-    # # Fixme: we miss the decoders
-    # for sub_layer, scope, parent, terminal, sb_id in special_traverse_model(module, depth=depth,
-    #                                                                         basic_blocks=basic_blocks,
-    #                                                                         special_blocks=special_blocks,
-    #                                                                         full=True,
-    #                                                                         mark=True):
-    #     if sb_id is not None and sb_id not in first_sb_id_to_scopes:
-    #         first_sb_id_to_scopes[sb_id] = scope
-    #         sb_class_to_first_sb_ids[sub_layer.__class__].append(sb_id)
-    #         l = []
-    #         for node in nodes:
-    #             if node.scope.startswith(scope):
-    #                 node.sp_block_id = sb_id
-    #                 l.append(node)
-    #         sb_id_to_nodes[sb_id] = l
-
-    # return sb_id_to_nodes, first_sb_id_to_scopes, sb_class_to_first_sb_ids

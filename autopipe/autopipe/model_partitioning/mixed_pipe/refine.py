@@ -61,6 +61,7 @@ class Refiner:
 
         self.stage_to_cost = self.calc_stage_to_cost()
         self.best_objective = self.calc_objective()
+        self.initial_objective = self.best_objective
 
     def calc_stage_to_cost(self):
         cwf = self.cwf
@@ -81,6 +82,9 @@ class Refiner:
     def calc_objective(self):
         # to minimize
         return max(self.stage_to_cost.values())
+
+    def percents_of_relative_objective_improvement(self):
+        return ((self.initial_objective / self.best_objective) - 1)
 
     def update_on_move(self, nodes: Iterable[Node], new_stage_id: int, escape_minima=False):
         prev_stage_id = next(iter(nodes)).stage_id
@@ -255,7 +259,9 @@ def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_f
         total_moves += num_moved
         print(f"Round {rounds}: num_moved {num_moved}, (fwd {num_moved_fwd}, bwd {num_moved_bwd})")
 
-    print(f"Refinement ended after {rounds} rounds and {total_moves} moves")
-    return refiner.best_objective
+    pori = refiner.percents_of_relative_objective_improvement()
+
+    print(f"Refinement ended after {rounds} rounds and {total_moves} moves. Relative improvement: {pori:.2%}")
+    return refiner.best_objective, pori
     # try invalids? next round
     # TODO: try with merges?

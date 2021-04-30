@@ -94,7 +94,7 @@ def compile_partitioned_model(graph: Graph,
             n
             for n in stage_nodes if n.type == NodeTypes.BUFF_PARAM
         ]
-        class_decl, scope_to_class_field = generate_init_method(stage_nodes, class_name, layers,
+        class_decl, scope_to_class_field = generate_init_method(graph, stage_nodes, class_name, layers,
                                                                 is_param_dict, buffs_params)
         state_methods_functions = generate_partition_state_methods()
         forward_function, io = generate_forward_method(idx,

@@ -4,6 +4,8 @@ import warnings
 from dataclasses import dataclass
 from typing import Dict, List
 
+from ..partitioning_scripts.partition_scripts_utils import record_transformer_cfg
+
 try:
     import datasets as nlp
 except ImportError as e:
@@ -292,7 +294,7 @@ class ParsePartitioningT5Opts(Parser):
         seq_len_str = f"s_{args.max_seq_length}_{args.answer_max_seq_length}"
 
         model_str += seq_len_str
-        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+        output_file = f"{args.output_file}{model_str}_{args.n_partitions}p_bw{bw_str}"
 
         if args.async_pipeline:
             output_file += "_async"
@@ -365,6 +367,21 @@ class T5Partitioner(PartitioningTask):
             print("Please call get_model() first")
             raise e
         return get_input(args, tokenizer, analysis=analysis)
+
+    def record_transformer_cfg(self, cmd_args):
+        record_transformer_cfg(
+            python_output_file=f"{cmd_args.output_file}.py",
+            args=cmd_args,
+            model_type='t5_stateless' if cmd_args.stateless_tied else "t5",
+            explicitly_set_dict={
+                "output_only": True,
+                "output_attentions": False,
+                "precompute_masks": cmd_args.precompute_masks,
+                # 'return_dict': False
+                "output_hidden_states": False
+            },
+            do_resize_token_embedding=False
+        )
 
 
 register_task("t5", ParsePartitioningT5Opts, T5Partitioner)

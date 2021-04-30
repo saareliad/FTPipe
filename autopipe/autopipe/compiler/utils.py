@@ -50,7 +50,7 @@ def pretty_format_obj(obj, dict_prefix=dtab) -> str:
     return str(obj)
 
 
-def get_sorted_partition_inputs(partition: List[Node]) -> List[Node]:
+def get_sorted_partition_inputs(graph: Graph, partition: List[Node]) -> List[Node]:
     """return a list of all nodes that are input to this partition\n
        sorted by id
     """
@@ -66,7 +66,13 @@ def get_sorted_partition_inputs(partition: List[Node]) -> List[Node]:
             if (n.stage_id != node.stage_id) or (n.type == NodeTypes.IN)
         ])
 
-    return sorted(inputs, key=lambda n: n.id)
+    # we do this PRO since in pipeline we first pass dataset inputs, regardless of topo-sort.
+    def key_fn(n):
+        first = 0 if n.id in graph.input_kw_ids else 1
+        second = n.id
+        return first, second
+
+    return sorted(inputs, key=key_fn)
 
 
 def get_partition_outputs(partition: List[Node],

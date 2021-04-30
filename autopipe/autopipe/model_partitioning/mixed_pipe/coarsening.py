@@ -33,7 +33,7 @@ def coarsening(model, graph,
     mgr.add_method("prefixes")
     mgr.add_method("forbidden_edges")
     mgr.add_method("node_weight_0")
-    # mgr.add_method("heavy_edges", 0.95)
+    # mgr.add_method("heavy_edges", 0.99)  # enable this only if there is problems with CCO.
     mgr.add_method("cco")
     mgr.add_method("stochastic_centers")
     mgr.add_method("smallest_nodes")
