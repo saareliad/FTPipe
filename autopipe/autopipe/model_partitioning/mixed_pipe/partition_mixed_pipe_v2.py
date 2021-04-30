@@ -58,7 +58,9 @@ def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit
     post_process_partition(last_graph, edge_weight_function=edge_weight_function, verbose_check_outputs=False)
     print(f"Got {n_stages} stages after initial assignment.")
     # un-coarsening
-    first_graph = work_graph
+    first_graph = hierarchy[0][0] # FIXME: ^ this is hack, it shouldn't have changed.
+    work_graph = first_graph
+    # first_graph = work_graph
     full_uf: UnionFind = hierarchy[-1][-1]
     # copy stage_ids and gpu_ids.
     component_mapping = full_uf.component_mapping()

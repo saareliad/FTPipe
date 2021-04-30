@@ -89,7 +89,7 @@ def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] 
     if prefix is None:
         prefix = type(module).__name__
 
-    for name, sub_module in module.named_children():
+    for child_idx, (name, sub_module) in enumerate(module.named_children()):
         scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
         if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
@@ -106,7 +106,7 @@ def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] 
             # TODO: do we want to mark it?
             if mark:
                 if not hasattr(module, "_next_special_bb_id"):
-                    next_special_bb_id += 1
+                    next_special_bb_id += 0.01
                 sub_module._next_special_bb_id = next_special_bb_id
 
             if full:
@@ -115,7 +115,7 @@ def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] 
                 else:
                     yield sub_module, scope, module, False
             yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
-                                              next_special_bb_id, full, mark=mark)
+                                              next_special_bb_id+child_idx, full, mark=mark)
 
         else:
             if full:
@@ -125,7 +125,7 @@ def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] 
                     yield sub_module, scope, module, False
 
             yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
-                                              next_special_bb_id, full, mark=mark)
+                                              next_special_bb_id+child_idx, full, mark=mark)
 
     # clear the mess
     if mark and hasattr(module, "_next_special_bb_id"):

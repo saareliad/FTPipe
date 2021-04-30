@@ -142,7 +142,7 @@ class CoarseningMgr:
                                                         verbose=False,
                                                         record_history=True,
                                                         threshold=0)
-        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.append_to_hierarchy(p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
         self.p = g
 
     def heavy_edges(self, percentile_to_filter=0.95, is_last_op_in_pipe=False):
@@ -155,7 +155,7 @@ class CoarseningMgr:
                                                       record_history=True,
                                                       pecentile_to_filter=percentile_to_filter)
 
-        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.append_to_hierarchy(p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
         self.p = g
 
     def cco(self, is_last_op_in_pipe=False):
@@ -171,7 +171,7 @@ class CoarseningMgr:
         if uf2 is None:
             warnings.warn("can't restore single step of systematic max blocks")
 
-        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.append_to_hierarchy(p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
         self.p = g
 
     def stochastic_centers(self, is_last_op_in_pipe=False):
@@ -180,7 +180,7 @@ class CoarseningMgr:
                                                        self.L, self.P, self.uf, verbose=True, record_history=False,
                                                        special_blocks=self.special_blocks)
 
-        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.append_to_hierarchy(p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
         self.p = g
 
     def smallest_nodes(self, is_last_op_in_pipe=False):
@@ -192,7 +192,7 @@ class CoarseningMgr:
                                                               verbose=True,
                                                               record_history=True
                                                               )
-        self.append_to_hierarchy(self.p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
+        self.append_to_hierarchy(p, uf2, g, self.uf, is_last_op_in_pipe=is_last_op_in_pipe)
         self.p = g
 
 
