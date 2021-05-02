@@ -11,6 +11,7 @@ import torch
 
 
 def zero_grad_fn(g):
+    return
     for b in g:
         b.detach_().zero_()
 
@@ -81,16 +82,21 @@ class Buffers:
     def wait_first(self):
         """ Wait for the first Irecv_fn to finish """
         request_objects = self.handlers.popleft()
-        for obj in request_objects:
-            # obj.wait()
-            while not obj.is_completed():
-                pass
+        res = []
+        bres = self.buffers[self.pointer]
 
-        res = self.buffers[self.pointer]
-        self.pointer = (self.pointer + 1) % self.max_buffers
-
-        # Must do this due MPI.
+        # concurrent wait-n'-clone
         with torch.cuda.stream(self.clone_stream):
-            res = [v.clone() if isinstance(v, torch.Tensor) else v for v in res]
+            with torch.no_grad():
+
+                for obj, v in zip(request_objects, bres):
+                    obj.wait()
+                    if isinstance(v, torch.Tensor):
+                        res.append(v.clone())
+                    else:
+                        res.append(v)
+
+        self.pointer = (self.pointer + 1) % self.max_buffers
         self.clone_stream.synchronize()
+
         return res
