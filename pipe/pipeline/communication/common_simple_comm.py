@@ -188,9 +188,7 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
         self.changed_shapes_last_batch_fwd = False
         self.changed_shapes_last_batch_bwd = False
 
-
         # print("last_batch_train_shapes", last_batch_train_shapes)
-
 
     def fix_after_recv(self, x, is_grad=False):
         """ Fixes received buffer after sync wait ends"""
@@ -208,7 +206,3 @@ class SimpleCommBase(CommunicationHandlerBase, ABC):
                     out.append(next(ix))
             return out
         return x
-
-
-
-

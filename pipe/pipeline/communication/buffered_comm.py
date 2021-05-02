@@ -109,55 +109,38 @@ class BufferSimpleCommBase(SimpleCommBase):
         # print(self.rank, batch_idx, num_batches, last_due_end)
         self._ensure_fwd_recv_buffers_size_set(last_due_end)
         fwd_recv_buffers = self.fwd_recv_buffers
-        fwd_recv_buffers.recv_next(batch_idx)
-        # print(f"rank {self.rank} get_data_forward, waiting")
-        x = fwd_recv_buffers.wait_first()
-        # print(f"rank {self.rank} get_data_forward, got {x}")
-        x = self.fix_after_recv(x)
-        # FIXME used to avoid this clone
-        # FIXME used to avoid this clone
-        # FIXME used to avoid this clone
-        # TODO: this clone can happen in another stream
-        x = [v.clone() if isinstance(v, torch.Tensor) else v for v in x]
+        fwd_recv_buffers.recv_next(batch_idx)   # NOTE: may be redundant, handling it.
+        x = fwd_recv_buffers.wait_first()  # Note: it synchronizes.
         # pre-Start the next fwd Irecv:
         if fwd_recv_buffers.max_buffers > 1 and not last_due_end:
             next_last_due_end = batch_idx + 2 == num_batches
             self._ensure_fwd_recv_buffers_size_set(last_due_end=next_last_due_end)
             fwd_recv_buffers.recv_next(batch_idx + 1)
 
-        # elif fwd_recv_buffers.max_buffers == 1 and not last_due_end:
-        #     pass
-        #     # TODO: need to sync the clone, then start.
-        #     #  From one hand: We don't want to block execution, so do it on another thread.
-        #     #  From the other hand: cuda+threading is horrible. Python+threading is horrible...
-
+        x = self.fix_after_recv(x)
         return x
 
     def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
         """ Used to start the recv before recomputation.
         Called at the beginning of "backward"
-        # TODO: can start it earlier, after the forward send
+        # TODO: can start it earlier, after the forward send.
+            The implication of not doing so is slightly longer first bwd recv.
+            this is bearable for better code simplicity.
         """
         # Special case: Last batch with different size
-        if self._last_pre_recv_gradients == batch_idx:
+        if self._last_pre_recv_gradients == batch_idx:   # FIXME: will get bug if using only 1 batch...
             return  # already taken care off
 
         self._ensure_bwd_recv_buffers_size_set(last_due_end)
-        bwd_recv_buffers = self.bwd_recv_buffers
-        bwd_recv_buffers.recv_next(batch_idx)
+        self.bwd_recv_buffers.recv_next(batch_idx)
         self._last_pre_recv_gradients = batch_idx
 
     def wait_recv_gradients(self, *args):
-        # the *args are due to inheritance and redunent here.
+        # the *args are due to inheritance and redundant here.
         # its due to multiprocessing comm handler
         g = self.bwd_recv_buffers.wait_first()
         g = self.fix_after_recv(g, True)
         return g
-
-    def post_recv_gradients(self, batch_idx, num_batches):
-        """ Hack: start the next recv here."""
-        # Wait for next if appropriate
-        raise NotImplementedError("TO BE DEPRECATED")
 
     def eval(self):
         """Sets evaluation mode.
@@ -216,13 +199,15 @@ class BufferSimpleCommBase(SimpleCommBase):
 
             if self.fwd_recv_buffers.max_buffers == 1:
                 self.changed_shapes_last_batch_fwd = True
+                s = self.fwd_recv_buffers.clone_stream
                 del self.fwd_recv_buffers
                 fwd_recv_buffers = make_buff(self,
                                              dtypes=dtypes,
                                              max_buffers=1,
                                              shapes=shapes,
                                              is_bwd=False,
-                                             create=False)
+                                             create=False,
+                                             prev_stream_to_use=s)
                 self.fwd_recv_buffers = fwd_recv_buffers
                 # print(f"rank: {self.rank}: new buffer sizes: {shapes}")
 
@@ -259,13 +244,15 @@ class BufferSimpleCommBase(SimpleCommBase):
             dtypes = self.training_tensor_dtypes
 
             if self.bwd_recv_buffers.max_buffers == 1:
+                s = self.bwd_recv_buffers.clone_stream
                 del self.bwd_recv_buffers
                 bwd_recv_buffers = make_buff(self,
                                              dtypes=dtypes,
                                              max_buffers=1,
                                              shapes=shapes,
                                              is_bwd=True,
-                                             create=False)
+                                             create=False,
+                                             prev_stream_to_use=s)
                 self.bwd_recv_buffers = bwd_recv_buffers
             else:
                 bwd_recv_buffers = self.bwd_recv_buffers
@@ -458,7 +445,8 @@ def make_buff(comm_handler: BufferSimpleCommBase,
               shapes,
               dtypes=None,
               max_buffers=1,
-              create=False):
+              create=False,
+              prev_stream_to_use=None):
     """Create recv buffer.
         TODO: This should be moved to comm handler
     """
@@ -469,13 +457,15 @@ def make_buff(comm_handler: BufferSimpleCommBase,
         b = Buffers(max_buffers,
                     comm_handler.create_gradients_rcv_buffers,
                     comm_handler.recv_gradients,
-                    is_grad=True)
+                    is_grad=True,
+                    prev_stream_to_use=prev_stream_to_use)
 
     else:
         b = Buffers(max_buffers,
                     comm_handler.create_activations_recv_buffers,
                     comm_handler.recv_activations,
-                    is_grad=False)
+                    is_grad=False,
+                    prev_stream_to_use=prev_stream_to_use)
 
     if create:
         b.create()

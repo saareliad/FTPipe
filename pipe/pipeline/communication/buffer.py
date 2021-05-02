@@ -5,6 +5,11 @@ from itertools import cycle
 
 # HACK: (very ugly) for some reason need to zero grad for P2P cuda aware. (tested via MPI)
 # Need to experiment and check if we can drop it.
+from typing import Union, Optional
+
+import torch
+
+
 def zero_grad_fn(g):
     for b in g:
         b.detach_().zero_()
@@ -25,7 +30,7 @@ class PreProcIter:
 
 
 class Buffers:
-    def __init__(self, max_buffers, create_fn, irecv_fn, is_grad=False):
+    def __init__(self, max_buffers, create_fn, irecv_fn, is_grad=False, prev_stream_to_use: Optional[torch.cuda.Stream] = None):
         self.buffers = []
         self.create_fn = create_fn
         self.max_buffers = max_buffers
@@ -35,6 +40,10 @@ class Buffers:
         self.pointer = 0
         self.is_grad = is_grad
         self.last_irecv = None
+        if prev_stream_to_use is not None:
+            self.clone_stream = prev_stream_to_use
+        else:
+            self.clone_stream = torch.cuda.Stream(priority=-1)
 
     def create(self):
         self._is_initialized = True
@@ -79,4 +88,9 @@ class Buffers:
 
         res = self.buffers[self.pointer]
         self.pointer = (self.pointer + 1) % self.max_buffers
+
+        # Must do this due MPI.
+        with torch.cuda.stream(self.clone_stream):
+            res = [v.clone() if isinstance(v, torch.Tensor) else v for v in res]
+        self.clone_stream.synchronize()
         return res

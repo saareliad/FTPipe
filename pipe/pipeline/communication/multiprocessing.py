@@ -427,9 +427,6 @@ class MultiprocessingCommunicationHandler(SimpleCommBase):
     def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
         self._ensure_bwd_send_buffers_size_set(last_due_end)
 
-    def post_recv_gradients(self, *args):
-        pass
-
     def wait_recv_gradients(self, *args):
         # TODO: args are design mistake.
         # None is probably design mistake too.

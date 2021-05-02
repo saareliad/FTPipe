@@ -736,8 +736,7 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
             true_weights_storage=true_weights_storage,
         )
         if weight_predictor:
-            partition.set_weight_predictor(weight_predictor,
-                                           nag_with_predictor)
+            partition.set_weight_predictor(weight_predictor)
             logger.info(f"Stage {args.stage} will use Weight Predictor")
 
         # Set Weight Stashing

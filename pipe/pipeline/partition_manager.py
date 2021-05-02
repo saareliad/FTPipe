@@ -251,8 +251,7 @@ class SinglePartitionManager:
                 for _ in range(fake_draw):
                     next(self.dl_iter)
 
-    def set_weight_predictor(self, weight_predictor: WeightPredictor,
-                             nag_with_predictor: bool):
+    def set_weight_predictor(self, weight_predictor: WeightPredictor):
         self.weight_predictor = weight_predictor
 
     def set_lr_scheduler(self, lr_scheduler):
@@ -488,12 +487,11 @@ class SinglePartitionManager:
         # NOTE: in MPI version there was hacky zero and sync here
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
 
+        # recv the next gradients.
         if next_backward_batch_idx is not None:
             next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
             self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
                                                  next_backward_batch_idx_last_due_end)
-
-        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Allow skipping steps (Gradient aggregation)
         old_lrs = None
@@ -854,12 +852,11 @@ class GPipePartitionManager(SinglePartitionManager):
             self.partition.recompute(batch_idx)
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
 
+        # recv the next gradients
         if next_backward_batch_idx is not None:
             next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
             self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
                                                  next_backward_batch_idx_last_due_end)
-
-        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Compute gradients
         if (not do_step) and self.is_replicated:
