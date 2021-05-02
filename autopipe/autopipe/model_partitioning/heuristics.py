@@ -105,7 +105,7 @@ class EdgeWeightFunction:
                 # can check size for torch.Size or whatever, or be accurate for bool. but its not interesting
 
             else:
-                # its a tensor, calculate the volume
+                # its a tensor, (or tuple of such). calculate the volume
                 volume = 0
                 for shape, dtype in zip(flatten(u.tensor_shape),
                                         flatten(u.tensor_dtype)):
@@ -116,14 +116,14 @@ class EdgeWeightFunction:
                         if u.req_grad and v.req_grad:
                             bwd_volume += tmp
                     else:
-                        warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. PENALIZING!")
+                        warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. valtype:{u.value_type} PENALIZING!")
                         return self.penalty
                         # raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
                     volume += tmp
 
             # TODO: take (partial) care of heterogeneous bandwidth in refinement.
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-            if u.gpu_id == v.gpu_id:  # u.gpu_id is not None and v.gpu_id is not None and
+            if u.gpu_id is not None and v.gpu_id is not None and u.gpu_id == v.gpu_id:
                 bw = 550  # TODO: check the exact number, its some high number
             else:
                 bw = self.bw

@@ -1,5 +1,5 @@
-import collections
 import inspect
+import collections
 import operator
 import os
 import re
@@ -347,40 +347,96 @@ magics = {"__len__": "len",
           "__abs__": "abs",
           "__iter__": "iter"}
 
+# see https://pytorch.org/docs/stable/torch.html#tensor-creation-ops
+# track and add
+
 tensor_creation_ops = {
-    torch.as_tensor: torch,
-    torch.from_numpy: torch,
     torch.tensor: torch,
-    torch.align_tensors: torch,
-    torch.arange: torch,
+    torch.sparse_coo_tensor: torch,
+    torch.as_tensor: torch,
     torch.as_strided: torch,
-    torch.bartlett_window: torch,
-    torch.blackman_window: torch,
-    torch.empty: torch,
-    torch.empty_strided: torch,
-    torch.eye: torch,
-    torch.from_file: torch,
-    torch.full: torch,
-    torch.hamming_window: torch,
-    torch.hann_window: torch,
+    torch.from_numpy: torch,
+    torch.zeros: torch,
+    torch.zeros_like: torch,
+    torch.ones: torch,
+    torch.ones_like: torch,
+    torch.arange: torch,
+    torch.range: torch,
     torch.linspace: torch,
     torch.logspace: torch,
-    torch.ones: torch,
+    torch.eye: torch,
+    torch.empty: torch,
+    torch.empty_like: torch,
+    torch.empty_strided: torch,
+    torch.full: torch,
+    torch.full_like: torch,
+    torch.quantize_per_tensor: torch,
+    torch.quantize_per_channel: torch,
+    torch.dequantize: torch,
+    torch.complex: torch,
+    torch.polar: torch,
+    torch.heaviside: torch,
+    #
+    torch.cat: torch,
+    torch.chunk: torch,
+    # torch.dsplit: torch,
+    # torch.column_stack: torch,
+    torch.dstack: torch,
+    torch.gather: torch,
+    # torch.hsplit: torch,
+    torch.hstack: torch,
+    torch.index_select: torch,
+    torch.masked_select: torch,
+    torch.movedim: torch,
+    # torch.moveaxis: torch,
+    torch.narrow: torch,
+    torch.nonzero: torch,
+    torch.reshape: torch,
+    # torch.row_stack: torch,
+    torch.scatter: torch,
+    torch.scatter_add: torch,
+    torch.split: torch,
+    torch.squeeze: torch,
+    torch.stack: torch,
+    # torch.swapaxes: torch,
+    # torch.swapdims: torch,
+    torch.t: torch,
+    torch.take: torch,
+    # torch.take_along_dim: torch,
+    # torch.tensor_split: torch,
+    # torch.tile: torch,
+    torch.transpose: torch,
+    torch.unbind: torch,
+    torch.unsqueeze: torch,
+    # torch.vsplit: torch,
+    torch.vstack: torch,
+    torch.where: torch,
+
+
+    torch.align_tensors: torch,
+    torch.bartlett_window: torch,
+    torch.blackman_window: torch,
+    torch.from_file: torch,
+    torch.hamming_window: torch,
+    torch.hann_window: torch,
+
     torch.rand: torch,
     torch.randn: torch,
     torch.randint: torch,
     torch.randperm: torch,
-    torch.range: torch,
-    torch.sparse_coo_tensor: torch,
-    torch.zeros: torch,
-    torch.cat: torch,
-    torch.stack: torch
-}
 
+
+
+    torch.less: torch,
+    torch.less_equal: torch,
+    torch.lt: torch ## and more!!
+
+}
 tensor_creation_ops_without_device_kw = {
     # TODO: maybe more...
     torch.cat: torch,
-    torch.stack: torch
+    torch.stack: torch,
+    torch.where: torch
 }
 
 
@@ -431,7 +487,11 @@ def convert_none_checks(input_file: str, output_file: str):
 
     if modified:
         lines = ['import operator\n']
+        lines.append("\n")
+        lines.append("\n")
         lines.append(inspect.getsource(is_None))
+        lines.append("\n")
+        lines.append("\n")
         lines.append(inspect.getsource(is_not_None))
         lines.append("\n")
         res = lines + res

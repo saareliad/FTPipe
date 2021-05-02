@@ -577,6 +577,23 @@ def t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
                 stateless_tied=True)
 
 
+def t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
+    return dict(model_type='t5_stateless',
+                model_name_or_path='t5-base',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": True,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
 def t5_small_tied_lmheads_512_4_3p_bw12_squad1_virtual_stages():
     return dict(model_type='t5_stateless',
                 model_name_or_path='t5-small',
@@ -619,9 +636,9 @@ functions_list = getmembers(
 MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS = {i: v for i, v in functions_list}
 
 
-def _register_hardcoded(name, dict):
-    global MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
-    MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS[name] = dict
+# def register_hardcoded_trasformer_cfg(name, dict):
+#     global MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS
+#     MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS[name] = dict
 
 # for name in MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS:
 #     # HACK: called with a ready model instance.

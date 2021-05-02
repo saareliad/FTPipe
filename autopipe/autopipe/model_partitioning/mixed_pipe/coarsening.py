@@ -227,11 +227,34 @@ def penalty_edges_matching(graph: Graph, edge_weight_function: EdgeWeightFunctio
                 # TODO: we have to handle doubles and so on...
                 check = True
         if check:
-            for e in matching[-len(node.out_edges):]:
-                if e[0] != node:
-                    # This should happen, since penalty is on the node itself
-                    raise NotImplementedError(
-                        f"potential cycle in edge {e}. Should probably duplicate node, or check topo order.")
+            if not node.compound_edge_weights:
+
+                try:
+                    for out in node.out_edges:
+                        assert edge_weight_function(node, out) >= edge_weight_function.penalty
+                except AssertionError:
+                    for out in node.out_edges:
+                        print(edge_weight_function(node, out))
+                    print("PENATLY", edge_weight_function.penalty)
+
+                count=0
+                for v in node.out_edges:
+                    if v.id in graph.output_ids:
+                        continue
+                    count += 1
+                for e in matching[-count:]:
+                    if e[0] is not node:
+                        # This should happen, since penalty is on the node itself
+                        print("matching")
+                        for tup in matching:
+                            print(tup)
+
+                        print("out edges")
+                        for v in node.out_edges:
+                            print(v)
+
+                        raise NotImplementedError(
+                            f"potential cycle in edge {e}. (count={count}) Should probably duplicate node, or check topo order.")
     return matching
 
 

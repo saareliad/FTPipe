@@ -56,6 +56,9 @@ class Node:
     # def __repr__(self):
     #     return self.scope
 
+    def is_graph_input(self):
+        return self.type is NodeTypes.IN
+
     def maybe_create_compound_edge_weights(self, edge_weight_function):
         if not self.compound_edge_weights:
             for nn in self.out_edges:
@@ -220,6 +223,7 @@ class Graph:
         # merge node parameters
         u.num_parameters += v.num_parameters
         u.max_memory_bytes += v.max_memory_bytes
+
 
         # TODO: dynamic topo_sort
         if dynamic_topo_sort:

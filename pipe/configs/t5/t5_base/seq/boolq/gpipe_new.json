@@ -6,10 +6,10 @@
     "bs_train": 2,
     "bs_test": 2,
     "checkpoints_save_name_prefix": "gpipe_new",
-    "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/3b/boolq/gpipe/",
-    "model": "t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream",
+    "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/base/boolq/gpipe/",
+    "model": "t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream",
     "save_checkpoints":  true,
     "epochs": -1,
     "steps": 3200,
-    "dont_drop_last": false
+    "dont_drop_last": true
 }

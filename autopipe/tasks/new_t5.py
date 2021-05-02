@@ -18,10 +18,14 @@ from transformers import T5Config, T5Tokenizer
 from models.normal.NLP_models.modeling_t5 import (
     T5ForConditionalGeneration, T5Model, get_attention_mask,
     get_inverted_encoder_attention_mask)
-from models.normal.NLP_models.modeling_t5_tied_weights import \
-    T5ForConditionalGeneration as TiedT5ForConditionalGeneration
-from models.normal.NLP_models.modeling_t5_tied_weights import \
-    T5Model as TiedT5Model
+# from models.normal.NLP_models.modeling_t5_tied_weights import \
+#     T5ForConditionalGeneration as TiedT5ForConditionalGeneration
+# from models.normal.NLP_models.modeling_t5_tied_weights import \
+#     T5Model as TiedT5Model
+
+from pipe.misc.new_t5.modeling_t5 import T5Model as TiedT5Model  # Fixme
+from pipe.misc.new_t5.modeling_t5 import T5ForConditionalGeneration as TiedT5ForConditionalGeneration
+
 from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
 from . import register_task, Parser
@@ -54,7 +58,7 @@ def get_input_dummy(args, tokenizer, analysis=False):
         kwargs = {
             "input_ids": input_ids,
             "decoder_input_ids": decoder_input_ids,
-            "lm_labels": lm_labels,
+            "labels": lm_labels,
         }
     else:
         kwargs = {
@@ -180,7 +184,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
                 "attention_mask": attention_mask,
                 'decoder_input_ids': decoder_input_ids,
                 "decoder_attention_mask": decoder_attention_mask,
-                'lm_labels': lm_labels,
+                'labels': lm_labels,
             }
 
             if self.precompute_masks:
@@ -201,7 +205,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
 
             # truncation=True`
             if not args.lmhead:
-                del batch['lm_labels']
+                del batch['labels']
 
             return batch
 
@@ -340,6 +344,8 @@ class T5Partitioner(PartitioningTask):
         tokenizer_class = T5Tokenizer
 
         explicitly_set_dict = {
+            "return_dict": False,
+            "use_cache": False,
             "output_attentions": False,
             "output_hidden_states": False,
             "output_only": True,
@@ -374,6 +380,8 @@ class T5Partitioner(PartitioningTask):
             args=cmd_args,
             model_type='t5_stateless' if cmd_args.stateless_tied else "t5",
             explicitly_set_dict={
+                "return_dict": False,
+                "use_cache": False,
                 "output_only": True,
                 "output_attentions": False,
                 "precompute_masks": cmd_args.precompute_masks,
@@ -383,5 +391,5 @@ class T5Partitioner(PartitioningTask):
             do_resize_token_embedding=True
         )
 
-
-register_task("t5", ParsePartitioningT5Opts, T5Partitioner)
+# replace with automatic basename
+register_task("new_t5", ParsePartitioningT5Opts, T5Partitioner)
