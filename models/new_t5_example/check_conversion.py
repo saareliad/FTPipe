@@ -3,6 +3,7 @@ from modeling_t5 import T5ForConditionalGeneration as TiedT5ForConditionalGenera
 from transformers import T5Model, T5ForConditionalGeneration
 import torch
 
+# run from current dir.
 if __name__ == '__main__':
 
     def normal_model_check():
