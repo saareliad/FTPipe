@@ -70,14 +70,15 @@ simply add `self.shared_embed_weight` as the first parameter.
 Now, the model can be registered to the framework. 
 
 In addition: 
- - remove huggingface functions which are called in runtime but I'm too lazy to convert, like head mask.
+ - remove huggingface functions which are called in runtime but I'm too lazy to convert, like head mask (to remove `operator.is_`).
  - return a single value
  - check if there additional hidden `operator.is_`
 
 Explanation: 
-1. Conversion: done to help the tracer.
+1. Conversion: done to help the tracer. 
 2. Stateless: this manually creates an edge from the shared weight to new `Staleless` layers, which will accept it as a parameter.
 The rest will be handled by the framework.
+3. single value: currently only models with single output value are supported (this can be easily changed).
 
 
 
