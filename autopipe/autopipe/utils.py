@@ -94,7 +94,13 @@ def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] 
         if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
             if full:
                 if mark:
-                    yield sub_module, scope, module, True, None
+                    if special_blocks and isinstance(sub_module, tuple(special_blocks)):
+                        # without this check:
+                        #   it will not work when special_block = basic_block and no children or depth=0, ...
+                        next_special_bb_id += 0.01
+                        yield sub_module, scope, module, True, next_special_bb_id
+                    else:
+                        yield sub_module, scope, module, True, None
                 else:
                     yield sub_module, scope, module, True
 

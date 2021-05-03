@@ -27,14 +27,14 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
         special_blocks = ()
 
     bb = special_blocks
-    bb_names = [c.__name__ for c in bb]
-    found_nodes = {b: list() for b in bb_names}
+    sb_names = [c.__name__ for c in bb]
+    found_nodes = {b: list() for b in sb_names}
     total_found = 0
 
     # find nodes which are basic blocks.
     for n in graph.non_input_nodes:
-        for b in bb_names:
-            if b in n.scope:
+        for b in sb_names:
+            if b in n.scope or (n.scope_to_hold_to and b in n.scope_to_hold_to):
                 found_nodes[b].append(n)
                 total_found += 1
 

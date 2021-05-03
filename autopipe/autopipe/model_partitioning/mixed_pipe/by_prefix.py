@@ -16,13 +16,15 @@ def coarsen_prefixes(model: Module, graph: Graph, node_weight_function, edge_wei
     # Used to find the local multi-matching
     uf2 = UnionFind(elements=graph._nodes.keys())
 
+    # FIXME: replace by finer granularity:
     nodes = list(graph.non_input_nodes)
-    sb_id_to_nodes = mark_nodes_for_prefix_coarsening(module=model,
-                                                      nodes=nodes,
-                                                      basic_blocks=basic_blocks,
-                                                      special_blocks=special_blocks,
-                                                      depth=depth)
-    for sb_scope, sb_nodes in sb_id_to_nodes.items():
+    sb_scope_to_nodes = get_marked_nodes_for_prefix_coarsening(module=model,
+                                                            nodes=nodes,
+                                                            basic_blocks=basic_blocks,
+                                                            special_blocks=special_blocks,
+                                                            depth=depth)
+    # will only merge nodes under the same sb scope.
+    for sb_scope, sb_nodes in sb_scope_to_nodes.items():
         set_sb_nodes = set(sb_nodes)
         sb_nodes.sort(key=lambda n: n.topo_sort_id)
 
@@ -53,15 +55,13 @@ def coarsen_prefixes(model: Module, graph: Graph, node_weight_function, edge_wei
             raise NotImplementedError()
 
     matching = None
-    sb_names = list(sb_id_to_nodes.keys())
+    sb_names = list(sb_scope_to_nodes.keys())
     print("Found special block names:", sb_names)
     return prev_graph, matching, graph, uf, uf2, sb_names
 
 
-def mark_nodes_for_prefix_coarsening(module, nodes, basic_blocks, special_blocks, depth):
-    first_sb_id_to_scopes = dict()
+def get_marked_nodes_for_prefix_coarsening(module, nodes, basic_blocks, special_blocks, depth):
     sb_id_to_nodes = dict()
-    sb_class_to_first_sb_ids = defaultdict(list)
 
     all_sbs = []
     for packed in special_traverse_model(module, depth=depth,
@@ -77,6 +77,29 @@ def mark_nodes_for_prefix_coarsening(module, nodes, basic_blocks, special_blocks
 
     for packed in all_sbs:
         _, scope, _, _, sb_id = packed
-        l = [node for node in nodes if node.scope.startswith(scope)]
+        l= []
+        l = [node for node in nodes if (node.scope.startswith(scope) or (node.scope_to_hold_to and node.scope_to_hold_to.startswith(scope)))]
         sb_id_to_nodes[scope] = l
     return sb_id_to_nodes
+
+
+def annotate_special_blocks_to_hold_to(model, graph, special_blocks, basic_blocks, depth):
+
+    # step1: find the core basic blocks, to extract their scopes.
+    nodes = list(graph.non_input_nodes)
+    sb_scope_to_nodes = get_marked_nodes_for_prefix_coarsening(module=model,
+                                                               nodes=nodes,
+                                                               basic_blocks=basic_blocks,
+                                                               special_blocks=special_blocks,
+                                                               depth=depth)
+
+    scopes_to_hold_to = list(sb_scope_to_nodes.keys())
+    # step2: find nodes which have this scopes as prefix i.e., children of each SB node.
+    # step 3: annotate children.
+    for node in graph.nodes:
+        for scope_to_hold_to in scopes_to_hold_to:
+            if node.scope.startswith(scope_to_hold_to):
+                if node.scope_to_hold_to is not None:
+                    raise NotImplementedError("nested by prefix coarsening not supported")
+                node.scope_to_hold_to = scope_to_hold_to
+

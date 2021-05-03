@@ -5,7 +5,8 @@ from typing import List, Optional, Tuple
 from sortedcollections import ValueSortedDict
 
 from autopipe.autopipe.model_partitioning.heuristics import EdgeWeightFunction, NodeWeightFunction
-from autopipe.autopipe.model_partitioning.mixed_pipe.by_prefix import coarsen_prefixes
+from autopipe.autopipe.model_partitioning.mixed_pipe.by_prefix import coarsen_prefixes, \
+    annotate_special_blocks_to_hold_to
 from autopipe.autopipe.model_partitioning.mixed_pipe.centers import stochastic_centers_matching
 from autopipe.autopipe.model_partitioning.mixed_pipe.check_cycles import check_cycle2
 from autopipe.autopipe.model_partitioning.mixed_pipe.systematic_block_ratio_creation import RatioBlockCreator
@@ -20,7 +21,7 @@ def coarsening(model, graph,
                basic_blocks,
                special_blocks,
                depth) -> List[Tuple[Graph, List[List[Node]], Graph, UnionFind]]:
-    uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
+    # uf = UnionFind(elements=[n.id for n in graph.non_input_nodes])
     print(f"-I- Coarsening: got graph with {graph.num_nodes} nodes")
 
     mgr = CoarseningMgr(model, graph,
@@ -81,6 +82,11 @@ class CoarseningMgr:
         self.kwargs_pipeline.append((method_args, method_kwargs))
 
     def execute(self):
+        if "prefixes" in self.pipeline:
+            annotate_special_blocks_to_hold_to(model=self.model, graph=self.graph, special_blocks=self.special_blocks,
+                                               basic_blocks=self.basic_blocks,
+                                               depth=self.depth)
+
         for i, (method, (method_args, method_kwargs)) in enumerate(zip(self.pipeline, self.kwargs_pipeline)):
             is_last_op_in_pipe = i == len(self.pipeline) - 1
 
@@ -364,13 +370,15 @@ def nodes_leq_threshold_matching(graph: Graph, node_weight_function, edge_weight
                 if check_cycle2(graph, u, v):
                     # can't merge without breaking topo sort
                     continue
+                warnings.warn(f"can't merge small node {u} backward, will merge forward and lose the name of {v}.")
+                # if "T5Block" in v.scope:
+                #     print("HERE")
                 graph.merge(uid=u.id, vid=v.id, edge_weight_function=edge_weight_function, uf=uf)
                 uf.union(u.id, v.id)
                 uf2.union(u.id, v.id)
                 hd.pop(u)
                 hd.pop(v)
                 hd[u] = node_weight_function(u)
-                warnings.warn(f"can't merge small node {u} backward, will merge forward and lose the name of {v}")
                 return True, weight_of_u, False
         return False, None, False
 

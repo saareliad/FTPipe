@@ -20,7 +20,7 @@ def check_cycle2(g: Graph, a: Node, b: Node):
     # Add node AB, with outputs of combined A,B
     # start DFS from AB. if encountering A or B : there is a cycle.
 
-    ab = Node(None, None, None)
+    ab = Node(None, None, "dummy_not_None_scope")
     ab.out_edges = sorted(set(a.out_edges + b.out_edges) - {a, b}, key=lambda x: x.id)
 
     # TODO: dynamic topo sort. than we can just check path from a,b after removing edges.
