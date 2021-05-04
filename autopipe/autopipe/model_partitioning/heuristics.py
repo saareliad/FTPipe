@@ -4,6 +4,7 @@ from functools import reduce
 from typing import Set, Tuple, Optional, Iterable
 
 import torch
+import numpy as np
 
 from autopipe.autopipe.utils import ExecTimes, flatten
 from ..model_profiling import Node, NodeTypes
@@ -115,6 +116,9 @@ class EdgeWeightFunction:
                         tmp *= torch.empty(1, dtype=dtype).element_size()
                         if u.req_grad and v.req_grad:
                             bwd_volume += tmp
+                    elif dtype is type(None) and not self.penalize_non_tensors:
+                        warnings.warn("experimentally allowing None inside a tuple.")
+                        tmp = 4
                     else:
                         warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. valtype:{u.value_type} PENALIZING!")
                         return self.penalty

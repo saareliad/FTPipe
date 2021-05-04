@@ -52,6 +52,7 @@ def run_analysis(sample,
     if not stages_on_same_gpu:
         stages_on_same_gpu = list()
     # kwarg input
+    sample_save = sample
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config.model_inputs()])
     elif not isinstance(sample, tuple):
@@ -347,8 +348,8 @@ def run_analysis(sample,
             if seq_success:
                 s += f"\nexpected_speedup_compared_to_seq_no_recomp_no_comm: {expected_speedup_compared_to_seq_no_comm:.3f}"
 
-        data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,
-                               sequential_model, verbose)
+        data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample_save,
+                               sequential_model, verbose, config)
 
         if torch.cuda.is_available():
             s += f"\nAnalysis max cuda memory used {max_memory_allocated / 1e9:.2f}GB"
@@ -385,7 +386,7 @@ def sorted_stage_to_device_map(n_partitions, stages_on_same_gpu):
 
 
 def data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,
-                           sequential_model, verbose):
+                           sequential_model, verbose, config: AnalysisPipelineConfig):
     if TRY_SSGD_ANALYSIS and torch.cuda.is_available() and (
             sequential_model is not None):
         n_workers = num_real_stages

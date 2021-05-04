@@ -7,8 +7,10 @@ from autopipe.autopipe.utils import flatten
 def cuda_computation_times(model, inputs):
     """ measure forward/backward time of a partition on the GPU
     """
-    if not isinstance(inputs, tuple):
+    if not isinstance(inputs, (tuple, list, dict)):
         inputs = (inputs,)
+
+
     model.cuda()
     # now we move inputs to GPU
     inputs = move_tensors(inputs, 'cuda')
@@ -17,7 +19,12 @@ def cuda_computation_times(model, inputs):
 
     torch.cuda.synchronize(device='cuda')
     start.record()
-    outputs = model(*inputs)
+    if isinstance(inputs, (tuple,list)):
+        outputs = model(*inputs)
+    elif isinstance(inputs, dict):
+        outputs = model(**inputs)
+    else:
+        raise NotImplementedError(str(type(inputs)))
 
     # TODO: can generate targets beforehand to use cross_entropy...
     # TODO: replace randn_like with pre-generated tensors
