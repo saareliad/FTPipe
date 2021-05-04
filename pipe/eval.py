@@ -1,5 +1,6 @@
 import warnings
 
+import pipe.data.t5.t5_tfds_eval
 from pipe.models import parse_config
 from pipe.models.registery import AVAILABLE_MODELS
 from pipe.train import approximate_checkpoint_every_x_epochs
@@ -79,10 +80,16 @@ def get_all_eval_results(args):
         all_cps = list(range(0, infer_all_cps(args)))  # + ["c4"]
     print(f"-I- evaluating {len(all_cps)}: {all_cps}")
     if args.dataset == "t5_tfds":
-        from pipe.data.t5 import t5_tfds
         device = getattr(args, "eval_device", "cpu")
         if not isinstance(device, list):
-            all_results = t5_tfds.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
+            import transformers
+            if transformers.__version__ > ('4.1.1'):
+                from pipe.data.t5 import new_t5_tfds_eval
+                all_results = pipe.data.t5.new_t5_tfds_eval.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
+
+            else:
+                from pipe.data.t5 import t5_tfds_eval
+                all_results = pipe.data.t5.t5_tfds_eval.evaluate_t5_tfds(args, cp_number=all_cps, device=device)
         else:
             raise NotImplementedError()
             # TODO: map with GPU queue.

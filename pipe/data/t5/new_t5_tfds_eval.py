@@ -8,18 +8,17 @@ import warnings
 import torch
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
+from torch.utils.tensorboard import SummaryWriter
+# from pipe.models.load_pipeline_weights_to_hf import T5HFLoader
+# from pipe.models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
+from models.new_t5_example.eval_new_t5 import NewT5HFLoader
 from pipe.experiments.experiments import auto_file_name
-from pipe.models.load_pipeline_weights_to_hf import T5HFLoader
-from pipe.models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
 
 def load_huggingface_checkpoint(args, cp_number, spread_across_devices=True, **kwargs):
-    if spread_across_devices:
-        hf_transformers_model_class = ModelParallelT5ForConditionalGeneration
-    else:
-        hf_transformers_model_class = T5ForConditionalGeneration
-    loader = T5HFLoader(hf_transformers_model_class=hf_transformers_model_class)
+    hf_transformers_model_class = T5ForConditionalGeneration
+    loader = NewT5HFLoader(hf_transformers_model_class=hf_transformers_model_class)
 
     if cp_number == "c4":
         model_name_or_path = args.model_name_or_path
@@ -43,7 +42,7 @@ class T5Evaluator:
                  use_existing_model_next_loads=True):
         super().__init__()
         self._model: T5ForConditionalGeneration = None
-        self._writer = torch.utils.tensorboard.writer.SummaryWriter(model_dir)
+        self._writer = SummaryWriter(model_dir)
         self._model_dir = model_dir
         if isinstance(device, str):
             device = torch.device(device)
@@ -94,10 +93,12 @@ class T5Evaluator:
         self._step = cp_number  # HACK
 
         if self.spread_across_devices:
+
+
             # will spread across all visible devices
-            assert isinstance(hugg, ModelParallelT5ForConditionalGeneration)
-            hugg: ModelParallelT5ForConditionalGeneration
-            hugg.spread_on_devices(devices=None)
+            assert isinstance(hugg, T5ForConditionalGeneration)
+            hugg : T5ForConditionalGeneration
+            hugg.parallelize(device_map=None)
 
         if self._device.type == "cuda":
             self._model.to(self._device)

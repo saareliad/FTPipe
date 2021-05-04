@@ -7,9 +7,8 @@ from torch.utils.data import TensorDataset
 
 from pipe.data.datasets import CommonDatasetHandler, register_dataset
 from autopipe.autopipe.cache_utils import compute_and_cache
-from pipe.experiments.experiments import auto_file_name
 from .preproc import _shift_right, get_attention_mask, get_inverted_encoder_attention_mask
-from .t5_tfds_eval import T5Evaluator
+from .t5_tfds_eval import get_t5_sequence_length_from_args
 
 
 # try:
@@ -29,13 +28,6 @@ def get_t5_available_tasks(verbose=False):
             print(i)
 
     return t5.data.TaskRegistry.names()
-
-
-def get_t5_sequence_length_from_args(args):
-    return {
-        "inputs": args.max_seq_length,
-        "targets": args.answer_max_seq_length
-    }
 
 
 def torch_tensor_dict_from_args(args,
@@ -262,22 +254,6 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
     return train_dataset, dev_dataset
-
-
-def evaluate_t5_tfds(args, cp_number, device="cpu"):
-    DIR_NAME = "results/t5_eval_dir/"
-    model_dir = os.path.join(DIR_NAME, auto_file_name(args))
-    batch_size = getattr(args, "single_worker_eval_batch_size", 32)
-    generate_kwargs = getattr(args, "generate_kwargs", {})
-    # generate_kwargs['max_length'] = args.answer_max_length
-    evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
-    results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
-                             sequence_length=get_t5_sequence_length_from_args(args),
-                             batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
-                             summary_dir=None,
-                             **generate_kwargs
-                             )
-    return results
 
 
 class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):
