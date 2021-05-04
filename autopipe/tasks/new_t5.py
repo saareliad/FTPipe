@@ -23,8 +23,8 @@ from models.normal.NLP_models.modeling_t5 import (
 # from models.normal.NLP_models.modeling_t5_tied_weights import \
 #     T5Model as TiedT5Model
 
-from pipe.misc.new_t5.modeling_t5 import T5Model as TiedT5Model  # Fixme
-from pipe.misc.new_t5.modeling_t5 import T5ForConditionalGeneration as TiedT5ForConditionalGeneration
+from models.new_t5_example.modeling_t5 import T5Model as TiedT5Model  # Fixme
+from models.new_t5_example.modeling_t5 import T5ForConditionalGeneration as TiedT5ForConditionalGeneration
 
 from autopipe.autopipe.model_profiling.tracer import (
     register_new_explicit_untraced_function, register_new_traced_function)
@@ -385,7 +385,6 @@ class T5Partitioner(PartitioningTask):
                 "output_only": True,
                 "output_attentions": False,
                 "precompute_masks": cmd_args.precompute_masks,
-                # 'return_dict': False
                 "output_hidden_states": False
             },
             do_resize_token_embedding=True

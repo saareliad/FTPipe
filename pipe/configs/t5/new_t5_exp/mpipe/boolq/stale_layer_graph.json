@@ -1,0 +1,8 @@
+{
+    "base_config_path": "common_layer_graph.json",
+    "base_config_path_is_relative": true,
+    "weight_stashing": false,
+    "work_scheduler": "1f1b",
+    "checkpoints_save_name_prefix": "stale_adafactor",
+    "checkpoints_save_dir": "/nfs_Disk2/mpipe/checkpoints/t5/3b/boolq/stale_layer/"
+}

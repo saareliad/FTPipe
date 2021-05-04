@@ -4,6 +4,7 @@
 import sys
 from inspect import getmembers, isfunction
 
+import transformers
 from transformers import (BertConfig, BertTokenizer)
 from transformers import (GPT2Config, GPT2Tokenizer)
 from transformers import (RobertaConfig, RobertaTokenizer)
@@ -20,6 +21,7 @@ from models.normal.NLP_models.modeling_t5 import T5ForConditionalGeneration
 from models.normal.NLP_models.modeling_t5_tied_weights import \
     T5ForConditionalGeneration as StatelesT5ForConditionalGeneration
 
+
 # We use this to get cfg_class, model_class, and tokenizer_class
 MODEL_TYPES = {
     'gpt2': (GPT2Config, GPT2Model, GPT2Tokenizer),
@@ -34,6 +36,188 @@ MODEL_TYPES = {
     't5_stateless':
         (T5Config, StatelesT5ForConditionalGeneration, T5Tokenizer),
 }
+
+if transformers.__version__ > ('4.1.1'):
+    from models.new_t5_example.modeling_t5 import T5ForConditionalGeneration as NewStatelesT5ForConditionalGeneration
+    MODEL_TYPES['new_t5_stateless'] = (T5Config, NewStatelesT5ForConditionalGeneration, T5Tokenizer)
+
+
+def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+
+############################################
+
+
+def op_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+
+def op_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def op_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+####################################
 
 
 # NOTE: some of these configs are just for this repo, see

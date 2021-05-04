@@ -2,6 +2,7 @@ import os
 from typing import Dict
 
 import torch
+import transformers
 from torch.utils.data import TensorDataset
 
 from pipe.data.datasets import CommonDatasetHandler, register_dataset
@@ -129,7 +130,7 @@ def our_collate_fn(batch, device, config):
     else:
         # print("-W- preprocessing will happen inside the model...")
         inverted_encoder_attention_mask = None
-        decoder_attention_mask = None
+        # decoder_attention_mask = None
 
     d = {}
     d['input_ids'] = input_ids
@@ -137,7 +138,15 @@ def our_collate_fn(batch, device, config):
     d['decoder_input_ids'] = decoder_input_ids
     d['decoder_attention_mask'] = decoder_attention_mask
     d['inverted_encoder_attention_mask'] = inverted_encoder_attention_mask
-    d['lm_labels'] = lm_labels
+
+    if transformers.__version__ > ('4.1.1'):  # 3.3.1
+        d['labels'] = lm_labels
+    else:
+        d['lm_labels'] = lm_labels
+
+    to_del = [i for i in d if d[i] is None]
+    for i in to_del:
+        del d[i]
 
     return d
 

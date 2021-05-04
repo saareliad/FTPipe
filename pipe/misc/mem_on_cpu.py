@@ -7,6 +7,7 @@ from pprint import pprint
 from typing import List, Dict
 
 import psutil
+import transformers
 from torch.utils.data import Dataset, RandomSampler, DataLoader
 
 try:
@@ -395,7 +396,8 @@ if __name__ == '__main__':
     print("memory use, begin1:", check_cpu_mem())
     mem_usage['begin1'] = check_cpu_mem()
 
-    use_cdn = args.model_name_or_path not in {"t5-11b"}
+
+
     if "gpt" in args.model_name_or_path:
         model_cls = AutoModelWithLMHead
     elif "t5" in args.model_name_or_path:
@@ -405,12 +407,22 @@ if __name__ == '__main__':
     else:
         model_cls = AutoModel
 
-    model = model_cls.from_pretrained(
-        args.model_name_or_path,
-        # from_tf=bool('.ckpt' in model_name_or_path),
-        config=config,
-        # cache_dir=cache_dir if cache_dir else None,
-        use_cdn=use_cdn)
+    if transformers.__version__ > ('4.1.1'):  # 3.3.1
+        model = model_cls.from_pretrained(
+            args.model_name_or_path,
+            # from_tf=bool('.ckpt' in model_name_or_path),
+            config=config,
+            # cache_dir=cache_dir if cache_dir else None,
+        )
+    else:
+        use_cdn = args.model_name_or_path not in {"t5-11b"}
+        model = model_cls.from_pretrained(
+            args.model_name_or_path,
+            # from_tf=bool('.ckpt' in model_name_or_path),
+            config=config,
+            # cache_dir=cache_dir if cache_dir else None,
+            use_cdn=use_cdn)
+
 
     model.train()
 
