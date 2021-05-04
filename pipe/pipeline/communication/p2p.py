@@ -82,7 +82,7 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
                     else:
                         cname = tensor_name
                     tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
-                    tensor = tensor.detach()
+                    tensor = tensor.detach().contiguous()
 
                     if self.verbose:
                         self.logger.info(
@@ -93,7 +93,7 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
                         # FIXME: in MPI we must synchronize.
                         torch.cuda.current_stream(self.device).synchronize()
 
-                    request_obj = dist.isend(tensor.contiguous(),
+                    request_obj = dist.isend(tensor,
                                              send_rank,
                                              tag=tensor_tag)
                     request_objects.append(request_obj)
