@@ -6,7 +6,7 @@
     "bs_train": 2,
     "bs_test": 2,
     "checkpoints_save_name_prefix": "gpipe_new",
-    "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/3b/boolq/gpipe/",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/boolq/gpipe/",
     "save_checkpoints":  true,
     "epochs": -1,
     "steps": 3200,

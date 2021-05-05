@@ -224,6 +224,7 @@ def parse_cli():
     # TODO: option for weight stashing just statistics.
 
     parser.add_argument("--explicit_eval_cp", required=False, type=str, help="explicit name for eval cp")
+    parser.add_argument("--eval_device", required=False, type=str, default="cuda:0", help="device to eval on first input")
     args = parser.parse_args()
 
     if args.base_config_path:

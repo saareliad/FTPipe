@@ -3,7 +3,7 @@
     "base_config_path_is_relative": true,
     "weight_stashing": false,
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/rte/seq/",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/t5/3b/rte/seq/",
     "step_every": 4,
     "bs_train": 10,
     "bs_test": 10,

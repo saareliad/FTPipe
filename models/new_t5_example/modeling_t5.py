@@ -507,7 +507,7 @@ class T5Attention(nn.Module):
 
             if is_not_None(mask):
                 position_bias = position_bias + mask  # (batch_size, n_heads, seq_length, key_length)
-
+        # FIXME: RuntimeError: output with shape [4, 32, 512, 512] doesn't match the broadcast shape [4, 1, 4, 32, 512, 512]
         scores += position_bias
         attn_weights = F.softmax(scores.float(), dim=-1).type_as(
             scores

@@ -5,6 +5,8 @@ import warnings
 
 # import t5
 # import tensorflow.compat.v1 as tf
+from types import SimpleNamespace
+
 import torch
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
@@ -100,8 +102,8 @@ class T5Evaluator:
             hugg : T5ForConditionalGeneration
             hugg.parallelize(device_map=None)
 
-        if self._device.type == "cuda":
-            self._model.to(self._device)
+        # if self._device.type == "cuda":
+        #     self._model.to(self._device)
 
     def get_all_checkpoint_steps(self):
         raise NotImplementedError()
@@ -146,7 +148,10 @@ class T5Evaluator:
         """
         import t5
         import tensorflow.compat.v1 as tf
-        get_dataset = t5.models.hf_model.get_dataset
+        try:
+            get_dataset = t5.models.hf_model.get_dataset
+        except AttributeError:  # new version of T5...
+            get_dataset = t5.models.hf_model._get_dataset
 
         mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
         vocab = mixture_or_task.output_features["targets"].vocabulary
@@ -163,7 +168,7 @@ class T5Evaluator:
                 logging.info(
                     "Task %s has no '%s' split; skipping eval.", task.name, split
                 )
-        tasks = [task for task in tasks if split in task.splits]
+        # tasks = [task for task in tasks if split in task.splits]
 
         summary_dir = summary_dir or os.path.join(self._model_dir, f"{split}_eval")
         tf.io.gfile.makedirs(summary_dir)
@@ -177,6 +182,7 @@ class T5Evaluator:
         cached_examples = {}
         for task in tasks:
             if task.metric_fns:
+                # ds = task.get_dataset()
                 ds = get_dataset(task.name, sequence_length, split, batch_size)
                 # Create list of postprocessed text targets
                 batches = list(ds)
@@ -311,3 +317,16 @@ def evaluate_t5_tfds(args, cp_number, device="cpu"):
                              **generate_kwargs
                              )
     return results
+
+
+if __name__ == '__main__':
+    model = T5ForConditionalGeneration.from_pretrained("t5-small")
+    args = SimpleNamespace()
+    args.model_name_or_path = "t5-small"
+
+    evaluator = T5Evaluator(
+    args, "results/tmp", "cuda:0", model, spread_across_devices=True,
+                 use_existing_model_next_loads=False)
+
+    evaluator.eval(mixture_or_task_name="super_glue_wic_v102", sequence_length=64, batch_size=4,
+                   checkpoint_steps=["c4"],split="validation", summary_dir=None)

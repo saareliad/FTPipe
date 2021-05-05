@@ -4,7 +4,7 @@
     "weight_stashing": false,
     "work_scheduler": "1f1b",
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/no_virtual_stages/checkpoints/t5/3b/wic/stale/",
-    "bs_train": 64,
-    "step_every": 2
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/wic/stale/",
+    "bs_train": 32,
+    "step_every": 4
 }
