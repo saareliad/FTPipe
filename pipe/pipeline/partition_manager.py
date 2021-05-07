@@ -140,7 +140,7 @@ class SinglePartitionManager:
 
         return is_replicated
 
-    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
+    def _init_partition(self, partition, use_recomputation, disable_clone_inputs, req_grad,
                         ):
 
         if self.stage_depth == 0:
@@ -192,7 +192,7 @@ class SinglePartitionManager:
                     _REQ_GRAD=True,
                     req_grad=req_grad,
                 )
-        if is_mp:
+        if disable_clone_inputs:
             # We do the clone ourself.
             # if hasattr(partition_cls, "_CLONE_INPUTS"):
             partition_cls._CLONE_INPUTS = False
@@ -682,8 +682,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         self.saved_for_backward = dict()
 
-    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
-                        ):
+    def _init_partition(self, partition, use_recomputation, disable_input_clone, req_grad):
         # NOTE: it will be called from super().__init__
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
@@ -699,7 +698,7 @@ class GPipePartitionManager(SinglePartitionManager):
             else:
                 partition_cls = GPipePartition
 
-            if is_mp:
+            if disable_input_clone:
                 # We do the clone ourself.
                 partition_cls._CLONE_INPUTS = False
             self.partition = partition_cls(partition,

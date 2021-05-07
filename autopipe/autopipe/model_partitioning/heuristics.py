@@ -56,6 +56,7 @@ class NodeWeightFunction:
 
 
 class EdgeWeightFunction:
+    GPU_MEMORY_BW = 550
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -74,10 +75,15 @@ class EdgeWeightFunction:
 
     def __call__(self, u: Node, v: Node):
         if u.compound_edge_weights:
-            if self.ratio == 0:
+            if self.ratio == 0:  # forward
                 # TODO: this can change
+                # different GPUs
                 if u.gpu_id != v.gpu_id or (u.gpu_id is None and v.gpu_id is None):
                     return u.compound_edge_weights[v.id]
+                elif u.gpu_id == v.gpu_id: #and (u.gpu_id is not None):
+                    # This is a problem since weight already includes BW inside the calculation. same gpu bw.
+                    warnings.warn("experimental - compound weight but on same GPU - should it happen? check it is not an output node.")
+                    return u.compound_edge_weights[v.id] / (self.GPU_MEMORY_BW / self.bw)
                 else:
                     raise NotImplementedError("not supported yet")
                     # return u.compound_edge_weights[v.id] / (550 / self.bw)
@@ -128,7 +134,7 @@ class EdgeWeightFunction:
             # TODO: take (partial) care of heterogeneous bandwidth in refinement.
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
             if u.gpu_id is not None and v.gpu_id is not None and u.gpu_id == v.gpu_id:
-                bw = 550  # TODO: check the exact number, its some high number
+                bw = self.GPU_MEMORY_BW  # TODO: check the exact number, its some high number
             else:
                 bw = self.bw
 

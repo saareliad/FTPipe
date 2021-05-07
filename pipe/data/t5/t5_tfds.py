@@ -34,6 +34,29 @@ def torch_tensor_dict_from_args(args,
                                 config,
                                 dataset_split="train",
                                 preproc_device="cpu"):
+    """This is the main function to get dataset from.
+
+    # Example of the process this is finally going to go through.
+
+    # def rte_tensor_dataset(config,
+    #                        preproc_device="cuda:0",
+    #                        preproc_batch_size=128):
+    #     ds = like_mtf(mixture_or_task_name="glue_rte_v002",
+    #                   sequence_length={   # note: these are example sizes.
+    #                       "inputs": 128,
+    #                       "targets": 16
+    #                   },
+    #                   dataset_split="train",
+    #                   use_cached=False,
+    #                   pack=False)
+    #
+    #     d = to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device)
+    #     tensors = list(d.values())
+    #     # NOTE: our tracer should automatically drops None arguments, hence the input are only non-Nones.
+    #     tensor_dataset = torch.utils.data.TensorDataset(*tensors)
+    #     return tensor_dataset
+
+    """
     mixture_or_task_name = args.mixture_or_task_name
     sequence_length = get_t5_sequence_length_from_args(args)
     # preproc_device = getattr(args, "preproc_device")
@@ -51,23 +74,6 @@ def torch_tensor_dict_from_args(args,
                                 preproc_batch_size=preproc_batch_size)
 
 
-def rte_tensor_dataset(config,
-                       preproc_device="cuda:0",
-                       preproc_batch_size=128):
-    # sequence_length={"inputs": 512, "targets": 84},
-    ds = like_mtf(mixture_or_task_name="glue_rte_v002",
-                  sequence_length={
-                      "inputs": 128,
-                      "targets": 16
-                  },
-                  dataset_split="train",
-                  use_cached=False,
-                  pack=False)
-
-    d = to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device)
-    tensors = list(d.values())
-    tensor_dataset = torch.utils.data.TensorDataset(*tensors)
-    return tensor_dataset
 
 
 def to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device):
@@ -170,6 +176,9 @@ def like_mtf(mixture_or_task_name: str,
     feature_keys = tuple(k for k in mixture_or_task.output_features
                          if k in tf.data.get_output_shapes(ds))
 
+
+    # todo: This has beed change in master:
+    # https://github.com/google-research/text-to-text-transfer-transformer/blob/master/t5/models/hf_model.py#L126
     ds = transformer_dataset.pack_or_pad(ds,
                                          sequence_length,
                                          pack=pack,

@@ -6,7 +6,7 @@
     "bs_train": 4,
     "bs_test": 4,
     "checkpoints_save_name_prefix": "new_gpipe",
-    "checkpoints_save_dir": "/mnt/qnap/saareliad/saare/checkpoints/t5/3b/rte/seq/",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/saare/checkpoints/no_virtual_stages/checkpoints/t5/3b/rte/gpipe/",
     "epochs": 6,
     "steps": -1,
     "save_checkpoints":  false

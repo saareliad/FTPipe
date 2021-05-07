@@ -73,6 +73,7 @@ In addition:
  - remove huggingface functions which are called in runtime but I'm too lazy to convert, like head mask (to remove `operator.is_`).
  - return a single value
  - check if there additional hidden `operator.is_`
+ - `training=self.training` this is traced as static, replace it.
 
 Explanation: 
 1. Conversion: done to help the tracer. 

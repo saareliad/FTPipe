@@ -11,9 +11,9 @@ python -m autopipe.partition new_t5 \
  --partitioning_batch_size \
  8 \
  --ct \
- new_trace_cache_t53b_512_4_lg \
+ new_trace_cache_t53b_320_8_lg \
  --cp \
- new_prof_cache_t53b_512_4_lg \
+ new_prof_cache_t53b_320_8_lg \
  --stateless_tied \
  --lmhead \
  --n_partitions \

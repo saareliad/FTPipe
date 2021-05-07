@@ -3,9 +3,8 @@
     "base_config_path_is_relative": true,
     "weight_stashing": false,
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/mnt/qnap/saareliad/t5/3b/rte/seq/",
-    "step_every": 4,
-    "bs_train": 10,
-    "bs_test": 10,
-    "save_checkpoint_every_x_steps": 500
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/rte/stale/",
+    "step_every": 5,
+    "bs_train": 8,
+    "bs_test": 8
 }
