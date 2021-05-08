@@ -1,3 +1,4 @@
+import inspect
 import warnings
 from collections import OrderedDict
 
@@ -7,6 +8,7 @@ from pipe.models.simple_partitioning_config import PipelineConfig
 from pipe.pipeline.communication.buffer import Buffers
 from pipe.pipeline.communication.common_simple_comm import SimpleCommBase
 from pipe.pipeline.communication.interface import FuturesHandlerBase
+from pipe.pipeline.communication.wrapper import None_tensor
 
 
 class BufferSimpleCommBase(SimpleCommBase):
@@ -22,7 +24,11 @@ class BufferSimpleCommBase(SimpleCommBase):
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
                 if not isinstance(dtype, torch.dtype):
-                    if issubclass(dtype, (list, tuple)):
+                    if dtype is None:  # RECV None
+                        _tmp = None_tensor()
+                        dtype = _tmp.dtype
+                        shape = _tmp.shape
+                    elif issubclass(dtype, (list, tuple)): # Usually: RECV torch.Size
                         if shape is not None:
                             # HACK: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
                             dtype = torch.int64  # torch.tensor([1,3,3]).dtype
