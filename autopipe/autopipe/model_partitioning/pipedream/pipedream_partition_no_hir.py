@@ -50,6 +50,10 @@ def partition_pipedream(
     else:
         work_graph, lookup = graph, None
 
+    # saved_work_graph = work_graph
+    # saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
+    work_graph._remove_parallel_edges()
+
     # params_per_node = calculate_params_per_node(model, work_graph)
 
     non_input_nodes = list(work_graph.non_input_nodes)
@@ -79,7 +83,7 @@ def partition_pipedream(
             stashed_data_size = cum_activation_size
             if stashed_data_size > memory_size:
                 A[i][j] = (None, None)
-                print("skipping OOM solution")
+                # print("skipping OOM solution")
                 continue
 
             data_parallel_communication_time = calc_data_parall_comm_time(num_machines=j + 1,
@@ -139,7 +143,7 @@ def partition_pipedream(
                     # stashed_data_size *= math.ceil((num_machines - (m+1)) / m_prime)
                     # stashed_data_size += last_stage_parameter_size
                     if stashed_data_size > memory_size:
-                        print("skipping OOM solution")
+                        # print("skipping OOM solution")
                         continue
 
                     last_stage_time = max(last_stage_time,

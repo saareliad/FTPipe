@@ -900,8 +900,8 @@ class T5Stack(T5PreTrainedModel):
         # required mask seq length can be calculated via length of past
         mask_seq_length = past_key_values[0][0].shape[2] + seq_length if is_not_None(past_key_values) else seq_length
 
-        if use_cache is True:
-            assert self.is_decoder, f":obj:`use_cache` can only be set to `True` if {self} is used as a decoder"
+        # if is True:
+        #     assert self.is_decoder, f":obj:`use_cache` can only be set to `True` if {self} is used as a decoder"
 
         if is_None(attention_mask):
             attention_mask = torch.ones(batch_size, mask_seq_length).to(inputs_embeds.device)

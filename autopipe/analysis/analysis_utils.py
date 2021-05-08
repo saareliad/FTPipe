@@ -5,7 +5,7 @@ from typing import Dict
 import torch
 from torch import Tensor
 
-from autopipe.autopipe.utils import move_tensors
+from autopipe.autopipe.utils import move_tensors, nested_map
 from pipe.models.simple_partitioning_config import PipelineConfig
 
 
@@ -132,3 +132,98 @@ def add_stds_dicts(d1,d2):
         assert i1 == i2
         d[i1] = math.sqrt(v1**2 + v2**2)
     return d
+
+
+def get_tensor_req_grad(ts):
+    def get_req_grad(t):
+        if isinstance(t,Tensor):
+            return t.requires_grad
+        return False
+    return nested_map(get_req_grad, ts)
+
+def run_partitions_fwd(model_inputs, analysis_config : AnalysisPipelineConfig, device='cpu', return_info_for_bwd=False):
+    # kwarg input
+    if isinstance(model_inputs, dict):
+        model_inputs = tuple(
+            [model_inputs[i] for i in analysis_config.model_inputs()])
+
+    n_partitions = analysis_config.n_stages
+
+    if not isinstance(model_inputs, tuple):
+        model_inputs = (model_inputs,)
+
+    activations = {}
+    req_grad = {}
+
+    device = torch.device(device)
+
+    for i in range(n_partitions):
+        analysis_config.stage_to_model[i] = analysis_config.stage_to_model[i].to('cpu')
+        # analysis_config.stage_to_model[i].device = 'cpu'
+
+    for i, t in zip(analysis_config.model_inputs(), model_inputs):
+        activations[i] = move_tensors(t, 'cpu')
+        req_grad[i] = get_tensor_req_grad(t)
+
+    parts = deque(range(n_partitions))
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        # if all inputs are ready run partition
+        if all(tensor in activations
+               for tensor in analysis_config.get_all_stage_inputs(idx)):
+            inputs = [activations[tensor] for tensor in analysis_config.get_all_stage_inputs(idx)]
+
+            analysis_config.stage_to_model[idx] = analysis_config.stage_to_model[idx].to(device)
+            inputs = move_tensors(inputs, device)
+
+            outs = analysis_config.stage_to_model[idx](*inputs)
+
+            analysis_config.stage_to_model[idx] = analysis_config.stage_to_model[idx].to('cpu')
+            outs = move_tensors(outs, 'cpu')
+
+
+            for o, t in zip(analysis_config.get_all_stage_outputs(idx), outs):
+                req_grad[o] = get_tensor_req_grad(t)
+                activations[o] = t
+        else:
+            parts.append(idx)
+
+    outputs = [move_tensors(activations[o], device) for o in analysis_config.model_outputs()]
+
+    if return_info_for_bwd:
+        return outputs, (activations, req_grad)
+    else:
+        return outputs
+
+
+def run_partitions_bwd(analysis_config: AnalysisPipelineConfig, activations, req_grad):
+
+    n_partitions = analysis_config.n_stages
+    for i in range(n_partitions):
+        analysis_config.stage_to_model[i] = analysis_config.stage_to_model[i].to('cpu')
+        # analysis_config[i]['model'].device = 'cpu'
+
+    parts = deque(range(n_partitions))
+
+    grads = {tensor: torch.ones_like(activations[tensor], requires_grad=False) for tensor in
+             analysis_config.model_outputs() if req_grad[tensor]}
+
+    while len(parts) > 0:
+        idx = parts.popleft()
+
+        if all(tensor in grads
+               for tensor in analysis_config.get_all_stage_outputs(idx) if req_grad[tensor]):
+
+            grad_in = [grads[tensor] for tensor in analysis_config.get_all_stage_outputs(idx) if req_grad[tensor]]
+            outputs = [activations[tensor] for tensor in analysis_config.get_all_stage_outputs(idx) if req_grad[tensor]]
+
+            torch.autograd.backward(outputs, grad_in)
+            torch.cuda.synchronize()
+            for tensor in analysis_config.get_all_stage_inputs(idx):
+                if req_grad[tensor]:
+                    grads[tensor] = activations[tensor].grad
+                    assert grads[tensor] is not None
+        else:
+            parts.append(idx)

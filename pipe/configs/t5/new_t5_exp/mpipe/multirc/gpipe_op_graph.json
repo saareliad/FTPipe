@@ -6,5 +6,5 @@
     "bs_train": 1,
     "bs_test": 1,
     "checkpoints_save_name_prefix": "gpipe_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/mpipe/checkpoints/t5/3b/multirc/gpipe_op/"
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/mpipe/checkpoints/t5/3b/multirc/gpipe_op/"
 }

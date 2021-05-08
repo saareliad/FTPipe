@@ -133,19 +133,18 @@ def ensure_no_unnecessary_tuple_sends(graph: Graph, assert_same_stages=True):
             # if the index node itself has inputs better logic is needed to prevent cycles in the graph
             # This moves the getitem one stage back back.
             # warnings.warn(f"Changing stage for {getitem_node.idx}
-            b4 = {getitem_node.stage_id, index_node.stage_id, tuple_node.stage_id}
-            b4_ids = [getitem_node.stage_id, index_node.stage_id, tuple_node.stage_id]
+            b4_ids = {getitem_node.stage_id, index_node.stage_id, tuple_node.stage_id}
+            b4_stage_ids = [getitem_node.stage_id, index_node.stage_id, tuple_node.stage_id]
+            b4_gpu_ids = [getitem_node.gpu_id, index_node.gpu_id, tuple_node.gpu_id]
             getitem_node.stage_id = index_node.stage_id = tuple_node.stage_id
             getitem_node.gpu_id = index_node.gpu_id = tuple_node.gpu_id
 
             after = {getitem_node.stage_id}
-            change = b4 - after
+            change = b4_ids - after
             if change:
-                for x, b4_id in zip([getitem_node, index_node, tuple_node], b4_ids):
-                    if b4_id != getitem_node.stage_id:
-                        # TODO:should change GPU id.
-
-                        warnings.warn(f"changed {x.id}: {b4_id}->{getitem_node.stage_id}")
+                for x, b4_stage_id, b4_gpu_id in zip([getitem_node, index_node, tuple_node], b4_stage_ids, b4_gpu_ids):
+                    if b4_stage_id != getitem_node.stage_id:
+                        warnings.warn(f"changed {x.id}: stage:{b4_stage_id}->{getitem_node.stage_id}  gpu:{b4_gpu_id}->{getitem_node.gpu_id}")
 
     if assert_same_stages:
         after = {n.stage_id for n in graph.nodes}
