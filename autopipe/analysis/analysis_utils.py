@@ -141,6 +141,7 @@ def get_tensor_req_grad(ts):
         return False
     return nested_map(get_req_grad, ts)
 
+
 def run_partitions_fwd(model_inputs, analysis_config : AnalysisPipelineConfig, device='cpu', return_info_for_bwd=False):
     # kwarg input
     if isinstance(model_inputs, dict):

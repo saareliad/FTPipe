@@ -335,6 +335,9 @@ def generate_constant(node):
 
 
 def generate_magic(variable_name, self_arg, func_name, param_list):
+    ### TODO: must go over this
+    ### these are defined in autopipe.utils.py
+
     ##############################
     # Magic Method delegation
     # intentionally explicit

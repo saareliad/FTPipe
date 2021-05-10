@@ -15,9 +15,9 @@ except ImportError as e:
 import torch
 from transformers import T5Config, T5Tokenizer
 
-from models.normal.NLP_models.modeling_t5 import (
-    T5ForConditionalGeneration, T5Model, get_attention_mask,
-    get_inverted_encoder_attention_mask)
+# from models.normal.NLP_models.modeling_t5 import (
+#     T5ForConditionalGeneration, T5Model, get_attention_mask,
+#     get_inverted_encoder_attention_mask)
 # from models.normal.NLP_models.modeling_t5_tied_weights import \
 #     T5ForConditionalGeneration as TiedT5ForConditionalGeneration
 # from models.normal.NLP_models.modeling_t5_tied_weights import \
@@ -67,6 +67,7 @@ def get_input_dummy(args, tokenizer, analysis=False):
         }
 
     if args.precompute_masks:
+        raise NotImplementedError()
         # precomputed masks
         inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(), attention_mask,
                                                                               input_ids.device)
@@ -188,6 +189,7 @@ def get_input_squad1(args, tokenizer, analysis=False):
             }
 
             if self.precompute_masks:
+                raise NotImplementedError()
                 # precomputed masks
                 inverted_encoder_attention_mask = get_inverted_encoder_attention_mask(input_ids.size(), attention_mask,
                                                                                       attention_mask.device)
@@ -334,10 +336,12 @@ class T5Partitioner(PartitioningTask):
         if base and tied:
             model_cls = TiedT5Model
         elif base and not tied:
+            raise NotImplementedError()
             model_cls = T5Model
         elif not base and tied:
             model_cls = TiedT5ForConditionalGeneration
         else:
+            raise NotImplementedError()
             model_cls = T5ForConditionalGeneration
 
         config_cls = T5Config

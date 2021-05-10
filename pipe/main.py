@@ -400,6 +400,16 @@ def main(args, shared_ctx=None):
     if getattr(args, "cudnn_deterministic", False):
         torch.backends.cudnn.deterministic = True
 
+    if getattr(args, "deterministic_mode", False):
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        try:
+            torch.use_deterministic_algorithms(True)
+        except:
+            pass
+
+
+
     ###############################
     # Prepare for pipeline
     ###############################

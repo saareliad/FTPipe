@@ -35,7 +35,7 @@ def partition_pipedream(
         memory_size = 10e9 ,#math.inf,
         verbose=True,
         force_stright_pipeline=True,
-        node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(optimizer_multiply=3),
+        node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(optimizer_multiply=0),
 
 ):
     print("PipeDream Partitioning")
