@@ -430,20 +430,20 @@ tensor_creation_ops = {
     torch.randn: torch,
     torch.randint: torch,
     torch.randperm: torch,
-    torch.all: torch,
+    # torch.all: torch,
 
 
 
-    torch.less: torch,
-    torch.less_equal: torch,
-    torch.lt: torch, ## and more!!
-    torch.min: torch,
-    torch.matmul: torch,
-    torch.isinf: torch,
-    torch.clamp: torch,
-    torch.abs: torch,
-    torch.log: torch,
-    torch.rsqrt: torch,
+    # torch.less: torch,
+    # torch.less_equal: torch,
+    # torch.lt: torch, ## and more!!
+    # torch.min: torch,
+    # torch.matmul: torch,
+    # torch.isinf: torch,
+    # torch.clamp: torch,
+    # torch.abs: torch,
+    # torch.log: torch,
+    # torch.rsqrt: torch,
     # torch.unflatten: torch
 }
 

@@ -318,8 +318,24 @@ if __name__ == '__main__':
         #    partitioner = OLDT5Partitioner(cmd_args)
         return module_path
 
+    def tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe(cmd_args):
+        cmd_args.model_name_or_path = "t5-base"
+        cmd_args.max_seq_length = 512
+        cmd_args.answer_max_seq_length = 4
+        cmd_args.stateless_tied = True
+        cmd_args.lmhead = True
+        cmd_args.precompute_masks = False
+        cmd_args.t5_task = "squad1"
+        cmd_args.partitioning_batch_size = 1
+        cmd_args.n_partitions = 4
+        cmd_args.basic_blocks = "T5Block"
+        cmd_args.analysis_batch_size = 1
+        module_path = "models.partitioned.tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe"
+        # this is old, its just a name
+        #    partitioner = OLDT5Partitioner(cmd_args)
+        return module_path
 
-    module_path = t5_base_512_4_acyclic(cmd_args)
+    module_path = tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe(cmd_args)
 
     #t5_base_512_4_acyclic(   cmd_args)  # old_base_new_part(cmd_args) #old_t5(cmd_args) # t5_base_512_4_acyclic(cmd_args) # t5_base_512_4(cmd_args)
 
