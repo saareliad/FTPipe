@@ -60,7 +60,6 @@ def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
                 },
                 stateless_tied=True)
 
-
 def layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream():
     return dict(model_type='new_t5_stateless',
                 model_name_or_path='t5-3b',
@@ -814,6 +813,9 @@ def t5_3b_tied_lmheads_64_4_8p_bw12_squad1():
 functions_list = getmembers(
     sys.modules[__name__],
     lambda o: isfunction(o) and o.__module__ == __name__)
+
+from pipe.models.oldt5 import oldt5_functions_list
+functions_list.extend(oldt5_functions_list)
 
 # dict of all functions in current file.
 # name --> function

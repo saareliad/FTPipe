@@ -529,7 +529,8 @@ def get_profiles(graph: Graph, model: nn.Module,
         execute_graph(model, graph, model_args=model_args, model_kwargs=model_kwargs,
                       pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
 
-        profiler.set_max_memory_usage(graph)
+        warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+        # profiler.set_max_memory_usage(graph)
 
         # print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
 

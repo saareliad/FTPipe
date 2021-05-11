@@ -83,7 +83,7 @@ def partition_mpipe(model, graph: Graph,
                     num_gpus: int,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None,
-                    node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(optimizer_multiply=0),
+                    node_mem_estimator: NodeMemoryEstimator = NodeMemoryEstimator(), # TODO: opt multiply
                     use_layers_graph: bool = True,
                     round_limit=-1,
                     nprocs=1,

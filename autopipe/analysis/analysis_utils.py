@@ -31,6 +31,13 @@ class AnalysisPipelineConfig(PipelineConfig):
         else:
             raise NotImplementedError()
 
+    def get_outputs_req_grad_for_stage_tuple(self, stage_id: int):
+        my_outs = self.d['stages'][stage_id]['outputs']
+        if 'req_grad' in next(iter(my_outs.values())):
+            return tuple(v['req_grad'] for i, v in my_outs.items())
+        else:
+            raise NotImplementedError()
+
     def get_all_stage_inputs(self, stage_id):
         return self.d['stages'][stage_id]['inputs']
 
@@ -185,8 +192,8 @@ def run_partitions_fwd(model_inputs, analysis_config : AnalysisPipelineConfig, d
             outs = move_tensors(outs, 'cpu')
 
 
-            for o, t in zip(analysis_config.get_all_stage_outputs(idx), outs):
-                req_grad[o] = get_tensor_req_grad(t)
+            for o, rg, t in zip(analysis_config.get_all_stage_outputs(idx), analysis_config.get_outputs_req_grad_for_stage_tuple((idx)), outs):
+                req_grad[o] = rg #get_tensor_req_grad(t)
                 activations[o] = t
         else:
             parts.append(idx)

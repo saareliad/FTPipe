@@ -40,7 +40,7 @@ class GraphProfiler():
         if self.save_memory_mode:
             if self.profile_memory:
                 torch.cuda.reset_peak_memory_stats()
-                base_mem = torch.cuda.max_memory_allocated()
+                base_mem = torch.cuda.memory_allocated() # FIXME
 
             function, args, kwargs = move_tensors((function, args, kwargs),
                                                   'cuda')
@@ -106,7 +106,7 @@ class GraphProfiler():
             torch.cuda.synchronize(device='cuda')
             if self.profile_memory:
                 torch.cuda.reset_peak_memory_stats()
-                base_mem = torch.cuda.max_memory_allocated()
+                base_mem = torch.cuda.memory_allocated()
             start.record()
             torch.autograd.backward(tensors=tensors,
                                     grad_tensors=grads,
@@ -135,7 +135,7 @@ class GraphProfiler():
                 # TODO: retain graph is on so its problematic?
                 if self.profile_memory:
                     torch.cuda.reset_peak_memory_stats()
-                    base_mem = torch.cuda.max_memory_allocated()
+                    base_mem = torch.cuda.memory_allocated()
 
                 start.record()
                 output = function(*args, **kwargs)

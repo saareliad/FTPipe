@@ -27,7 +27,14 @@ def is_not_None(a):
 # limitations under the License.
 """ PyTorch T5 model. """
 
-from transformers.models.t5.modeling_t5 import *
+from transformers.models.t5.modeling_t5 import (logging,
+                                                ACT2FN, T5Config, find_pruneable_heads_and_indices,
+                                                prune_linear_layer, PreTrainedModel, DUMMY_INPUTS,
+                                                DUMMY_MASK, get_device_map, add_start_docstrings,
+                                                replace_return_docstrings, Seq2SeqModelOutput,
+                                                BaseModelOutput, assert_device_map, T5EncoderModel,
+                                                add_start_docstrings_to_model_forward, Seq2SeqLMOutput
+                                                )
 
 import copy
 import math
@@ -883,7 +890,7 @@ class T5Stack(T5PreTrainedModel):
                 f"You cannot specify both {err_msg_prefix}inputs and {err_msg_prefix}inputs_embeds at the same time"
             )
         elif is_not_None(input_ids):
-            input_shape = input_ids.size()
+            input_shape = input_ids.size()   # SE: second op, after decoder input ids?
             input_ids = input_ids.view(-1, input_shape[-1])
         elif is_not_None(inputs_embeds):
             input_shape = inputs_embeds.size()[:-1]
@@ -893,9 +900,9 @@ class T5Stack(T5PreTrainedModel):
 
         if is_None(inputs_embeds):
             assert is_not_None(self.embed_tokens), "You have to initialize the model with valid token embeddings"
-            inputs_embeds = self.embed_tokens(shared_embedding, input_ids)
+            inputs_embeds = self.embed_tokens(shared_embedding, input_ids)  # SE: l_0
 
-        batch_size, seq_length = input_shape
+        batch_size, seq_length = input_shape   # SE: did not happen
 
         # required mask seq length can be calculated via length of past
         mask_seq_length = past_key_values[0][0].shape[2] + seq_length if is_not_None(past_key_values) else seq_length
@@ -1692,103 +1699,3 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
             reordered_decoder_past = reordered_decoder_past + (reordered_layer_past_states,)
         return reordered_decoder_past
-
-
-@add_start_docstrings(
-    "The bare T5 Model transformer outputting encoder's raw hidden-states" "without any specific head on top.",
-    T5_START_DOCSTRING,
-)
-class T5EncoderModel(T5PreTrainedModel):
-    authorized_missing_keys = [
-        r"encoder\.embed_tokens\.weight",
-    ]
-
-    def __init__(self, config: T5Config):
-        super().__init__(config)
-        self.shared = nn.Embedding(config.vocab_size, config.d_model)
-
-        encoder_config = copy.deepcopy(config)
-        encoder_config.use_cache = False
-        encoder_config.is_encoder_decoder = False
-        self.encoder = T5Stack(encoder_config, self.shared)
-
-        self.init_weights()
-
-        # Model parallel
-        self.model_parallel = False
-        self.device_map = None
-
-    @add_start_docstrings(PARALLELIZE_DOCSTRING)
-    def parallelize(self, device_map=None):
-        self.device_map = (
-            get_device_map(len(self.encoder.block), range(torch.cuda.device_count()))
-            if is_None(device_map)
-            else device_map
-        )
-        assert_device_map(self.device_map, len(self.encoder.block))
-        self.encoder.parallelize(self.device_map)
-        self.model_parallel = True
-
-    @add_start_docstrings(DEPARALLELIZE_DOCSTRING)
-    def deparallelize(self):
-        self.encoder.deparallelize()
-        self.encoder = self.encoder.to("cpu")
-        self.model_parallel = False
-        self.device_map = None
-        torch.cuda.empty_cache()
-
-    def get_input_embeddings(self):
-        return self.shared
-
-    def set_input_embeddings(self, new_embeddings):
-        self.shared = new_embeddings
-        self.encoder.set_input_embeddings(new_embeddings)
-
-    def get_encoder(self):
-        return self.encoder
-
-    def _prune_heads(self, heads_to_prune):
-        """
-        Prunes heads of the model. heads_to_prune: dict of {layer_num: list of heads to prune in this layer} See base
-        class PreTrainedModel
-        """
-        for layer, heads in heads_to_prune.items():
-            self.encoder.layer[layer].attention.prune_heads(heads)
-
-    @add_start_docstrings_to_model_forward(T5_ENCODER_INPUTS_DOCSTRING)
-    @replace_return_docstrings(output_type=BaseModelOutput, config_class=_CONFIG_FOR_DOC)
-    def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        head_mask=None,
-        inputs_embeds=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        return_dict=None,
-    ):
-        r"""
-        Returns:
-
-        Example::
-
-            >>> from transformers import T5Tokenizer, T5EncoderModel
-            >>> tokenizer = T5Tokenizer.from_pretrained('t5-small')
-            >>> model = T5EncoderModel.from_pretrained('t5-small')
-            >>> input_ids = tokenizer("Studies have been shown that owning a dog is good for you", return_tensors="pt").input_ids  # Batch size 1
-            >>> outputs = model(input_ids=input_ids)
-            >>> last_hidden_states = outputs.last_hidden_state
-        """
-        return_dict = return_dict if is_not_None(return_dict) else self.config.use_return_dict
-
-        encoder_outputs = self.encoder(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            inputs_embeds=inputs_embeds,
-            head_mask=head_mask,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
-
-        return encoder_outputs

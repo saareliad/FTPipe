@@ -430,14 +430,54 @@ tensor_creation_ops = {
     torch.randn: torch,
     torch.randint: torch,
     torch.randperm: torch,
+    torch.all: torch,
 
 
 
     torch.less: torch,
     torch.less_equal: torch,
-    torch.lt: torch ## and more!!
-
+    torch.lt: torch, ## and more!!
+    torch.min: torch,
+    torch.matmul: torch,
+    torch.isinf: torch,
+    torch.clamp: torch,
+    torch.abs: torch,
+    torch.log: torch,
+    torch.rsqrt: torch,
+    # torch.unflatten: torch
 }
+
+old_tensor_creation_ops = {
+    torch.as_tensor: torch,
+    torch.from_numpy: torch,
+    torch.tensor: torch,
+    torch.align_tensors: torch,
+    torch.arange: torch,
+    torch.as_strided: torch,
+    torch.bartlett_window: torch,
+    torch.blackman_window: torch,
+    torch.empty: torch,
+    torch.empty_strided: torch,
+    torch.eye: torch,
+    torch.from_file: torch,
+    torch.full: torch,
+    torch.hamming_window: torch,
+    torch.hann_window: torch,
+    torch.linspace: torch,
+    torch.logspace: torch,
+    torch.ones: torch,
+    torch.rand: torch,
+    torch.randn: torch,
+    torch.randint: torch,
+    torch.randperm: torch,
+    torch.range: torch,
+    torch.sparse_coo_tensor: torch,
+    torch.zeros: torch,
+    torch.cat: torch,
+    torch.stack: torch,
+    torch.where: torch,
+}
+
 tensor_creation_ops_without_device_kw = {
     # TODO: maybe more...
     torch.cat: torch,

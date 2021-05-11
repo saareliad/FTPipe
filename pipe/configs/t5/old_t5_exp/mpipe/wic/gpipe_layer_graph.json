@@ -1,0 +1,10 @@
+{
+    "base_config_path": "common_layer_graph.json",
+    "base_config_path_is_relative": true,
+    "work_scheduler": "GPIPE",
+    "step_every": 8,
+    "bs_train": 16,
+    "bs_test": 16,
+    "checkpoints_save_name_prefix": "gpipe_oldt5",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/mpipe/checkpoints/old_t5/3b/wic/gpipe_layer/"
+}
