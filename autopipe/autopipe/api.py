@@ -11,6 +11,7 @@ from autopipe.autopipe import NodeWeightFunction, EdgeWeightFunction, Graph, com
     compute_and_cache, move_tensors, trace_module, infer_req_grad, GraphProfiler, pre_hook_factory, post_hook_factory, \
     execute_graph, profile_network
 from autopipe.autopipe.model_partitioning.pipedream.pipedream_partition_no_hir import partition_pipedream
+from autopipe.autopipe.model_profiling import profiler
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -237,6 +238,10 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                             trace_cache_name=trace_cache_name)
 
         if nparts > 1:
+            warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+            # profiler.set_max_memory_usage(graph)
+            GraphProfiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
+
             graph = partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function,
                                              edge_weight_function, use_virtual_stages, use_layers_only_graph, METIS_opt,
                                              acyclic_opt, binpack_opt, mpipe_opt)
@@ -249,11 +254,15 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                                        basic_blocks, save_memory_mode, trace_on_gpu,
                                                        res_cache_name=trace_cache_name)
 
-
+        # FIXME: the mem is not saved in cache now.
         weights = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
                                           graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
                                           basic_blocks, force_no_recomp_scopes, save_memory_mode, use_graph_profiler,
                                           use_network_profiler)
+
+        warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+        # profiler.set_max_memory_usage(graph)
+        GraphProfiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
 
         partition_profiled_graph_fn = functools.partial(partition_profiled_graph, model=model, nparts=nparts,
                                                         partitioning_method=partitioning_method,
@@ -529,8 +538,9 @@ def get_profiles(graph: Graph, model: nn.Module,
         execute_graph(model, graph, model_args=model_args, model_kwargs=model_kwargs,
                       pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
 
-        warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
-        # profiler.set_max_memory_usage(graph)
+        # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+        # # profiler.set_max_memory_usage(graph)
+        # profiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
 
         # print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
 

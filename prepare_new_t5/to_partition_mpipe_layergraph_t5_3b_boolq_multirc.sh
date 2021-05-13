@@ -19,9 +19,7 @@ python -m autopipe.partition new_t5 \
  --n_partitions \
  8 \
  --L \
- 8 \
  16 \
- 24 \
  --max_seq_length \
  512 \
  --answer_max_seq_length \

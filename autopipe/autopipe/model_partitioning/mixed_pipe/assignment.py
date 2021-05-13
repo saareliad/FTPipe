@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 
 from tqdm import tqdm
@@ -8,6 +9,7 @@ from autopipe.autopipe.model_partitioning.mixed_pipe.heap_dict import heapdict
 import numpy as np
 from math import comb  # python 3.8
 
+
 def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: NodeMemoryEstimator):
     bins = {i: list() for i in range(P)}
     bin_weights = heapdict({i: 0 for i in range(P)})
@@ -16,7 +18,7 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: N
     node_to_weight = {n: node_weight_function(n) for n in graph.non_input_nodes}
     node_to_weight = dict(sorted(node_to_weight.items(), key=lambda item: item[1], reverse=True))
 
-    gpu_mem_threshold_bytes = {i: 10 * 1e9 for i in bins}
+    gpu_mem_threshold_bytes = {i: 9 * 1e9 for i in bins}  # 11 - 512*2 - extra for send recv
     node_to_mem = {n: node_mem_estimator(n) for n in graph.non_input_nodes}
 
     def check_memory_fit(candidate, bin_id):
@@ -27,11 +29,17 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: N
         return True
 
     def choose_bin(node):
+        tmp = []
         while bin_weights:
             bin_id, w = bin_weights.peekitem()
             if not check_memory_fit(node, bin_id):
-                bin_weights.popitem()
+                tmp.append(bin_weights.popitem())
                 continue
+            # restore - next item may be smaller!
+            # it does not really matter, since if we would fail on smallest - we fail on all.
+            for i,v in tmp:
+                warnings.warn("it is unprobable we got here.")
+                bin_weights[i] = v
             return bin_id
         raise RuntimeError("Could not find an assignment which fits memory")
 

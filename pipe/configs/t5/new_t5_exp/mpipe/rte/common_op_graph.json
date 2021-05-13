@@ -6,7 +6,7 @@
     "out_filename": "rte_virtual",
     "distributed_backend": "mpi",
     "model": "op_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe",
-    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 3, 5, 4, 2, 6, 1, 7, 0],
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 3, 5, 4, 6, 2, 1, 0, 7],
     "nprocs": 16,
     "dataset": "t5_tfds",
     "mixture_or_task_name": "glue_rte_v002",
@@ -17,9 +17,9 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 10,
-    "bs_test": 10,
-    "step_every": 4,
+    "bs_train": 4,
+    "bs_test": 4,
+    "step_every": 10,
     "num_data_workers": 10,
     "optimizer": {
         "type": "adafactor",

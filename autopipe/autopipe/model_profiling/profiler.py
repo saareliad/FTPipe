@@ -7,6 +7,7 @@ from torch import Tensor
 
 from .tracer import NodeTypes
 from .control_flow_graph import Graph, Node
+from ..model_partitioning.heuristics import NodeMemoryEstimator
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes, \
     force_out_of_place
 
@@ -167,9 +168,14 @@ class GraphProfiler():
 
         return weights
 
+    @staticmethod
+    def activations_estimated_set_max_memory_usage(graph: Graph):
+        for node in graph.nodes:
+            node.max_memory_bytes = NodeMemoryEstimator.cuda_activations_and_grads_mem(node)
+
     def set_max_memory_usage(self, graph: Graph):
         for node in graph.nodes:
-            if node not in self.forward_mem or node not  in self.backward_mem:
+            if node not in self.forward_mem or node not in self.backward_mem:
                 continue
             fwd = self.forward_mem[node]
             bwd = self.backward_mem[node]

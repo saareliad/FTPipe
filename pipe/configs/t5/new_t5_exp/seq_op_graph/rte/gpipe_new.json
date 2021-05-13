@@ -1,0 +1,13 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "work_scheduler": "GPIPE",
+    "step_every": 10,
+    "bs_train": 4,
+    "bs_test": 4,
+    "checkpoints_save_name_prefix": "new_gpipe",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/saare/checkpoints/seq_op/checkpoints/t5/3b/rte/gpipe/",
+    "epochs": 6,
+    "steps": -1,
+    "save_checkpoints":  false
+}

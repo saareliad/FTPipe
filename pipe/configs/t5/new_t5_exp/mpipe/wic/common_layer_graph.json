@@ -6,7 +6,8 @@
     "out_filename": "test_vs",
     "distributed_backend": "mpi",
     "model": "layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe",
-    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 5, 2, 1, 0, 3, 6, 4, 7],
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 6, 2, 1, 0, 3, 4, 5, 7],
+
     "nprocs": 16,
     "dataset": "t5_tfds",
     "mixture_or_task_name": "super_glue_wic_v102",

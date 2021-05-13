@@ -1,4 +1,5 @@
 import math
+import warnings
 from typing import Optional, List, Tuple, Any
 
 from tqdm import tqdm
@@ -71,6 +72,7 @@ def partition_pipedream(
     cum_sum = 0.0
     cum_activation_size = 0.0
     cum_parameter_size = 0.0
+    something_works = False
     for i, node in enumerate(work_graph.non_input_nodes):
         cum_sum += node_weight_function(node)
         cum_activation_size += node_mem_estimator(node)  # FIXME: misleading name, it is aggregation
@@ -93,8 +95,10 @@ def partition_pipedream(
                 A[i][j] = (None, None)
             else:
                 A[i][j] = (max(cum_sum, data_parallel_communication_time) / (j + 1), None)
-
+                something_works = True
     print("-I- Done")
+    if not something_works:
+        warnings.warn("can't run any node without extra memory reduction - need to combine with other memory reduction methods")
 
     min_machines = 1 if num_machines_in_first_level is None else num_machines_in_first_level
     cum_times = []

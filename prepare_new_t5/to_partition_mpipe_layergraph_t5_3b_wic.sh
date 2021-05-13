@@ -1,3 +1,4 @@
+# NOTE: reducing size to fit in memory (?) it used to work b4.
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \
@@ -13,15 +14,13 @@ python -m autopipe.partition new_t5 \
  --ct \
  new_trace_cache_t53b_64_4_lg \
  --cp \
- prof_cache_t53b_64_4_lg_ftpipe \
+ new_prof_cache_t53b_64_4_lg_ftpipe \
  --stateless_tied \
  --lmhead \
  --n_partitions \
  8 \
  --L \
- 8 \
  16 \
- 24 \
  --max_seq_length \
  64 \
  --answer_max_seq_length \

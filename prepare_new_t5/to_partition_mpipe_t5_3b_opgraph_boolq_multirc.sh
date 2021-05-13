@@ -1,3 +1,4 @@
+# NOTE: reduced size to fit in memory.
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \
@@ -7,9 +8,9 @@ python -m autopipe.partition new_t5 \
  --n_iter \
  10 \
  --analysis_batch_size \
- 4 \
+ 2 \
  --partitioning_batch_size \
- 4 \
+ 2 \
  --ct \
  new_trace_cache_t53b_512_4_op \
  --cp \
@@ -19,9 +20,7 @@ python -m autopipe.partition new_t5 \
  --n_partitions \
  8 \
  --L \
- 8 \
  16 \
- 24 \
  --max_seq_length \
  512 \
  --answer_max_seq_length \

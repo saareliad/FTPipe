@@ -176,6 +176,8 @@ def parse_cli():
         help="Training epochs to run",
         default=-1,
     )
+    parser.add_argument("--epochs_from_cmd", action="store_true")
+
 
     parser.add_argument(
         "--steps",
@@ -183,6 +185,8 @@ def parse_cli():
         help="Training steps to run",
         default=-1,
     )
+    parser.add_argument("--steps_from_cmd", action="store_true")
+
     parser.add_argument(
         "--step_every",
         type=int,

@@ -42,6 +42,62 @@ if transformers.__version__ > ('4.1.1'):
     MODEL_TYPES['new_t5_stateless'] = (T5Config, NewStatelesT5ForConditionalGeneration, T5Tokenizer)
 
 
+def op_graph_t5_3b_tied_lmheads_64_4_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def op_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+def op_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-3b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
 def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
     return dict(model_type='new_t5_stateless',
                 model_name_or_path='t5-3b',

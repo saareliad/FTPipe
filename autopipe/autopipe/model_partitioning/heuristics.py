@@ -320,32 +320,41 @@ class CoarsenedWeightFunction:
 
 
 class NodeMemoryEstimator:
-    def __init__(self, optimizer_multiply=3):
+    def __init__(self, optimizer_multiply=3):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply
 
     @staticmethod
     def cuda_activations_and_grads_mem(u: Node):
-        if u.value_type in [int, bool, float, torch.Size, type(None)]:
-            return 0
-        if u.type is NodeTypes.CONSTANT or u.value_type in [torch.device, torch.dtype, str, slice]:
+        if u.type is NodeTypes.LAYER or u.type is NodeTypes.BUFF_PARAM:
+            # FIXME: this is wrong, sine some layers don't allocate new memory at all.
+
+            if u.value_type in [int, bool, float, torch.Size, type(None)]:
+                return 0
+            if u.type is NodeTypes.CONSTANT or u.value_type in [torch.device, torch.dtype, str, slice]:
+                return 0
+
+            # its a tensor, calculate the volume
+            bwd_volume = 0
+            volume = 0
+            for shape, dtype in zip(flatten(u.tensor_shape),
+                                    flatten(u.tensor_dtype)):
+                if isinstance(shape, torch.Size):
+                    tmp = reduce(operator.mul, shape, 1)
+                    # include dtype size
+                    tmp *= torch.empty(1, dtype=dtype).element_size()  # maybe use cache?
+                    if u.req_grad:
+                        bwd_volume += tmp
+                    volume += tmp
+                else:
+                    warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. ignoring volume!")
+
+            return volume + bwd_volume
+        else:
+            ## TODO: memory profiling - only for layers.
+            # The reason is we don't want to profile views.
             return 0
 
-        # its a tensor, calculate the volume
-        bwd_volume = 0
-        volume = 0
-        for shape, dtype in zip(flatten(u.tensor_shape),
-                                flatten(u.tensor_dtype)):
-            if isinstance(shape, torch.Size):
-                tmp = reduce(operator.mul, shape, 1)
-                # include dtype size
-                tmp *= torch.empty(1, dtype=dtype).element_size()  # maybe use cache?
-                if u.req_grad:
-                    bwd_volume += tmp
-                volume += tmp
-            else:
-                warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. ignoring volume!")
 
-        return volume + bwd_volume
 
     def __call__(self, node: Node):
         # cuda_memory_estimation_naive

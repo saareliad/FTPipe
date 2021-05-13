@@ -4,7 +4,7 @@ export OMP_NUM_THREADS=5
 # First, eval a seqpipe run
 #python -m pipe.main --config pipe/configs/t5/t5_3b_p8/seq/boolq/gpipe_new.json --seed 42 --mode eval
 
-
+mkdir /home_local/saareliad/data/moved_cache
 # Now, run mpipe
 
 # layers graph
@@ -31,6 +31,7 @@ python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/stale_layer_gr
 # seqpipe layergraph
 
  # wic
+ mv /home_local/saareliad/data/cache_* /home_local/saareliad/data/moved_cache/
  python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/wic/pipedream_stale.json --seed 42 --mode preproc
  mpirun -np 8 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/wic/pipedream_stale.json --seed 42
  python -m pipe.main --config pipe.main --config pipe/configs/t5/new_t5_exp/seq/wic/pipedream_stale.json --seed 42 --mode eval
