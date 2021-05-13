@@ -39,12 +39,11 @@ class GraphProfiler():
 
     def time_forward(self, node, function, args, kwargs):
         if self.save_memory_mode:
-            if self.profile_memory:
-                torch.cuda.reset_peak_memory_stats()
-                base_mem = torch.cuda.memory_allocated() # FIXME
-
             function, args, kwargs = move_tensors((function, args, kwargs),
                                                   'cuda')
+        if self.profile_memory:
+            torch.cuda.reset_peak_memory_stats()
+            base_mem = torch.cuda.memory_allocated() # FIXM
 
         with force_out_of_place(function):
             if self.should_profile(node, function, args, kwargs, is_bwd=False, output=None):
