@@ -173,6 +173,7 @@ class GraphProfiler():
             node.max_memory_bytes = NodeMemoryEstimator.cuda_activations_and_grads_mem(node)
 
     def set_max_memory_usage(self, graph: Graph):
+        d = dict()
         for node in graph.nodes:
             if node not in self.forward_mem or node not in self.backward_mem:
                 continue
@@ -180,6 +181,8 @@ class GraphProfiler():
             bwd = self.backward_mem[node]
             max_usage = max(max(fwd), max(bwd))
             node.max_memory_bytes = max(node.max_memory_bytes, max_usage)
+            d[node.scope] = node.max_memory_bytes
+        return d
 
     def print_times(self, backward=False):
         if backward:

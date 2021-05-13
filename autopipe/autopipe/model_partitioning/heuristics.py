@@ -320,7 +320,7 @@ class CoarsenedWeightFunction:
 
 
 class NodeMemoryEstimator:
-    def __init__(self, optimizer_multiply=3):  # grad, param, optimizer. adafactor is less though
+    def __init__(self, optimizer_multiply=2):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply
 
     @staticmethod
