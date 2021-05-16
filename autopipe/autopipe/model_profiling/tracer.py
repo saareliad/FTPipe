@@ -1,3 +1,6 @@
+from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, tensor_creation_ops
+from .control_flow_graph import Node, NodeTypes, Graph
+from autopipe.autopipe.utils import traverse_model
 import inspect
 import operator
 import warnings
@@ -15,9 +18,6 @@ if torch.__version__ < '1.7.0':
 else:
     from torch.overrides import get_overridable_functions
 
-from autopipe.autopipe.utils import traverse_model
-from .control_flow_graph import Node, NodeTypes, Graph
-from ..utils import get_tensor_shapes, get_tensor_dtypes, r_arithmetic_ops, logical_ops, nested_map, tensor_creation_ops
 
 override_dict = get_overridable_functions()
 
@@ -646,7 +646,6 @@ class TracedLayer(nn.Module):
             t_scope += f"/{self._name}"
         CURRENT_SCOPE = t_scope
 
-
         if self._terminal:
             # NOTE no need to set the creating operation
             # for terminal layer the layer itself is the creating operation
@@ -780,7 +779,7 @@ def trace_module(module: nn.Module, args=(), kwargs=None, depth=1000, basic_bloc
     return Graph(nodes, input_kw_ids, [output_id], depth, basic_blocks)
 
 
-def find_reachable_nodes(nodes, output_id):
+def find_reachable_nodes(nodes, output_id, keep_tensors=False):
     '''do a bfs from the output on the undirected graph to find all nodes that are 
     reachable from the output node this is really conservative some unused nodes will still remain
     '''
@@ -796,7 +795,8 @@ def find_reachable_nodes(nodes, output_id):
             continue
         open.update(node.in_edges)
         for n in node.out_edges:
-            if ("__i" in n.scope) or (n.value_type is torch.Tensor):
+            # NOTE experimental previous behavior is keep_tensors = True
+            if ("__i" in n.scope) or (n.value_type is torch.Tensor and keep_tensors):
                 open.add(n)
 
         reachable.add(node)
@@ -873,14 +873,13 @@ def _wrap_traced_layers(module: nn.Module, depth=1000, basic_blocks=(), allow_Mo
     layers_to_patch = dict()
     patched_layers_to_scope = dict()
 
-
     for sub_layer, scope, parent, terminal in traverse_model(module, depth=depth,
-                       basic_blocks=basic_blocks,
-                       full=True):
+                                                             basic_blocks=basic_blocks,
+                                                             full=True):
         name = scope[scope.rfind('[') + 1:-1]
 
         patch_direct_children = False
-        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)) :
+        if isinstance(sub_layer, (nn.ModuleList, nn.ModuleDict)):
             if not allow_ModuleList_ModuleDict:
                 raise TypeError(
                     f"tracing nn.ModuleList/nn.ModuleDict is not supported got {scope} of type {type(sub_layer)}")
