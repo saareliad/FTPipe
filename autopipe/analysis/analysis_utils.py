@@ -20,7 +20,7 @@ class AnalysisPipelineConfig(PipelineConfig):
 
         try_jit = False
         if try_jit:
-            for i,v in self.stage_to_model.items():
+            for i, v in self.stage_to_model.items():
                 try:
                     torch.jit.script(v)
                 except Exception as e:
@@ -138,7 +138,8 @@ def add_dicts(d1, d2):
         d[i1] = v1 + v2
     return d
 
-def add_stds_dicts(d1,d2):
+
+def add_stds_dicts(d1, d2):
     """ var(x+y) = var(x)+var(y) + cov(x,y)
         we assume for simplicity cov(x,y) is 0.
     """
@@ -152,13 +153,13 @@ def add_stds_dicts(d1,d2):
 
 def get_tensor_req_grad(ts):
     def get_req_grad(t):
-        if isinstance(t,Tensor):
+        if isinstance(t, Tensor):
             return t.requires_grad
         return False
     return nested_map(get_req_grad, ts)
 
 
-def run_partitions_fwd(model_inputs, analysis_config : AnalysisPipelineConfig, device='cpu', return_info_for_bwd=False):
+def run_partitions_fwd(model_inputs, analysis_config: AnalysisPipelineConfig, device='cpu', return_info_for_bwd=False):
     # kwarg input
     if isinstance(model_inputs, dict):
         model_inputs = tuple(
@@ -192,17 +193,28 @@ def run_partitions_fwd(model_inputs, analysis_config : AnalysisPipelineConfig, d
                for tensor in analysis_config.get_all_stage_inputs(idx)):
             inputs = [activations[tensor] for tensor in analysis_config.get_all_stage_inputs(idx)]
 
+            # sanity check for duplicate inputs
+            for i in range(len(inputs)):
+                for j in range(i+1, len(inputs)):
+                    err = f"inputs {i} and {j} of stage {idx} are the same tensor"
+                    assert inputs[i] is not inputs[j], err
+
             analysis_config.stage_to_model[idx] = analysis_config.stage_to_model[idx].to(device)
             inputs = move_tensors(inputs, device)
 
             outs = analysis_config.stage_to_model[idx](*inputs)
 
+            # sanity check for duplicate outputs
+            for i in range(len(outs)):
+                for j in range(i+1, len(outs)):
+                    err = f"outputs {i} and {j} of stage {idx} are the same tensor"
+                    assert outs[i] is not outs[j], err
+
             analysis_config.stage_to_model[idx] = analysis_config.stage_to_model[idx].to('cpu')
             outs = move_tensors(outs, 'cpu')
 
-
             for o, rg, t in zip(analysis_config.get_all_stage_outputs(idx), analysis_config.get_outputs_req_grad_for_stage_tuple((idx)), outs):
-                req_grad[o] = rg #get_tensor_req_grad(t)
+                req_grad[o] = rg  # get_tensor_req_grad(t)
                 activations[o] = t
         else:
             parts.append(idx)
