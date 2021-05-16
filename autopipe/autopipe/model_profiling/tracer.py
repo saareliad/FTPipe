@@ -993,7 +993,7 @@ def discard_unused_nodes(nodes, output_id):
             if unused_branch or iter_sentinel or unused_constant_or_input or unreachable:
                 assert len(
                     node.out_edges) == 0, "unused traced value should not have outgoing edges"
-
+                print(f"removing node: {node.scope} of type:{node.type} and dtype:{node.value_type}")
                 for u in node.in_edges:
                     u.remove_output(node)
 
