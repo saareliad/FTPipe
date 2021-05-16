@@ -115,6 +115,8 @@ class heapdict(MutableMapping):
         """D.peekitem() -> (k, v), return the (key, value) pair with lowest value;\n but raise KeyError if D is empty."""
         return (self.heap[0][1], self.heap[0][0])
 
+    def __str__(self):
+        return str(self.d)  ## unordered
 
 del doc
 __all__ = ['heapdict']

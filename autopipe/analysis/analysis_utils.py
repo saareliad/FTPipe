@@ -18,6 +18,15 @@ class AnalysisPipelineConfig(PipelineConfig):
             for stage_id in range(self.n_stages)
         }
 
+        try_jit = False
+        if try_jit:
+            for i,v in self.stage_to_model.items():
+                try:
+                    torch.jit.script(v)
+                except Exception as e:
+                    print(f"-V- could not script stage {i}")
+                    print(e)
+
     def model_inputs(self):
         return self.d['model_inputs']
 

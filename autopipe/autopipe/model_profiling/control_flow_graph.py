@@ -273,6 +273,9 @@ class Graph:
 
         # merge node parameters
         u.num_parameters += v.num_parameters
+
+        # u.max_memory_bytes = max(v.max_memory_bytes)
+
         u.max_memory_bytes += v.max_memory_bytes
 
         if v.scope_to_hold_to is not None:

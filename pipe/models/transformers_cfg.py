@@ -485,6 +485,16 @@ def bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream():
                 do_resize_token_embedding=False,
                 )
 
+def layer_bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream():
+    return dict(model_type='bert_squad',
+                model_name_or_path='bert-large-uncased-whole-word-masking',
+                do_lower_case=True,
+                output_past=False,
+                stateless_tied=False,
+                explicitly_set_dict={'precompute_attention_mask': True, 'return_dict': False},
+                do_resize_token_embedding=False,
+                )
+
 
 def bert_large_uncased_whole_word_maskings_384_4p_bw12_pipedream():
     return dict(model_type='bert_squad',

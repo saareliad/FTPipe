@@ -53,7 +53,8 @@ def partition_pipedream(
 
     # saved_work_graph = work_graph
     # saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
-    work_graph._remove_parallel_edges()
+    saved_work_graph = work_graph
+    work_graph = work_graph._remove_parallel_edges()
 
     # params_per_node = calculate_params_per_node(model, work_graph)
 

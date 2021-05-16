@@ -10,6 +10,12 @@ from autopipe.autopipe.cache_utils import compute_and_cache
 from .preproc import _shift_right, get_attention_mask, get_inverted_encoder_attention_mask
 from .t5_tfds_eval import get_t5_sequence_length_from_args
 
+try:
+    import t5
+    import tensorflow.compat.v1 as tf
+    import mesh_tensorflow.transformer.dataset as transformer_dataset
+except:
+    print("-W- can't import t5 stuff")
 
 # try:
 #     import t5
@@ -62,12 +68,12 @@ def torch_tensor_dict_from_args(args,
     # preproc_device = getattr(args, "preproc_device")
     preproc_batch_size = getattr(args, "preproc_batch_size", 128)
 
+
     ds = like_mtf(mixture_or_task_name=mixture_or_task_name,
                   sequence_length=sequence_length,
                   dataset_split=dataset_split,
                   use_cached=False,
                   pack=False)
-
     return to_torch_tensor_dict(config,
                                 ds,
                                 preproc_device=preproc_device,
@@ -154,12 +160,14 @@ def like_mtf(mixture_or_task_name: str,
              dataset_split="train",
              use_cached=False,
              pack=True):
-    import t5
-    import tensorflow.compat.v1 as tf
-    import mesh_tensorflow.transformer.dataset as transformer_dataset
+    print("like-mtf: pre import")
+
+    # import t5
+    # import tensorflow.compat.v1 as tf
+    # import mesh_tensorflow.transformer.dataset as transformer_dataset
 
     # https://github.com/google-research/text-to-text-transfer-transformer/blob/5053a463eac3423284c327bf36e61988189239c1/t5/models/mesh_transformer.py
-
+    print("like-mtf: import done")
     mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
     ds = mixture_or_task.get_dataset(sequence_length,
                                      split=dataset_split,

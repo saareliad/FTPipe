@@ -93,6 +93,8 @@ class EdgeWeightFunction:
 
                 if u.gpu_id != v.gpu_id or (u.gpu_id is None and v.gpu_id is None):
                     return u.compound_edge_weights[v.id]
+                elif u.gpu_id == v.gpu_id:
+                    return u.compound_edge_weights[v.id] / (self.GPU_MEMORY_BW / self.bw)
                 else:
                     raise NotImplementedError("not supported yet")
 
@@ -320,7 +322,8 @@ class CoarsenedWeightFunction:
 
 
 class NodeMemoryEstimator:
-    def __init__(self, optimizer_multiply=2):  # grad, param, optimizer. adafactor is less though
+    THRESHOLD = 11 * 1e9
+    def __init__(self, optimizer_multiply=1):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply
 
     @staticmethod
@@ -353,7 +356,6 @@ class NodeMemoryEstimator:
             ## TODO: memory profiling - only for layers.
             # The reason is we don't want to profile views.
             return 0
-
 
 
     def __call__(self, node: Node):

@@ -1,5 +1,6 @@
 import math
 import random
+import warnings
 from collections import deque
 from pprint import pprint
 
@@ -46,8 +47,13 @@ def stochastic_centers_matching(graph: Graph, node_weight_function: NodeWeightFu
     # need to make names compact e.g 'T5ForConditionalGeneration/T5Stack[encoder]/T5Block[15]'
     # we need to use "special blocks cmd_arg for the matther as I use basic blocks from the graph.
 
+    # to_assign = L
     if total_found < L:
-        raise NotImplementedError("random")
+        warnings.warn(f"There are only {total_found} special blocks, but need to find {L} centers")
+        warnings.warn("Finding {L-total_found} more random centers, all found special block centers will be centers")
+        # to_assign = total_found
+        # needtofind = L-total_found
+        # raise NotImplementedError("random centers")
 
     print("-I- assigning centers from special blocks")
     lengths = {b: math.floor(L * (len(nodes) / total_found)) for b, nodes in found_nodes.items()}

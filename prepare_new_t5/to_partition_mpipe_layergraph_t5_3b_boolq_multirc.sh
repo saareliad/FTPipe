@@ -1,3 +1,4 @@
+rm new_trace_cache_t53b_512_4_lg new_prof_cache_t53b_512_4_lg_ftpipe
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \

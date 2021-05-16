@@ -53,5 +53,9 @@ def add_parsed_config_to_args(args, output:dict):
                 raise RuntimeError(f"-W- {key}_from_cmd=True but not set")
             continue
 
+        key: str
+        if key.endswith("_from_cmd") and hasattr(args, key) and getattr(args, key):
+            warnings.warn(f"Taking {key} from cmd_args instead of overriding from json")
+            continue
         # Replace
         setattr(args, key, value)

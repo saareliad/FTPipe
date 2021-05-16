@@ -1,3 +1,4 @@
+rm new_prof_cache_t53b_64_4_op_ftpipe new_trace_cache_t53b_64_4_op
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \
@@ -7,9 +8,9 @@ python -m autopipe.partition new_t5 \
  --n_iter \
  10 \
  --analysis_batch_size \
- 64 \
+ 32 \
  --partitioning_batch_size \
- 64 \
+ 32 \
  --ct \
  new_trace_cache_t53b_64_4_op \
  --cp \

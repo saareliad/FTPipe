@@ -1,4 +1,5 @@
 # NOTE: reduced size to fit in memory.
+rm new_trace_cache_t53b_512_4_op new_prof_cache_t53b_512_4_op_ftpipe
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \
@@ -8,9 +9,9 @@ python -m autopipe.partition new_t5 \
  --n_iter \
  10 \
  --analysis_batch_size \
- 2 \
+ 4 \
  --partitioning_batch_size \
- 2 \
+ 4 \
  --ct \
  new_trace_cache_t53b_512_4_op \
  --cp \

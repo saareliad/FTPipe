@@ -1,5 +1,6 @@
 import warnings
 from copy import deepcopy
+from pprint import pprint
 
 from tqdm import tqdm
 
@@ -18,7 +19,7 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: N
     node_to_weight = {n: node_weight_function(n) for n in graph.non_input_nodes}
     node_to_weight = dict(sorted(node_to_weight.items(), key=lambda item: item[1], reverse=True))
 
-    gpu_mem_threshold_bytes = {i: 9 * 1e9 for i in bins}  # 11 - 512*2 - extra for send recv
+    gpu_mem_threshold_bytes = {i: node_mem_estimator.THRESHOLD for i in bins}  # 11 - 512*2 - also extra for send recv..
     node_to_mem = {n: node_mem_estimator(n) for n in graph.non_input_nodes}
 
     def check_memory_fit(candidate, bin_id):
@@ -38,21 +39,112 @@ def greedy_best_fit(graph: Graph, P, node_weight_function, node_mem_estimator: N
             # restore - next item may be smaller!
             # it does not really matter, since if we would fail on smallest - we fail on all.
             for i,v in tmp:
-                warnings.warn("it is unprobable we got here.")
+                warnings.warn("it is improbable we got here.")
                 bin_weights[i] = v
             return bin_id
+
+        print("Could not find an assignment which fits memory")
+        print(f"node: {node}")
+        print("bins:")
+        for x in tmp:
+            print(x)
+        print("node to mem:")
+        pprint(node_to_mem)
+
+        print(f"sum(node_to_mem.values()): {sum(node_to_mem.values()) * 1e-9} GB")
+
         raise RuntimeError("Could not find an assignment which fits memory")
 
     while node_to_weight:
         node, node_weight = node_to_weight.popitem()
+        try:
+            bin_id = choose_bin(node)
+        except RuntimeError as e:
+            if sum(node_to_mem.values()) < sum(gpu_mem_threshold_bytes.values()):
+                warnings.warn("Can find assignment using largest memory job first v1")
+                try:
+                    bins = largest_memory_first_greedy_best_fit_v1(graph, P, node_weight_function, node_mem_estimator)
+                    return bins
+                except Exception as ee:
+                    print(f"-v- largest_memory_first_greedy_best_fit_v1 Failed: {(str(ee))}")
+            raise e
+
+        bins[bin_id].append(node)
+        bin_weights[bin_id] += node_weight
+        bin_memory[bin_id] += node_to_mem[node]
+
+    print("bin_memory after greedy assignment:")
+    pprint(str(bin_memory))
+    print(f"sum(node_to_mem.values()): {sum(node_to_mem.values()) * 1e-9} GB")
+
+    return bins
+
+
+
+def largest_memory_first_greedy_best_fit_v1(graph: Graph, P, node_weight_function, node_mem_estimator: NodeMemoryEstimator):
+    # starting with highest mem, but choosing bins according to compute weight.
+    bins = {i: list() for i in range(P)}
+    bin_weights = heapdict({i: 0 for i in range(P)})
+    bin_memory = heapdict({i: 0 for i in range(P)})
+
+    node_to_weight = {n: node_weight_function(n) for n in graph.non_input_nodes}
+    node_to_weight = dict(sorted(node_to_weight.items(), key=lambda item: item[1], reverse=True))
+
+    gpu_mem_threshold_bytes = {i: node_mem_estimator.THRESHOLD for i in bins}  # 11 - 512*2 - also extra for send recv..
+    node_to_mem = {n: node_mem_estimator(n) for n in graph.non_input_nodes}
+    node_to_mem = dict(sorted(node_to_mem.items(), key=lambda item: item[1], reverse=True))
+
+    node_to_mem_copy = {node: v for node,v in node_to_mem.items()}
+
+    def check_memory_fit(candidate, bin_id):
+        # TODO:  PoC
+        if node_to_mem[candidate] + bin_memory[bin_id] > gpu_mem_threshold_bytes[bin_id]:
+            print(f"-v- failed to add candidate to GPU {bin_id}")
+            return False
+        return True
+
+    def choose_bin(node):
+        tmp = []
+        while bin_weights:
+            bin_id, w = bin_weights.peekitem()
+            if not check_memory_fit(node, bin_id):
+                tmp.append(bin_weights.popitem())
+                continue
+            # restore - next item may be smaller!
+            # it does not really matter, since if we would fail on smallest - we fail on all.
+            for i,v in tmp:
+                warnings.warn("it is improbable we got here.")
+                bin_weights[i] = v
+            return bin_id
+
+        print("Could not find an assignment which fits memory")
+        print(f"node: {node}")
+        print("bins:")
+        for x in tmp:
+            print(x)
+        print("node to mem:")
+        pprint(node_to_mem)
+
+        print(f"sum(node_to_mem.values()): {sum(node_to_mem.values()) * 1e-9} GB")
+
+        if sum(node_to_mem.values()) < sum(gpu_mem_threshold_bytes.values()):
+            warnings.warn("Can find assignment using largest memory job first")
+
+        raise RuntimeError("Could not find an assignment which fits memory")
+
+    while node_to_weight:
+        node, node_mem = node_to_mem_copy.popitem()
+        node_weight = node_to_weight.pop(node)
         bin_id = choose_bin(node)
         bins[bin_id].append(node)
         bin_weights[bin_id] += node_weight
         bin_memory[bin_id] += node_to_mem[node]
 
+    print("bin_memory after greedy assignment:")
+    pprint(str(bin_memory))
+    print(f"sum(node_to_mem.values()): {sum(node_to_mem.values()) * 1e-9} GB")
+
     return bins
-
-
 
 
 def algorithm_u(ns, m):
@@ -155,7 +247,7 @@ def exhustive_search(graph: Graph, P, node_weight_function, node_mem_estimator: 
     L_tag = len(all_nodes)
 
     # gpu_mem_threshold_bytes = {i: 10 * 1e9 for i in bins}
-    homogenous_threshold = 10* 1e9
+    homogenous_threshold = node_mem_estimator.THRESHOLD
 
     print(f"Doing exhaustive search ")
 

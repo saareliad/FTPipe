@@ -6,7 +6,7 @@
     "auto_file_name": true,
     "out_filename": "tst",
     "distributed_backend": "mpi",
-    "model": "bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream",
+    "model": "layer_bert_large_uncased_whole_word_maskings_384_8p_bw12_async_pipedream",
     "dataset": "squad1",
     "trainer": {
         "type": "squad",

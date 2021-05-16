@@ -22,7 +22,7 @@ def _lworker(args):
 
 
 def lworker(model, L, P, edge_weight_function, node_weight_function, round_limit, saved_work_graph_without_par_edges,
-            node_mem_estimator,
+            node_mem_estimator: NodeMemoryEstimator,
             basic_blocks, special_blocks, depth
             ):
     work_graph = Graph.from_state(saved_work_graph_without_par_edges)
@@ -104,7 +104,7 @@ def partition_mpipe(model, graph: Graph,
     P = num_gpus
     # TODO: Choose L, loop over L's
     saved_work_graph = work_graph
-    saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
+    # saved_work__remove_parallel_edgesgraph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
 
     L_to_res = dict()
     # max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
@@ -123,7 +123,7 @@ def partition_mpipe(model, graph: Graph,
         warnings.warn("experimental: parallel run on L.")
         # Parallel version
         worker_args = [(model, L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph_without_par_edges.state(), node_mem_estimator, basic_blocks, special_blocks,
+                        saved_work_graph._remove_parallel_edges.state(), node_mem_estimator, basic_blocks, special_blocks,
                         depth) for L in L_list]
 
         with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
@@ -135,14 +135,22 @@ def partition_mpipe(model, graph: Graph,
     else:
         # sequential version
         for L in L_list:
-            times, work_graph, best_objective, refine_improvement = lworker(model, L, P, edge_weight_function,
-                                                                            node_weight_function, round_limit,
-                                                                            saved_work_graph_without_par_edges.state(),
-                                                                            node_mem_estimator,
-                                                                            basic_blocks, special_blocks, depth)
+            try:
+                times, work_graph, best_objective, refine_improvement = lworker(model, L, P, edge_weight_function,
+                                                                                node_weight_function, round_limit,
+                                                                                saved_work_graph._remove_parallel_edges().state(),
+                                                                                node_mem_estimator,
+                                                                                basic_blocks, special_blocks, depth)
+                L_to_res[L] = (work_graph, times, best_objective, refine_improvement)
+            except Exception as e:
+                if L_list ==1:
+                    raise e
+                else:
+                    warnings.warn(f"partitioning failed to L={L}, trying others")
+                    print(str(e))
+                    continue
 
             # save res
-            L_to_res[L] = (work_graph, times, best_objective, refine_improvement)
 
     # TODO: choose best L times
     # TODO: fix the assert to torch.allclose, it fails due float round error even though same number.
@@ -192,6 +200,9 @@ def partition_mpipe(model, graph: Graph,
         L_to_num_stages[L] = nstages
 
     L = best_L
+    if not L_to_res:
+        raise RuntimeError("ERROR: MPIPE Could not find any legal assignment, see errors")
+
     work_graph = L_to_res[L][0]
     # TODO: SAVE THIS. (also save the graphs and run full exp)
     print(f"Best L is {L}")
@@ -199,6 +210,13 @@ def partition_mpipe(model, graph: Graph,
     print("L to refinement improvement", L_to_refinement_improvement)
     print("L_to_num_stages:", L_to_num_stages)
     print("L_to_best_objective", L_to_best_objective)
+
+    # work_graph -> saved_work_graph, since work graph is without par edges
+    for node in saved_work_graph.non_input_nodes:
+        node.gpu_id = work_graph[node.id].gpu_id
+        node.stage_id = work_graph[node.id].stage_id
+
+    work_graph = saved_work_graph
 
     # # bins to stages
     # stages_from_bins(work_graph, bins, id_to_node_worked_on=id_to_node)

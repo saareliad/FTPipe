@@ -2,9 +2,12 @@
 python -m autopipe.partition new_t5 --model_name_or_path t5-3b --t5_task squad1 --lmhead --n_iter 10 --analysis_batch_size 64 --partitioning_batch_size 64 --ct new_trace_cache_t53b_64_4_lg --cp new_prof_cache_t53b_64_4_lg --stateless_tied --lmhead --n_partitions 8 --max_seq_length 64 --answer_max_seq_length 4 --partitioning_method pipedream --preset pipedream --disable_op_profiling --dont_use_async_meta_alg --save_memory_mode --special_blocks T5Block --basic_blocks T5Block --output_file layer_graph_
 """
 import torch.functional
-import torch
+import torch.linalg
 import torch.nn.functional
+import torch
 import math
+#import torch.special
+import torch.fft
 from torch import Tensor
 import torch.nn as nn
 from itertools import chain
@@ -12,23 +15,23 @@ from typing import Optional, Tuple, Iterator, Iterable, OrderedDict, Dict
 import collections
 
 from typing import Type
-from models.normal.NLP_models.stateless import StatelessEmbedding
 from torch.nn.modules.linear import Linear
-from torch.nn.modules.dropout import Dropout
 from models.new_t5_example.modeling_t5 import T5Block
+from torch.nn.modules.dropout import Dropout
+from models.normal.NLP_models.stateless import StatelessEmbedding
 from models.new_t5_example.modeling_t5 import T5LayerNorm
 # this is an auto generated file do not edit unless you know what you are doing
 
 
 # partition adjacency
 # model inputs {0, 6, 7}
-# partition 0 {'inputs': {'input_ids', 'attention_mask', 'decoder_input_ids'}, 'outputs': {1, 2, 3, 4, 5, 6}}
+# partition 0 {'inputs': {'decoder_input_ids', 'attention_mask', 'input_ids'}, 'outputs': {1, 2, 3, 4, 5, 6}}
 # partition 1 {'inputs': {0}, 'outputs': {2}}
 # partition 2 {'inputs': {0, 1}, 'outputs': {3}}
 # partition 3 {'inputs': {0, 2}, 'outputs': {4}}
 # partition 4 {'inputs': {0, 3}, 'outputs': {5}}
 # partition 5 {'inputs': {0, 4}, 'outputs': {6}}
-# partition 6 {'inputs': {0, 'attention_mask', 5, 'decoder_input_ids', 'decoder_attention_mask'}, 'outputs': {7}}
+# partition 6 {'inputs': {0, 'decoder_input_ids', 'attention_mask', 5, 'decoder_attention_mask'}, 'outputs': {7}}
 # partition 7 {'inputs': {'labels', 6}, 'outputs': {'output'}}
 # model outputs {7}
 
@@ -37,7 +40,7 @@ def create_pipeline_configuration(DEBUG=False, batch_size=64):
     config = {
         'batch_dim': 0,
         'depth': 10000,
-        'basic_blocks': (StatelessEmbedding,Linear,Dropout,T5Block,T5LayerNorm),
+        'basic_blocks': (Linear,T5Block,Dropout,StatelessEmbedding,T5LayerNorm),
         'model_inputs': {
             'attention_mask': {
                 'shape': torch.Size([64, 64]),
@@ -405,19 +408,19 @@ def create_pipeline_configuration(DEBUG=False, batch_size=64):
                         'req_grad': False,
                         'is_batched': True,
                         'used_by': [7]},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___564': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___577': {
                         'shape': torch.Size([64, 4, 1024]),
                         'dtype': torch.float32,
                         'req_grad': True,
                         'is_batched': True,
                         'used_by': [7]},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___566': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___579': {
                         'shape': torch.Size([64, 32, 4, 4]),
                         'dtype': torch.float32,
                         'req_grad': True,
                         'is_batched': True,
                         'used_by': [7]},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___568': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___581': {
                         'shape': torch.Size([64, 32, 4, 64]),
                         'dtype': torch.float32,
                         'req_grad': False,
@@ -452,19 +455,19 @@ def create_pipeline_configuration(DEBUG=False, batch_size=64):
                         'req_grad': False,
                         'is_batched': True,
                         'created_by': 6},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___564': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___577': {
                         'shape': torch.Size([64, 4, 1024]),
                         'dtype': torch.float32,
                         'req_grad': True,
                         'is_batched': True,
                         'created_by': 6},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___566': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___579': {
                         'shape': torch.Size([64, 32, 4, 4]),
                         'dtype': torch.float32,
                         'req_grad': True,
                         'is_batched': True,
                         'created_by': 6},
-                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___568': {
+                    'T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___581': {
                         'shape': torch.Size([64, 32, 4, 64]),
                         'dtype': torch.float32,
                         'req_grad': False,
@@ -1072,6 +1075,7 @@ class Partition6(nn.Module):
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[6]',
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[7]',
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[8]',
+            'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[9]',
         ]
     TENSORS = [
         ]
@@ -1108,7 +1112,8 @@ class Partition6(nn.Module):
                         'l_10': 'decoder.block.5',
                         'l_11': 'decoder.block.6',
                         'l_12': 'decoder.block.7',
-                        'l_13': 'decoder.block.8'}
+                        'l_13': 'decoder.block.8',
+                        'l_14': 'decoder.block.9'}
         self.to(self.device)
 
     def forward(self, *args):
@@ -1126,6 +1131,7 @@ class Partition6(nn.Module):
         # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[6] <=> self.l_11
         # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[7] <=> self.l_12
         # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[8] <=> self.l_13
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[9] <=> self.l_14
         # input0 <=> attention_mask
         # input1 <=> decoder_attention_mask
         # input2 <=> decoder_input_ids
@@ -1209,14 +1215,19 @@ class Partition6(nn.Module):
         t_3 = t_3[0]
         t_6 = t_2[2]
         t_2 = t_2[3]
+        t_2 = self.l_14(t_3, attention_mask=t_5, position_bias=t_6, encoder_attention_mask=t_4, encoder_decoder_position_bias=t_2, layer_head_mask=None, encoder_layer_head_mask=None, past_key_value=None, output_attentions=False, use_cache=False, encoder_hidden_states=t_1)
+        t_6 = t_2[slice(None, 2, None)]
+        t_6 = t_6[0]
+        t_3 = t_2[2]
+        t_2 = t_2[3]
         # Returning:
         # T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout]
         # T5ForConditionalGeneration/T5Stack[decoder]/Tensor::__mul___440
         # T5ForConditionalGeneration/T5Stack[decoder]/Tensor::__mul___448
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___564
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___566
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___568
-        return list(flatten((t_1, t_5, t_4, t_3, t_6, t_2)))
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___577
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___579
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___581
+        return list(flatten((t_1, t_5, t_4, t_6, t_3, t_2)))
 
     def state_dict(self, *args, **kwargs):
         # we return the state dict of this part as it should be in the original model
@@ -1245,7 +1256,6 @@ class Partition6(nn.Module):
 
 class Partition7(nn.Module):
     LAYER_SCOPES = [
-            'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[9]',
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[10]',
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[11]',
             'T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[12]',
@@ -1286,52 +1296,50 @@ class Partition7(nn.Module):
 
         self.device = torch.device(device)
         self.input_structure = [1, 1, 1, 1, 1, 1, 1]
-        self.lookup = {'l_0': 'decoder.block.9',
-                        'l_1': 'decoder.block.10',
-                        'l_2': 'decoder.block.11',
-                        'l_3': 'decoder.block.12',
-                        'l_4': 'decoder.block.13',
-                        'l_5': 'decoder.block.14',
-                        'l_6': 'decoder.block.15',
-                        'l_7': 'decoder.block.16',
-                        'l_8': 'decoder.block.17',
-                        'l_9': 'decoder.block.18',
-                        'l_10': 'decoder.block.19',
-                        'l_11': 'decoder.block.20',
-                        'l_12': 'decoder.block.21',
-                        'l_13': 'decoder.block.22',
-                        'l_14': 'decoder.block.23',
-                        'l_15': 'decoder.final_layer_norm',
-                        'l_16': 'decoder.dropout',
-                        'l_17': 'lm_head'}
+        self.lookup = {'l_0': 'decoder.block.10',
+                        'l_1': 'decoder.block.11',
+                        'l_2': 'decoder.block.12',
+                        'l_3': 'decoder.block.13',
+                        'l_4': 'decoder.block.14',
+                        'l_5': 'decoder.block.15',
+                        'l_6': 'decoder.block.16',
+                        'l_7': 'decoder.block.17',
+                        'l_8': 'decoder.block.18',
+                        'l_9': 'decoder.block.19',
+                        'l_10': 'decoder.block.20',
+                        'l_11': 'decoder.block.21',
+                        'l_12': 'decoder.block.22',
+                        'l_13': 'decoder.block.23',
+                        'l_14': 'decoder.final_layer_norm',
+                        'l_15': 'decoder.dropout',
+                        'l_16': 'lm_head'}
         self.to(self.device)
 
     def forward(self, *args):
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[9] <=> self.l_0
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[10] <=> self.l_1
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[11] <=> self.l_2
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[12] <=> self.l_3
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[13] <=> self.l_4
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[14] <=> self.l_5
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[15] <=> self.l_6
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[16] <=> self.l_7
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[17] <=> self.l_8
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[18] <=> self.l_9
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[19] <=> self.l_10
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[20] <=> self.l_11
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[21] <=> self.l_12
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[22] <=> self.l_13
-        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[23] <=> self.l_14
-        # T5ForConditionalGeneration/T5Stack[decoder]/T5LayerNorm[final_layer_norm] <=> self.l_15
-        # T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout] <=> self.l_16
-        # T5ForConditionalGeneration/Linear[lm_head] <=> self.l_17
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[10] <=> self.l_0
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[11] <=> self.l_1
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[12] <=> self.l_2
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[13] <=> self.l_3
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[14] <=> self.l_4
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[15] <=> self.l_5
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[16] <=> self.l_6
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[17] <=> self.l_7
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[18] <=> self.l_8
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[19] <=> self.l_9
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[20] <=> self.l_10
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[21] <=> self.l_11
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[22] <=> self.l_12
+        # T5ForConditionalGeneration/T5Stack[decoder]/ModuleList[block]/T5Block[23] <=> self.l_13
+        # T5ForConditionalGeneration/T5Stack[decoder]/T5LayerNorm[final_layer_norm] <=> self.l_14
+        # T5ForConditionalGeneration/T5Stack[decoder]/Dropout[dropout] <=> self.l_15
+        # T5ForConditionalGeneration/Linear[lm_head] <=> self.l_16
         # input4 <=> labels
         # T5ForConditionalGeneration/T5Stack[encoder]/Dropout[dropout] <=> x0
         # T5ForConditionalGeneration/T5Stack[decoder]/Tensor::__mul___440 <=> x1
         # T5ForConditionalGeneration/T5Stack[decoder]/Tensor::__mul___448 <=> x2
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___564 <=> x3
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___566 <=> x4
-        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___568 <=> x5
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___577 <=> x3
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___579 <=> x4
+        # T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___581 <=> x5
         labels, x0, x1, x2, x3, x4, x5 = unflatten(args, self.input_structure)
         t_0 = self.l_0(x3, attention_mask=x1, position_bias=x4, encoder_attention_mask=x2, encoder_decoder_position_bias=x5, layer_head_mask=None, encoder_layer_head_mask=None, past_key_value=None, output_attentions=False, use_cache=False, encoder_hidden_states=x0)
         t_1 = t_0[slice(None, 2, None)]
@@ -1401,24 +1409,19 @@ class Partition7(nn.Module):
         t_0 = self.l_13(t_1, attention_mask=x1, position_bias=t_2, encoder_attention_mask=x2, encoder_decoder_position_bias=t_0, layer_head_mask=None, encoder_layer_head_mask=None, past_key_value=None, output_attentions=False, use_cache=False, encoder_hidden_states=x0)
         t_2 = t_0[slice(None, 2, None)]
         t_2 = t_2[0]
+        t_2 = self.l_14(t_2)
         t_1 = t_0[2]
         t_0 = t_0[3]
-        t_0 = self.l_14(t_2, attention_mask=x1, position_bias=t_1, encoder_attention_mask=x2, encoder_decoder_position_bias=t_0, layer_head_mask=None, encoder_layer_head_mask=None, past_key_value=None, output_attentions=False, use_cache=False, encoder_hidden_states=x0)
-        t_1 = t_0[slice(None, 2, None)]
-        t_1 = t_1[0]
-        t_1 = self.l_15(t_1)
-        t_2 = t_0[2]
-        t_0 = t_0[3]
-        t_1 = self.l_16(t_1)
-        t_1 = t_1 * 0.03125
-        t_1 = self.l_17(t_1)
-        t_3 = t_1.size(-1)
-        t_3 = t_1.view(-1, t_3)
-        t_1 = labels.view(-1)
-        t_1 = torch.nn.functional.cross_entropy(t_3, t_1, weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean')
+        t_2 = self.l_15(t_2)
+        t_2 = t_2 * 0.03125
+        t_2 = self.l_16(t_2)
+        t_3 = t_2.size(-1)
+        t_3 = t_2.view(-1, t_3)
+        t_2 = labels.view(-1)
+        t_2 = torch.nn.functional.cross_entropy(t_3, t_2, weight=None, size_average=None, ignore_index=-100, reduce=None, reduction='mean')
         # Returning:
         # T5ForConditionalGeneration/torch.nn.functional::cross_entropy_780
-        return (t_1,)
+        return (t_2,)
 
     def state_dict(self, *args, **kwargs):
         # we return the state dict of this part as it should be in the original model
@@ -1694,7 +1697,7 @@ Partition2 output:T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem__
 Partition3 output:T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___261 is not contiguous!
 Partition4 output:T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___321 is not contiguous!
 Partition5 output:T5ForConditionalGeneration/T5Stack[encoder]/tuple::__getitem___366 is not contiguous!
-Partition6 output:T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___566 is not contiguous!
+Partition6 output:T5ForConditionalGeneration/T5Stack[decoder]/tuple::__getitem___579 is not contiguous!
 Number of nodes in Computation Graph: 781
 Number of stages: 8
 backward times include recomputation
@@ -1707,8 +1710,8 @@ Stage parameter count:
  3: 201334784,
  4: 201334784,
  5: 151001088,
- 6: 654343168,
- 7: 1039550464,
+ 6: 721455104,
+ 7: 972438528,
  'total': 2884440064}
 
 GPU parameter count:
@@ -1716,21 +1719,21 @@ GPU parameter count:
 {'total': 2884440064}
 
 real times are based on real measurements of execution time (with communication) of generated partitions ms
-forward {0: 171.22, 1: 158.31, 2: 158.38, 3: 158.29, 4: 158.21, 5: 119.64, 6: 128.68, 7: 152.46}
-backward {0: 450.26, 1: 450.91, 2: 451.28, 3: 450.87, 4: 451.12, 5: 339.83, 6: 385.72, 7: 284.46}
+forward {0: 171.7, 1: 158.54, 2: 157.99, 3: 158.34, 4: 158.82, 5: 119.79, 6: 138.88, 7: 141.98}
+backward {0: 451.6, 1: 451.58, 2: 451.81, 3: 451.88, 4: 451.5, 5: 340.28, 6: 415.74, 7: 265.99}
 
 Analysis for T = (1-R)fwd + R*bwd:
 
 Pipeline Slowdown: (compared to sequential execution with no communication, and same recompute policy)
-forward 1.173
-backward 1.119
+forward 1.176
+backward 1.115
 
 Expected utilization by partition
-forward {0: 0.91, 1: 0.9, 2: 0.91, 3: 0.9, 4: 0.9, 5: 0.68, 6: 0.74, 7: 0.89}
-backward {0: 1.0, 1: 0.99, 2: 0.99, 3: 0.99, 4: 0.99, 5: 0.74, 6: 0.82, 7: 0.63}
+forward {0: 0.91, 1: 0.9, 2: 0.9, 3: 0.9, 4: 0.9, 5: 0.68, 6: 0.8, 7: 0.83}
+backward {0: 1.0, 1: 0.99, 2: 0.99, 3: 0.99, 4: 0.99, 5: 0.74, 6: 0.89, 7: 0.59}
 
-worstcase: bwd: 451.282 fwd: 171.215
-Expected speedup for 8 partitions is: 7.056
+worstcase: bwd: 451.883 fwd: 171.702
+Expected speedup for 8 partitions is: 7.069
 Assuming bandwidth of 12 GBps between GPUs
 
 communication volumes size of activations of each partition
@@ -1754,38 +1757,38 @@ Analysis for T = fwd + bwd:
                                   3: 0.99,
                                   4: 0.99,
                                   5: 0.74,
-                                  6: 0.82,
-                                  7: 0.72,
-                                  'worstcase_std': 0.0},
- 'pipeline_no_comm': {0: 606.32,
-                      1: 600.83,
-                      2: 601.27,
-                      3: 600.77,
-                      4: 600.94,
-                      5: 451.08,
-                      6: 497.58,
-                      7: 435.25,
-                      'worstcase': 606.32,
-                      'worstcase_std': 2.27},
- 'pipeline_vs_seq_no_comm': 5.58,
- 'pipeline_with_non_parallel_comm': {0: 621.47,
-                                     1: 609.22,
-                                     2: 609.66,
-                                     3: 609.16,
-                                     4: 609.33,
-                                     5: 459.48,
-                                     6: 514.41,
-                                     7: 436.92,
-                                     'worstcase': 621.47},
- 'seq_no_comm_no_recomp': {0: 451.49,
-                           1: 447.92,
-                           2: 447.4,
-                           3: 448.03,
-                           4: 448.15,
-                           5: 335.56,
-                           6: 369.34,
-                           7: 436.01}}
+                                  6: 0.88,
+                                  7: 0.67,
+                                  'worstcase_std': 0.01},
+ 'pipeline_no_comm': {0: 608.15,
+                      1: 601.73,
+                      2: 601.41,
+                      3: 601.83,
+                      4: 601.93,
+                      5: 451.67,
+                      6: 537.8,
+                      7: 406.3,
+                      'worstcase': 608.15,
+                      'worstcase_std': 5.03},
+ 'pipeline_vs_seq_no_comm': 5.56,
+ 'pipeline_with_non_parallel_comm': {0: 623.3,
+                                     1: 610.12,
+                                     2: 609.8,
+                                     3: 610.22,
+                                     4: 610.32,
+                                     5: 460.07,
+                                     6: 554.63,
+                                     7: 407.98,
+                                     'worstcase': 623.3},
+ 'seq_no_comm_no_recomp': {0: 451.16,
+                           1: 447.52,
+                           2: 447.1,
+                           3: 447.1,
+                           4: 447.69,
+                           5: 335.61,
+                           6: 398.67,
+                           7: 407.51}}
 
-expected_speedup_compared_to_seq_no_recomp_no_comm: 5.436
-Analysis max cuda memory used 8.48GB
+expected_speedup_compared_to_seq_no_recomp_no_comm: 5.424
+Analysis max cuda memory used 7.94GB
 """

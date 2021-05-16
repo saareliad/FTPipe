@@ -79,6 +79,29 @@ class Refiner:
             stage_id, nodes in stage_to_nodes.items()}
         return stage_to_cost
 
+    def calc_total_comm(self):
+        cwf = self.cwf
+        gpu_to_comp_cost = self.gpu_to_comp_cost
+        stage_borders = self.stage_borders
+        stage_to_nodes = self.stage_to_nodes
+        stage_to_gpu = self.stage_to_gpu
+
+        total_comm = 0
+
+        for stage_id, nodes in stage_to_nodes.items():
+            boarders = stage_borders[stage_id]
+            if boarders:
+                outgoing_edges, _, incomming_edges, _ = boarders
+            else:
+                outgoing_edges, _, incomming_edges, _ = cwf.calculate_borders(nodes)
+
+            comm_bwd, comm_fwd = cwf.calculate_comm_forward_and_backward(incomming_edges, outgoing_edges)
+
+            total_comm += comm_bwd
+            total_comm += comm_fwd
+
+        return total_comm
+
     def calc_objective(self):
         # to minimize
         return max(self.stage_to_cost.values())
@@ -88,6 +111,8 @@ class Refiner:
 
     def update_on_move(self, nodes: Iterable[Node], new_stage_id: int, escape_minima=False):
         prev_stage_id = next(iter(nodes)).stage_id
+
+        prev_comm = self.calc_total_comm()
 
         # Move
         self._apply_move(nodes, new_stage_id)
@@ -99,9 +124,12 @@ class Refiner:
             return True
         elif new_objective == self.best_objective:
             self.best_objective = new_objective
-            # TODO: check if communication decreased
-            comm_sign = 0  # prev - now
+            # check if communication decreased
+            curr_comm = self.calc_total_comm()
+            comm_sign = prev_comm - curr_comm
+            # comm_sign = 0  # prev - now
             if comm_sign > 0 or (comm_sign == 0 and escape_minima):
+                print("objective is the same, reducing comm")
                 return True
 
         # Undo
@@ -218,7 +246,8 @@ def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_f
             valid_local_noedes = set()
 
             # Outgoing:
-            for e in sorted(outgoing_edges, key=lambda x: (x[0].id, x[1].id), reverse=True):
+            # u->v we want u to be max, and v to be min.
+            for e in sorted(outgoing_edges, key=lambda x: (x[0].topo_sort_id, -x[1].topo_sort_id), reverse=True):
                 node = e[0]
                 dst_stage = e[1].stage_id
 
@@ -243,7 +272,8 @@ def refine(graph: Graph, node_weight_function: NodeWeightFunction, edge_weight_f
             outgoing_edges, outgoing_nodes, incoming_edges, incoming_nodes = borders
 
             # Ingoing:
-            for e in sorted(incoming_edges, key=lambda x: (x[0].id, x[1].id), reverse=False):
+            # # u->v we want v to be min. but we want its u to be max, it has the least change of creating cycles
+            for e in sorted(incoming_edges, key=lambda x: (x[0].topo_sort_id, -x[1].topo_sort_id), reverse=False):
                 dst_stage = e[0].stage_id
                 node = e[1]
 

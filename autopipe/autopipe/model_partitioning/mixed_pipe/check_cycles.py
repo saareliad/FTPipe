@@ -2,10 +2,11 @@ from typing import Set
 
 import networkx as nx
 
+from autopipe.autopipe.model_partitioning.heuristics import NodeMemoryEstimator
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
 
-def check_cycle2(g: Graph, a: Node, b: Node):
+def check_cycle2(g: Graph, a: Node, b: Node, nms=NodeMemoryEstimator()):
     """
     Checks if contracting (merging) (a,b) breaks topo order
     Args:
@@ -29,6 +30,11 @@ def check_cycle2(g: Graph, a: Node, b: Node):
     # when dynamic topo sort is maintaned, we can
     # change depth_limit to rank b
     creates_a_cycle = g.forward_dfs_and_check(source=ab, set_to_check={a, b}, depth_limit=None)
+
+    if not creates_a_cycle:
+        if nms(a) + nms(b) > nms.THRESHOLD:
+            return True  ### Failse due memory  # HACK #FIXME:
+
     return creates_a_cycle
 
 

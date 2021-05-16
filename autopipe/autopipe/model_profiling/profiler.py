@@ -167,21 +167,25 @@ class GraphProfiler():
 
         return weights
 
-    @staticmethod
-    def activations_estimated_set_max_memory_usage(graph: Graph):
-        for node in graph.nodes:
-            node.max_memory_bytes = NodeMemoryEstimator.cuda_activations_and_grads_mem(node)
+    # @staticmethod
+    # def activations_estimated_set_max_memory_usage(graph: Graph):
+    #     for node in graph.nodes:
+    #         node.max_memory_bytes = NodeMemoryEstimator.cuda_activations_and_grads_mem(node)
 
-    def set_max_memory_usage(self, graph: Graph):
+    def set_max_memory_usage(self, graph: Graph, ignore_retain_graph=True):
         d = dict()
         for node in graph.nodes:
             if node not in self.forward_mem or node not in self.backward_mem:
                 continue
             fwd = self.forward_mem[node]
-            bwd = self.backward_mem[node]
+            bwd = self.backward_mem[node] # TODO: ignore outlier [99999, 555, 555, 555], it comes from retain_graph
+            if ignore_retain_graph:
+                fwd = fwd[1:]
+                bwd = bwd[1:]
             max_usage = max(max(fwd), max(bwd))
             node.max_memory_bytes = max(node.max_memory_bytes, max_usage)
             d[node.scope] = node.max_memory_bytes
+        print("max_mem_usage_per_node", d)
         return d
 
     def print_times(self, backward=False):

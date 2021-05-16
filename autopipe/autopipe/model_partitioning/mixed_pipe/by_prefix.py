@@ -99,7 +99,9 @@ def annotate_special_blocks_to_hold_to(model, graph, special_blocks, basic_block
     for node in graph.nodes:
         for scope_to_hold_to in scopes_to_hold_to:
             if node.scope.startswith(scope_to_hold_to):
-                if node.scope_to_hold_to is not None:
+                if node.scope_to_hold_to is not None and node.scope_to_hold_to != scope_to_hold_to:
+                    print(f"need to assign a scope to hold to for node:{node.scope}")
+                    print(f"but node already has {node.scope_to_hold_to}")
                     raise NotImplementedError("nested by prefix coarsening not supported")
                 node.scope_to_hold_to = scope_to_hold_to
 

@@ -395,7 +395,10 @@ def get_optimizer(args, optimizer_cls, parameters):
     assert isinstance(parameters, list)
     if len(parameters) == 0:
         if not getattr(args, "allow_stateless", False):
-            raise ValueError(f"Got stateless partition {args.stage}")
+            raise ValueError(f"Got stateless partition {args.stage}, if this is wanter, set \"allow_stateless\": true")
+        else:
+            warnings.warn("using a dummy parameter")
+            parameters = torch.nn.ParameterList([torch.nn.Parameter(torch.randn(1))])
 
     # HACK: tuplify all optimizer paramerets, just in case. [0.9, 0.98] -> (0.9, 0.98)
     # https://stackoverflow.com/questions/15721363/preserve-python-tuples-with-json

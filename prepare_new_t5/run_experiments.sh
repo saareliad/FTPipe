@@ -7,6 +7,16 @@ export OMP_NUM_THREADS=5
 mkdir /home_local/saareliad/data/moved_cache
 # Now, run mpipe
 
+# opgraph
+
+mv /home_local/saareliad/data/cache_* /home_local/saareliad/data/moved_cache/
+echo quit | nvidia-cuda-mps-control
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/gpipe_op_graph.json --seed 42 --mode preproc
+nvidia-cuda-mps-control -d # Start deamon in background
+mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/gpipe_op_graph.json --seed 42
+#python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/gpipe_op_graph.json --seed 42 --mode eval
+
+
 # layers graph
 # boolq
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42 --mode preproc

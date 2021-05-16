@@ -8,9 +8,9 @@ python -m autopipe.partition new_t5 \
  --n_iter \
  5 \
  --analysis_batch_size \
- 32 \
+ 8 \
  --partitioning_batch_size \
- 32 \
+ 8 \
  --ct \
  new_trace_cache_t53b_64_4_op \
  --cp \
