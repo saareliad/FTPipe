@@ -134,6 +134,7 @@ def compile_partitioned_model(graph: Graph,
     with open(path, 'w') as f:
         f.write('\n'.join(lines))
 
+    return str(path)
 
 def group_nodes_by_stage_id(nodes: Iterable[Node]) -> Dict[int, List[Node]]:
     """

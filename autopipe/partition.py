@@ -16,6 +16,7 @@ from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
 from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
 from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
 from autopipe.tasks import PartitioningTask, Parser, get_parser_and_partitioner
+from pipe.misc.sanity_check import run_sanity_check
 
 
 def parse_cli() -> Tuple[Namespace, Dict, PartitioningTask]:
@@ -47,6 +48,10 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
             raise ValueError(
                 f"override dict should not modify model creation arguments got {i}\nthe intended use is for modifying partitioning/hueristics related values")
         setattr(cmd_args, i, v)
+
+    if getattr(cmd_args, "sanity_check", False):
+        torch.manual_seed(0)
+        torch.cuda.synchronize()
 
     model = partitioner.get_model(cmd_args).train()
     sample = partitioner.get_input(cmd_args, analysis=False)
@@ -159,6 +164,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                                                      layers,
                                                      tensors)
         del layers, tensors
+
+        if getattr(cmd_args, "sanity_check", False):
+            print("-I- running sanity check")
+            run_sanity_check(cmd_args, partitioner, analysis_config, device=cmd_args.device,
+                             training=True, check_grads=True, ref_model=None, check_init=False)
 
         # run analysis log output in the generated file
         sample = partitioner.get_input(cmd_args, analysis=True)

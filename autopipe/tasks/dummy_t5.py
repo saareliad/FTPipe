@@ -29,7 +29,7 @@ class DumT5Partitioner(T5Partitioner):
         config_class = T5Config
         config = config_class.from_pretrained("t5-11b")
 
-        config.num_layers = 2
+        config.num_layers = 1
         config.num_decoder_layers = 1
 
         for k, v in explicitly_set_dict.items():

@@ -5,6 +5,7 @@ from typing import Dict, Tuple
 from autopipe.analysis.analysis_utils import run_partitions_fwd, AnalysisPipelineConfig, \
     convert_to_analysis_format
 from autopipe.autopipe.utils import move_tensors, layerDict, tensorDict
+from autopipe.tasks.dummy_t5 import DumT5Partitioner
 from autopipe.tasks.partitioning_task import PartitioningTask
 
 
@@ -35,6 +36,8 @@ def run_sanity_check(cmd_args: Namespace, partitioner: PartitioningTask, analysi
     except:
         pass
 
+    is_ok = True
+
     # get some input for comparison
     args, kwargs = get_input_args_kwargs(partitioner.get_input(cmd_args, analysis=False))
     assert len(args) == 0, "only kwargs are supported for sanity checks"
@@ -52,7 +55,7 @@ def run_sanity_check(cmd_args: Namespace, partitioner: PartitioningTask, analysi
         model.train(training)
         a2 = model(*args, **kwargs)
         torch.cuda.synchronize()
-        assert torch.allclose(a1, a2), (a1, a2)
+        assert torch.allclose(a1, a2), ("intialization check failed" + str((a1, a2)))
         del a1, a2, model
 
     # run fwd pass for the partitioned model
@@ -78,10 +81,16 @@ def run_sanity_check(cmd_args: Namespace, partitioner: PartitioningTask, analysi
         ref_model = partitioner.get_model(cmd_args)
 
     ref_model.to(device).train(training)
+    torch.cuda.synchronize()
+
+    with torch.no_grad():
+        kwargs_to_ref_model = move_tensors(kwargs, device)
+        args_to_ref_model = move_tensors(args, device)
+    torch.cuda.synchronize()
     torch.manual_seed(0)
+    ref_output = ref_model(*args_to_ref_model, **kwargs_to_ref_model)
     torch.cuda.synchronize()
-    ref_output = ref_model(**move_tensors(kwargs, device))
-    torch.cuda.synchronize()
+    del kwargs_to_ref_model, args_to_ref_model
     ref_model = ref_model.cpu()
 
     assert isinstance(ref_output, torch.Tensor)
@@ -99,10 +108,10 @@ def run_sanity_check(cmd_args: Namespace, partitioner: PartitioningTask, analysi
     else:
         print(f"\noutputs are not the same in {'training' if training else 'evaluation'}\n")
         print(output, ref_output)
+        is_ok = False
 
         g1 = make_dot(output)
         g2 = make_dot(ref_output)
-        import networkx as nx
         g1.save("p_output")
         g2.save("ref_output")
         print("saved dot files: p_output ref_output")
@@ -153,14 +162,14 @@ def run_sanity_check(cmd_args: Namespace, partitioner: PartitioningTask, analysi
                 max_abs = abs_error.max()
                 abs_error = abs_error.sum() / abs_error.numel()
                 print(f"{name} grad is different avg_abs {abs_error} N {g.numel()} max_abs {max_abs}")
+                is_ok = False
             else:
                 pass
                 # print(f"{name} is OK.")
-
+    return is_ok
 
 from graphviz import Digraph
 import torch
-from torch.autograd import Variable
 
 
 def make_dot(var):
@@ -192,8 +201,6 @@ def make_dot(var):
 
 if __name__ == '__main__':
     from autopipe.tasks.new_t5 import T5Partitioner, ParsePartitioningT5Opts
-    from autopipe.tasks.t5 import T5Partitioner as OLDT5Partitioner
-
 
     parser = ParsePartitioningT5Opts()
     cmd_args = parser.parse_args()
@@ -283,6 +290,7 @@ if __name__ == '__main__':
 
         return module_path
 
+
     def old_t5_pipedream(cmd_args):
         cmd_args.model_name_or_path = "t5-base"
         cmd_args.max_seq_length = 512
@@ -318,6 +326,7 @@ if __name__ == '__main__':
         #    partitioner = OLDT5Partitioner(cmd_args)
         return module_path
 
+
     def tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe(cmd_args):
         cmd_args.model_name_or_path = "t5-base"
         cmd_args.max_seq_length = 512
@@ -335,16 +344,68 @@ if __name__ == '__main__':
         #    partitioner = OLDT5Partitioner(cmd_args)
         return module_path
 
-    module_path = tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe(cmd_args)
 
-    #t5_base_512_4_acyclic(   cmd_args)  # old_base_new_part(cmd_args) #old_t5(cmd_args) # t5_base_512_4_acyclic(cmd_args) # t5_base_512_4(cmd_args)
+    def SANITY_CHECK_new_t5_tmp_op_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream(cmd_args):
+        cmd_args.model_name_or_path = "t5-base"
+        cmd_args.max_seq_length = 512
+        cmd_args.answer_max_seq_length = 4
+        cmd_args.stateless_tied = True
+        cmd_args.lmhead = True
+        cmd_args.precompute_masks = False
+        cmd_args.t5_task = "squad1"
+        cmd_args.partitioning_batch_size = 1
+        cmd_args.n_partitions = 4
+        cmd_args.basic_blocks = "T5Block"
+        cmd_args.analysis_batch_size = 1
+        module_path = "models.partitioned.SANITY_CHECK_new_t5_tmp_op_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream"
+        return module_path
+
+
+    def DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_mpipe(cmd_args):
+        cmd_args.model_name_or_path = "t5-base"
+        cmd_args.max_seq_length = 512
+        cmd_args.answer_max_seq_length = 4
+        cmd_args.stateless_tied = True
+        cmd_args.lmhead = True
+        cmd_args.precompute_masks = False
+        cmd_args.t5_task = "squad1"
+        cmd_args.partitioning_batch_size = 1
+        cmd_args.n_partitions = 2
+        cmd_args.basic_blocks = "T5Block"
+        cmd_args.analysis_batch_size = 1
+        module_path = "models.partitioned.DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_mpipe"
+        return module_path
+
+
+    def DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_pipedream(cmd_args):
+        cmd_args.model_name_or_path = "t5-base"
+        cmd_args.max_seq_length = 512
+        cmd_args.answer_max_seq_length = 4
+        cmd_args.stateless_tied = True
+        cmd_args.lmhead = True
+        cmd_args.precompute_masks = False
+        cmd_args.t5_task = "squad1"
+        cmd_args.partitioning_batch_size = 1
+        cmd_args.n_partitions = 2
+        cmd_args.basic_blocks = "T5Block"
+        cmd_args.analysis_batch_size = 1
+        module_path = "models.partitioned.DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_pipedream"
+        return module_path
+
+
+    # module_path = SANITY_CHECK_new_t5_tmp_op_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream(cmd_args)
+    module_path = DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_mpipe(cmd_args)
+
+    # t5_base_512_4_acyclic(   cmd_args)  # old_base_new_part(cmd_args) #old_t5(cmd_args) # t5_base_512_4_acyclic(cmd_args) # t5_base_512_4(cmd_args)
 
     # module_path = t5_3b_64_4(cmd_args)
 
     print(vars(cmd_args))
 
-    partitioner = T5Partitioner(cmd_args)
+    #partitioner = T5Partitioner(cmd_args)
     # partitioner = OLDT5Partitioner(cmd_args)
+    partitioner = DumT5Partitioner(cmd_args)
+
     torch.manual_seed(0)
     torch.cuda.synchronize()
     model = partitioner.get_model(cmd_args)

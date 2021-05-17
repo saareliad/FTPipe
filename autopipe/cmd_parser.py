@@ -159,6 +159,13 @@ class Parser(argparse.ArgumentParser, ABC):
             "whether to use the old network_profiler instead of the newer graph based profiler"
         )
         group.add_argument(
+            "--sanity_check",
+            default=False,
+            action="store_true",
+            help=
+            "whether to use do sanity check after partitioning"
+        )
+        group.add_argument(
             "--disable_op_profiling",
             default=False,
             action="store_true",

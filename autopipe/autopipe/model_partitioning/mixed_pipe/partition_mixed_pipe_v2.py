@@ -103,7 +103,7 @@ def partition_mpipe(model, graph: Graph,
 
     P = num_gpus
     # TODO: Choose L, loop over L's
-    saved_work_graph = work_graph
+    saved_work_graph = work_graph #.from_other(graph)
     # saved_work__remove_parallel_edgesgraph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
 
     L_to_res = dict()

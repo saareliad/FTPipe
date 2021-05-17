@@ -56,7 +56,7 @@ def coarsen_prefixes(model: Module, graph: Graph, node_weight_function, edge_wei
 
     matching = None
     sb_names = list(sb_scope_to_nodes.keys())
-    print("Found special block names:", sb_names)
+    # print("Found special block names:", sb_names)
     return prev_graph, matching, graph, uf, uf2, sb_names
 
 
