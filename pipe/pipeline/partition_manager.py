@@ -2,6 +2,7 @@ import logging
 import os
 import types
 import warnings
+from typing import Union
 
 import torch
 from torch import Tensor
@@ -16,7 +17,7 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
-from .trainers import PipelineSupportedTrainerType
+from .trainers import PipelineSupportedTrainerType, GapAwareTrainerMixin
 from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
 from .trainers.statistics.gap import try_record_real_gap_from_current
 from .true_weights_storage import TrueWeightsStorage
@@ -124,6 +125,7 @@ class SinglePartitionManager:
         self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
+        self.partition: Partition
 
     def _maybe_init_ddp(self, comm_handler, partition, stage, sync_buffers):
         is_replicated = False
@@ -539,6 +541,7 @@ class SinglePartitionManager:
             # ####### Preparing to step
 
             if self.gap_aware:
+                trainer: Union[GapAwareTrainerMixin, PipelineSupportedTrainerType]
                 # Get delay and modify gradients.
                 if self.step_every > 1:
                     raise NotImplementedError()  # TODO:

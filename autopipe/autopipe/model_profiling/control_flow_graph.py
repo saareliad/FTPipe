@@ -45,13 +45,14 @@ class Node:
         self.num_parameters: Optional[int] = 0
         self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
-        self.args = []
+        self.args: List[Node] = []
         self.kwargs = defaultdict(list)
         self.value_type = None
 
         self.tensor_dtype = None
         self.tensor_shape = None
         self.req_grad = False
+        self.is_contiguous = None
 
         self.constant_value = None
 
@@ -145,6 +146,7 @@ class Node:
         node.constant_value = other.constant_value
         node.max_memory_bytes = other.max_memory_bytes
         node.scope_to_hold_to = other.scope_to_hold_to
+        node.is_contiguous = other.is_contiguous
 
         return node
 
@@ -167,6 +169,7 @@ class Node:
         node.num_parameters = state['num_parameters']
         node.max_memory_bytes = state['max_memory_bytes']
         node.scope_to_hold_to = state['scope_to_hold_to']
+        node.is_contiguous = state['is_contiguous']
         return node
 
     def state_dict(self):
@@ -189,7 +192,8 @@ class Node:
                      req_grad=node.req_grad,
                      compound_edge_weights=deepcopy(node.compound_edge_weights),
                      max_memory_bytes=node.max_memory_bytes,
-                     scope_to_hold_to=node.scope_to_hold_to)
+                     scope_to_hold_to=node.scope_to_hold_to,
+                     is_contiguous=node.is_contiguous)
         return state
 
     def __repr__(self):
@@ -693,7 +697,7 @@ class Graph:
     def from_other(cls, graph: "Graph") -> "Graph":
         return cls(None, None, None, None, None).load_state(graph.state())
 
-    def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
+    def new_graph_without_constants(self) -> Tuple["Graph", Dict[int, int]]:
         """
         creates a graph g with nodes of type CONSTANT 
         or nodes who solely depend on constants are removed
@@ -849,7 +853,7 @@ class Graph:
 
         return stages
 
-    def _remove_parallel_edges(self) -> "Graph":
+    def get_copy_without_parallel_edges(self) -> "Graph":
         """the control flow graph can contain parallel in/out edges
         those edges are important for control flow but are detrimental for partitioning
         this function creates a new Graph without parallel edges"""
@@ -954,7 +958,7 @@ class Graph:
             _nodes = {n.topo_sort_id: n for n in self.nodes}
             self._nodes = _nodes
 
-    def forward_dfs_and_check(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
+    def forward_dfs_and_check_if_in_set(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
         if depth_limit is None:
             depth_limit = len(self)
         # dfs

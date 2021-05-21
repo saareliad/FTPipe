@@ -7,7 +7,7 @@ python -m autopipe.partition new_t5 \
  squad1 \
  --lmhead \
  --n_iter \
- 10 \
+ 5 \
  --analysis_batch_size \
  4 \
  --partitioning_batch_size \
@@ -21,7 +21,9 @@ python -m autopipe.partition new_t5 \
  --n_partitions \
  8 \
  --L \
+ 15 \
  16 \
+ 17 \
  --max_seq_length \
  512 \
  --answer_max_seq_length \

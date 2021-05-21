@@ -50,11 +50,13 @@ def training_loop(args, logger, train_dl, test_dl,
     def run_eval(eval_batches_to_run):
         logger.info(f"Running eval")
         if eval_batches_to_run == 0:
+            partition.eval()
+            if statistics:
+                statistics.eval()
             return False
         if test_dl:
             partition.set_dataloader(test_dl, eval_batches_to_run)
         partition.eval()
-
         if statistics:
             statistics.eval()
 

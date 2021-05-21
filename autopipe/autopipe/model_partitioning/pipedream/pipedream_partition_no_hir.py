@@ -47,14 +47,14 @@ def partition_pipedream(
     assert use_layers_graph
     graph.topo_sort()
     if use_layers_graph:
-        work_graph, lookup = graph.layers_graph()
+        work_graph, lookup = graph.new_graph_without_constants()
     else:
         work_graph, lookup = graph, None
 
     # saved_work_graph = work_graph
-    # saved_work_graph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
+    # saved_work_graph_without_par_edges = saved_work_graph.get_copy_without_parallel_edges()  # creates a copy
     saved_work_graph = work_graph
-    work_graph = work_graph._remove_parallel_edges()
+    work_graph = work_graph.get_copy_without_parallel_edges()
 
     # params_per_node = calculate_params_per_node(model, work_graph)
 

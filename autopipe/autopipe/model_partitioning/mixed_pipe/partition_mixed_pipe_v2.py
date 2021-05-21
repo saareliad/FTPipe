@@ -97,14 +97,14 @@ def partition_mpipe(model, graph: Graph,
     assert use_layers_graph
     graph.topo_sort()
     if use_layers_graph:
-        work_graph, lookup = graph.layers_graph()
+        work_graph, lookup = graph.new_graph_without_constants()
     else:
         work_graph, lookup = graph, None
 
     P = num_gpus
     # TODO: Choose L, loop over L's
     saved_work_graph = work_graph #.from_other(graph)
-    # saved_work__remove_parallel_edgesgraph_without_par_edges = saved_work_graph._remove_parallel_edges()  # creates a copy
+    # saved_work__remove_parallel_edgesgraph_without_par_edges = saved_work_graph.get_copy_without_parallel_edges()  # creates a copy
 
     L_to_res = dict()
     # max_num = min(len(saved_work_graph) - len(list(saved_work_graph.inputs)) + 1, 3 * P + 1)
@@ -123,7 +123,7 @@ def partition_mpipe(model, graph: Graph,
         warnings.warn("experimental: parallel run on L.")
         # Parallel version
         worker_args = [(model, L, P, edge_weight_function, node_weight_function, round_limit,
-                        saved_work_graph._remove_parallel_edges.state(), node_mem_estimator, basic_blocks, special_blocks,
+                        saved_work_graph.get_copy_without_parallel_edges.state(), node_mem_estimator, basic_blocks, special_blocks,
                         depth) for L in L_list]
 
         with multiprocessing.Pool(min(nprocs, len(L_list))) as pool:
@@ -138,7 +138,7 @@ def partition_mpipe(model, graph: Graph,
             try:
                 times, work_graph, best_objective, refine_improvement = lworker(model, L, P, edge_weight_function,
                                                                                 node_weight_function, round_limit,
-                                                                                saved_work_graph._remove_parallel_edges().state(),
+                                                                                saved_work_graph.get_copy_without_parallel_edges().state(),
                                                                                 node_mem_estimator,
                                                                                 basic_blocks, special_blocks, depth)
                 L_to_res[L] = (work_graph, times, best_objective, refine_improvement)

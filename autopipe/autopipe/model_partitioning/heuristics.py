@@ -4,13 +4,9 @@ from functools import reduce
 from typing import Set, Tuple, Optional, Iterable
 
 import torch
-import numpy as np
 
 from autopipe.autopipe.utils import ExecTimes, flatten
 from ..model_profiling import Node, NodeTypes
-
-
-# __all__ = ["get_weight_functions"]
 
 
 def get_weight_functions(args, verbose=True):
@@ -57,6 +53,8 @@ class NodeWeightFunction:
 
 class EdgeWeightFunction:
     GPU_MEMORY_BW = 550
+    NON_CONTIGIOUS_PENATLY = True
+
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -73,16 +71,17 @@ class EdgeWeightFunction:
         self.penalize_non_tensors = penalize_non_tensors
         self.ensure_positive = ensure_positive
 
-    def __call__(self, u: Node, v: Node):
+    def __call__(self, u: Node, v: Node, non_contig_penalty=False):
         if u.compound_edge_weights:
             if self.ratio == 0:  # forward
                 # TODO: this can change
                 # different GPUs
                 if u.gpu_id != v.gpu_id or (u.gpu_id is None and v.gpu_id is None):
                     return u.compound_edge_weights[v.id]
-                elif u.gpu_id == v.gpu_id: #and (u.gpu_id is not None):
+                elif u.gpu_id == v.gpu_id:  # and (u.gpu_id is not None):
                     # This is a problem since weight already includes BW inside the calculation. same gpu bw.
-                    warnings.warn("experimental - compound weight but on same GPU - should it happen? check it is not an output node.")
+                    warnings.warn(
+                        "experimental - compound weight but on same GPU - should it happen? check it is not an output node.")
                     return u.compound_edge_weights[v.id] / (self.GPU_MEMORY_BW / self.bw)
                 else:
                     raise NotImplementedError("not supported yet")
@@ -128,7 +127,8 @@ class EdgeWeightFunction:
                         warnings.warn("experimentally allowing None inside a tuple.")
                         tmp = 4
                     else:
-                        warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. valtype:{u.value_type} PENALIZING!")
+                        warnings.warn(
+                            f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. valtype:{u.value_type} PENALIZING!")
                         return self.penalty
                         # raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
                     volume += tmp
@@ -149,6 +149,8 @@ class EdgeWeightFunction:
                 w = self.MULT_FACTOR * bwd_volume
             elif self.ratio == 0:
                 # just forward
+                if not u.is_contiguous and non_contig_penalty:
+                    volume += volume*bw/self.GPU_MEMORY_BW
                 w = self.MULT_FACTOR * volume
             else:
                 w = self.MULT_FACTOR * (bwd_volume + volume)
@@ -187,10 +189,10 @@ class CoarsenedWeightFunction:
     def __init__(self,
                  edge_weight_function: EdgeWeightFunction,
                  node_weight_function: NodeWeightFunction,
-                 do_longest_path=False,
+                 do_critical_path=False,
                  ):
         self.mode = "ratio"
-        self.do_longest_path = do_longest_path
+        self.do_critical_path = do_critical_path
         self.ewf = edge_weight_function
         self.nwf = node_weight_function
 
@@ -237,7 +239,7 @@ class CoarsenedWeightFunction:
         return self.nwf(node) <= comm
 
     def calculate_comp(self, nodes: Iterable[Node]):
-        if not self.do_longest_path:
+        if not self.do_critical_path:
             comp_fwd = sum(node.weight.forward_time for node in nodes)
             comp_bwd = sum(node.weight.backward_time for node in nodes)
         else:
@@ -323,11 +325,12 @@ class CoarsenedWeightFunction:
 
 class NodeMemoryEstimator:
     THRESHOLD = 11 * 1e9
+
     def __init__(self, optimizer_multiply=1):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply
 
     @staticmethod
-    def cuda_activations_and_grads_mem(u: Node):
+    def cuda_activations_and_grads_mem(u: Node):  # DEPRECATED.
         if u.type is NodeTypes.LAYER or u.type is NodeTypes.BUFF_PARAM:
             # FIXME: this is wrong, sine some layers don't allocate new memory at all.
 
@@ -353,10 +356,9 @@ class NodeMemoryEstimator:
 
             return volume + bwd_volume
         else:
-            ## TODO: memory profiling - only for layers.
+            ## TODO: memory profiling - only for layers and tensors
             # The reason is we don't want to profile views.
             return 0
-
 
     def __call__(self, node: Node):
         # cuda_memory_estimation_naive

@@ -23,6 +23,7 @@ from .asgd_analysis import run_analysis as asgd_run_analysis
 from .deprecated_theoretical import maybe_do_theoretical_analysis
 from .profile_pipeline_stages import profile_execution, ProfileResult
 from .ssgd_analysis import run_analysis as ssgd_run_analysis
+from ..autopipe.model_partitioning.stage_to_device import sorted_stage_to_device_map
 
 
 def rounddict(d: Dict[Any, float], x=2):
@@ -84,7 +85,7 @@ def run_analysis(sample,
 
     # real statistics based on generated partitions
     if torch.cuda.is_available():
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
 
     profile_result = profile_execution(
         sample,
@@ -366,23 +367,6 @@ def run_analysis(sample,
     #     metric_to_maximize = expected_speedup
 
     return metric_to_maximize, s
-
-
-def sorted_stage_to_device_map(n_partitions, stages_on_same_gpu):
-    pipeline_representation_stage_to_device_map = list()
-    for stage_id in range(n_partitions):
-        seen_devices = set()
-        if stage_id in stages_on_same_gpu:
-            device_id = min(stages_on_same_gpu[stage_id])
-        else:
-            device_id = len(seen_devices)
-        seen_devices.add(device_id)
-        pipeline_representation_stage_to_device_map.append(device_id)
-    # Canonize
-    tmp = sorted(set(pipeline_representation_stage_to_device_map))
-    tmp = {v: i for i, v in enumerate(tmp)}
-    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
-    return pipeline_representation_stage_to_device_map
 
 
 def data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,

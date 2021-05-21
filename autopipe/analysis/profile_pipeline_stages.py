@@ -78,219 +78,11 @@ def profile_execution(model_inputs,
         # perform one run of the partitions
         parts = deque(range(n_partitions))
         while len(parts) > 0:
-            stage_id = parts.popleft()
-            if stages_on_same_gpu:
-                my_gpu_set = stages_on_same_gpu[stage_id]
-                if my_gpu_set:
-                    pass
-                    # TODO: use it do zero communication,
-                    # TODO: finally add all statistics for this gpu
-            else:
-                my_gpu_set = {}
-
-            # For async pipeline, do no use recomputation on last partition
-            is_last_partition = partition_config.is_last_forward_stage(stage_id)
-            is_first_partition = partition_config.is_first_forward_stage(stage_id)
-            partition_specific_recomputation = recomputation
-            if async_pipeline and is_last_partition:
-                partition_specific_recomputation = False
-
-            # partition_specific_inputs_requires_grad
-
-            inputs_requires_grad = partition_config.get_inputs_req_grad_for_stage_tuple(stage_id)
-
-            if all(tensor in activations
-                   for tensor in partition_config.get_all_stage_inputs(stage_id)):
-                inputs = []
-                inputs_rcv_from_stage = []
-                in_size_mb = 0
-
-                for tensor, tensor_input_info in partition_config.get_all_stage_inputs(stage_id).items():
-                    t = activations[tensor]
-                    sender_stage_id = tensor_input_info['created_by']
-                    if sender_stage_id == -1:
-                        assert tensor in partition_config.model_inputs()
-                    else:
-                        is_same_gpu = sender_stage_id in my_gpu_set
-                        if not is_same_gpu:
-                            # TODO: ratio analysis for different stages inside the same GPU
-                            in_size_mb += tensor_sizes(t)
-
-                    # TODO: it can also be false
-                    # shared weights support
-                    if tensor in is_parameter:
-                        t.requires_grad_()
-
-                    inputs.append(t)
-                    inputs_rcv_from_stage.append(sender_stage_id)
-
-                in_size_mb /= 1e6
-
-                # Calculate Forward recv time
-                if different_links_between_accelerators:
-
-                    # e.g p2p nvlinks without nvswitch
-                    recv_sizes_by_gpu = defaultdict(float)
-                    for t, sender_stage_id in zip(inputs,
-                                                  inputs_rcv_from_stage):
-                        if sender_stage_id == -1:
-                            continue
-                        is_same_gpu = sender_stage_id in my_gpu_set
-                        if is_same_gpu:
-                            continue
-
-                        for together in stages_on_same_gpu:
-                            if len(together) > 0:
-                                raise NotImplementedError()
-                        sender_gpu_id = sender_stage_id  # TODO:
-
-                        recv_sizes_by_gpu[sender_gpu_id] += (tensor_sizes(t) / 1e6)
-
-                    max_recv_time = max(list(recv_sizes_by_gpu.values()) + [0]) / bw_GBps
-                    recv_time = max_recv_time
-                else:
-                    # same link for all communications (e.g pci switch)
-                    recv_time = in_size_mb / bw_GBps
-
-                # TODO: calculate Backward send times (sending grads)
-                # TODO: calculate Forward send times (sending activations)
-
-                # Compute times measurement
-                model = partition_config.stage_to_model[stage_id]
-                with force_out_of_place(model):
-                    if torch.cuda.is_available():
-                        f_time, b_time, outputs = cuda_time(
-                            model,
-                            inputs,
-                            recomputation=partition_specific_recomputation,
-                            inputs_requires_grad=inputs_requires_grad)
-                    else:
-                        f_time, b_time, outputs = cpu_time(
-                            model,
-                            inputs,
-                            recomputation=partition_specific_recomputation,
-                            inputs_requires_grad=inputs_requires_grad)
-
-                # output statistics
-
-                if len(partition_config.get_all_stage_outputs(stage_id)) != len(outputs):
-                    raise RuntimeError()
-
-                out_size_mb = 0
-                for (o, o_info), t in zip(partition_config.get_all_stage_outputs(stage_id).items(), outputs):
-                    # TODO: figure out where this is sent too.
-                    sent_to = o_info['used_by']
-
-                    if len(sent_to) > 1 and o_info['req_grad']:
-                        if current_iteration_num == 0:
-                            warning = f"tensor {o} sent to more than 1 target. Inaccurate (backward) communication time analysis"
-                            warnings_list.append(warning)
-                            warnings.warn(warning)
-
-                    # Check and warn if contiguous
-                    if current_iteration_num == 0 and isinstance(t, torch.Tensor):
-                        if not t.is_contiguous():
-                            warning = f"Partition{stage_id} output:{o} is not contiguous!"
-                            warnings.warn(warning)
-                            warnings_list.append(warning)
-
-                    # save activation on CPU in order to save GPU memory
-                    if isinstance(t, torch.nn.Parameter):
-                        # shared weights support
-                        is_parameter.add(o)
-
-                    activations[o] = move_and_detach(t, 'cpu')
-                    t_mb = (tensor_sizes(t)) / 1e6
-                    sent_to_same_gpu = (ii in my_gpu_set for ii in sent_to)
-
-                    for target_stage_id, target_is_on_same_gpu in zip(sent_to, sent_to_same_gpu):
-                        if not target_is_on_same_gpu:
-                            out_size_mb += t_mb  # This is relevant for buffer, maybe
-
-                # Calculate forward (activations) send time
-                if different_links_between_accelerators:
-                    volume_to_gpu = defaultdict(int)
-                    target_stage_ids = [info['used_by'] for info in
-                                        partition_config.get_all_stage_outputs(stage_id).values()]
-                    for target_stage_id, t in zip(target_stage_ids, outputs):
-                        target_is_on_same_gpu = target_stage_id in my_gpu_set
-
-                        for together in stages_on_same_gpu:
-                            if len(together) > 0:
-                                raise NotImplementedError()
-                        target_gpu_id = target_stage_id  # TODO
-                        t_mb = (tensor_sizes(t)) / 1e6
-
-                        if not target_is_on_same_gpu:
-                            volume_to_gpu[target_gpu_id] += t_mb
-
-                    send_time = max(list(volume_to_gpu.values()) + [0]) / bw_GBps
-                else:
-                    send_time = out_size_mb / bw_GBps
-
-                # also del t
-                del outputs
-
-                if is_last_partition:
-                    send_time = 0.0
-
-                stats = {
-                    "input size": in_size_mb,  # "MB "
-                    "recieve_time": recv_time,  # "ms"
-                    "out": out_size_mb,  # "MB"
-                    "send time": send_time,  # ms"
-                }
-
-                communication_stats[stage_id] = stats
-
-                # Adding communication time to balance:
-                # time = time + comm_send
-
-                nocommf_times[stage_id].append(f_time)
-                nocommb_times[stage_id].append(b_time)
-
-                # TODO: calculate backward (gradients) send times
-
-                if different_links_between_accelerators:
-                    raise NotImplementedError()
-                else:
-                    # FIXME: its not accuracte
-                    # FIXME: targets on differnt accelerators have different links
-                    bwd_send_time = in_size_mb / bw_GBps  # HACK:
-
-                if add_comm_times_to_balance:
-                    if not parallel_comm_and_comp_ratio:
-                        if not is_last_partition:
-                            f_time += send_time
-                        if not is_first_partition:
-                            b_time += bwd_send_time
-                    else:
-                        # EXPERIMENTAL
-                        PARALLEL_RATIO = parallel_comm_and_comp_ratio
-                        bwd_plus_fwd = b_time + f_time  # computational times
-                        if not is_last_partition:
-                            lb = extra_communication_time_lower_bound(
-                                bwd_plus_fwd, send_time)
-                            ub = extra_communication_time_upper_bound(
-                                bwd_plus_fwd, send_time)
-                            extra_fwd_send_time = apply_ratio(
-                                ub, lb, PARALLEL_RATIO)
-                            f_time += extra_fwd_send_time
-                        if not is_first_partition:
-                            lb = extra_communication_time_lower_bound(
-                                bwd_plus_fwd, bwd_send_time)
-                            ub = extra_communication_time_upper_bound(
-                                bwd_plus_fwd, bwd_send_time)
-                            extra_bwd_send_time = apply_ratio(
-                                ub, lb, PARALLEL_RATIO)
-                            b_time += extra_bwd_send_time
-
-                # TODO: can check nans
-                f_times[stage_id].append(f_time)
-                b_times[stage_id].append(b_time)
-
-            else:
-                parts.append(stage_id)
+            run_and_profile_partitions(activations, add_comm_times_to_balance, async_pipeline, b_times, bw_GBps,
+                                       communication_stats, current_iteration_num, different_links_between_accelerators,
+                                       f_times, is_parameter, nocommb_times, nocommf_times,
+                                       parallel_comm_and_comp_ratio, partition_config, parts, recomputation,
+                                       stages_on_same_gpu, warnings_list)
 
     # # calculate mean and variance
     # ugly = mean_std(f_times), mean_std(b_times), communication_stats, mean_std(
@@ -301,6 +93,221 @@ def profile_execution(model_inputs,
     ncbm, ncbs = mean_std(nocommb_times)
 
     return ProfileResult(fm, fs, bm, bs, communication_stats, ncfm, ncfs, ncbm, ncbs, warnings_list)
+
+
+def run_and_profile_partitions(activations, add_comm_times_to_balance, async_pipeline, b_times, bw_GBps,
+                               communication_stats, current_iteration_num, different_links_between_accelerators,
+                               f_times, is_parameter, nocommb_times, nocommf_times, parallel_comm_and_comp_ratio,
+                               partition_config, parts, recomputation, stages_on_same_gpu, warnings_list):
+    stage_id = parts.popleft()
+    if stages_on_same_gpu:
+        my_gpu_set = stages_on_same_gpu[stage_id]
+        if my_gpu_set:
+            pass
+            # TODO: use it do zero communication,
+            # TODO: finally add all statistics for this gpu
+    else:
+        my_gpu_set = {}
+    # For async pipeline, do no use recomputation on last partition
+    is_last_partition = partition_config.is_last_forward_stage(stage_id)
+    is_first_partition = partition_config.is_first_forward_stage(stage_id)
+    partition_specific_recomputation = recomputation
+    if async_pipeline and is_last_partition:
+        partition_specific_recomputation = False
+    # partition_specific_inputs_requires_grad
+    inputs_requires_grad = partition_config.get_inputs_req_grad_for_stage_tuple(stage_id)
+    if all(tensor in activations
+           for tensor in partition_config.get_all_stage_inputs(stage_id)):
+        inputs = []
+        inputs_rcv_from_stage = []
+        in_size_mb = 0
+
+        for tensor, tensor_input_info in partition_config.get_all_stage_inputs(stage_id).items():
+            t = activations[tensor]
+            sender_stage_id = tensor_input_info['created_by']
+            if sender_stage_id == -1:
+                assert tensor in partition_config.model_inputs()
+            else:
+                is_same_gpu = sender_stage_id in my_gpu_set
+                if not is_same_gpu:
+                    # TODO: ratio analysis for different stages inside the same GPU
+                    in_size_mb += tensor_sizes(t)
+
+            # TODO: it can also be false
+            # shared weights support
+            if tensor in is_parameter:
+                t.requires_grad_()
+
+            inputs.append(t)
+            inputs_rcv_from_stage.append(sender_stage_id)
+
+        in_size_mb /= 1e6
+
+        # Calculate Forward recv time
+        if different_links_between_accelerators:
+
+            # e.g p2p nvlinks without nvswitch
+            recv_sizes_by_gpu = defaultdict(float)
+            for t, sender_stage_id in zip(inputs,
+                                          inputs_rcv_from_stage):
+                if sender_stage_id == -1:
+                    continue
+                is_same_gpu = sender_stage_id in my_gpu_set
+                if is_same_gpu:
+                    continue
+
+                for together in stages_on_same_gpu:
+                    if len(together) > 0:
+                        raise NotImplementedError()
+                sender_gpu_id = sender_stage_id  # TODO:
+
+                recv_sizes_by_gpu[sender_gpu_id] += (tensor_sizes(t) / 1e6)
+
+            max_recv_time = max(list(recv_sizes_by_gpu.values()) + [0]) / bw_GBps
+            recv_time = max_recv_time
+        else:
+            # same link for all communications (e.g pci switch)
+            recv_time = in_size_mb / bw_GBps
+
+        # TODO: calculate Backward send times (sending grads)
+        # TODO: calculate Forward send times (sending activations)
+
+        # Compute times measurement
+        model = partition_config.stage_to_model[stage_id]
+        with force_out_of_place(model):
+            if torch.cuda.is_available():
+                f_time, b_time, outputs = cuda_time(
+                    model,
+                    inputs,
+                    recomputation=partition_specific_recomputation,
+                    inputs_requires_grad=inputs_requires_grad)
+            else:
+                f_time, b_time, outputs = cpu_time(
+                    model,
+                    inputs,
+                    recomputation=partition_specific_recomputation,
+                    inputs_requires_grad=inputs_requires_grad)
+
+        # output statistics
+
+        if len(partition_config.get_all_stage_outputs(stage_id)) != len(outputs):
+            raise RuntimeError()
+
+        out_size_mb = 0
+        for (o, o_info), t in zip(partition_config.get_all_stage_outputs(stage_id).items(), outputs):
+            # TODO: figure out where this is sent too.
+            sent_to = o_info['used_by']
+
+            if len(sent_to) > 1 and o_info['req_grad']:
+                if current_iteration_num == 0:
+                    warning = f"tensor {o} sent to more than 1 target. Inaccurate (backward) communication time analysis"
+                    warnings_list.append(warning)
+                    warnings.warn(warning)
+
+            # Check and warn if contiguous
+            if current_iteration_num == 0 and isinstance(t, torch.Tensor):
+                if not t.is_contiguous():
+                    warning = f"Partition{stage_id} output:{o} is not contiguous!"
+                    warnings.warn(warning)
+                    warnings_list.append(warning)
+
+            # save activation on CPU in order to save GPU memory
+            if isinstance(t, torch.nn.Parameter):
+                # shared weights support
+                is_parameter.add(o)
+
+            activations[o] = move_and_detach(t, 'cpu')
+            t_mb = (tensor_sizes(t)) / 1e6
+            sent_to_same_gpu = (ii in my_gpu_set for ii in sent_to)
+
+            for target_stage_id, target_is_on_same_gpu in zip(sent_to, sent_to_same_gpu):
+                if not target_is_on_same_gpu:
+                    out_size_mb += t_mb  # This is relevant for buffer, maybe
+
+        # Calculate forward (activations) send time
+        if different_links_between_accelerators:
+            volume_to_gpu = defaultdict(int)
+            target_stage_ids = [info['used_by'] for info in
+                                partition_config.get_all_stage_outputs(stage_id).values()]
+            for target_stage_id, t in zip(target_stage_ids, outputs):
+                target_is_on_same_gpu = target_stage_id in my_gpu_set
+
+                for together in stages_on_same_gpu:
+                    if len(together) > 0:
+                        raise NotImplementedError()
+                target_gpu_id = target_stage_id  # TODO
+                t_mb = (tensor_sizes(t)) / 1e6
+
+                if not target_is_on_same_gpu:
+                    volume_to_gpu[target_gpu_id] += t_mb
+
+            send_time = max(list(volume_to_gpu.values()) + [0]) / bw_GBps
+        else:
+            send_time = out_size_mb / bw_GBps
+
+        # also del t
+        del outputs
+
+        if is_last_partition:
+            send_time = 0.0
+
+        stats = {
+            "input size": in_size_mb,  # "MB "
+            "recieve_time": recv_time,  # "ms"
+            "out": out_size_mb,  # "MB"
+            "send time": send_time,  # ms"
+        }
+
+        communication_stats[stage_id] = stats
+
+        # Adding communication time to balance:
+        # time = time + comm_send
+
+        nocommf_times[stage_id].append(f_time)
+        nocommb_times[stage_id].append(b_time)
+
+        # TODO: calculate backward (gradients) send times
+
+        if different_links_between_accelerators:
+            raise NotImplementedError()
+        else:
+            # FIXME: its not accuracte
+            # FIXME: targets on differnt accelerators have different links
+            bwd_send_time = in_size_mb / bw_GBps  # HACK:
+
+        if add_comm_times_to_balance:
+            if not parallel_comm_and_comp_ratio:
+                if not is_last_partition:
+                    f_time += send_time
+                if not is_first_partition:
+                    b_time += bwd_send_time
+            else:
+                # EXPERIMENTAL
+                PARALLEL_RATIO = parallel_comm_and_comp_ratio
+                bwd_plus_fwd = b_time + f_time  # computational times
+                if not is_last_partition:
+                    lb = extra_communication_time_lower_bound(
+                        bwd_plus_fwd, send_time)
+                    ub = extra_communication_time_upper_bound(
+                        bwd_plus_fwd, send_time)
+                    extra_fwd_send_time = apply_ratio(
+                        ub, lb, PARALLEL_RATIO)
+                    f_time += extra_fwd_send_time
+                if not is_first_partition:
+                    lb = extra_communication_time_lower_bound(
+                        bwd_plus_fwd, bwd_send_time)
+                    ub = extra_communication_time_upper_bound(
+                        bwd_plus_fwd, bwd_send_time)
+                    extra_bwd_send_time = apply_ratio(
+                        ub, lb, PARALLEL_RATIO)
+                    b_time += extra_bwd_send_time
+
+        # TODO: can check nans
+        f_times[stage_id].append(f_time)
+        b_times[stage_id].append(b_time)
+
+    else:
+        parts.append(stage_id)
 
 
 @contextmanager

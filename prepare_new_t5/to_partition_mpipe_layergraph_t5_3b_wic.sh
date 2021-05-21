@@ -1,4 +1,5 @@
 # NOTE: reducing size to fit in memory (?) it used to work b4.
+rm new_trace_cache_t53b_64_4_lg new_prof_cache_t53b_64_4_lg_ftpipe
 python -m autopipe.partition new_t5 \
  --model_name_or_path \
  t5-3b \

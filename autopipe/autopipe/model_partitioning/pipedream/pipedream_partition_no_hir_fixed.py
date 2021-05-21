@@ -44,7 +44,7 @@ def partition_pipedream(
     assert use_layers_graph
     graph.topo_sort()
     if use_layers_graph:
-        work_graph, lookup = graph.layers_graph()
+        work_graph, lookup = graph.new_graph_without_constants()
     else:
         work_graph, lookup = graph, None
 

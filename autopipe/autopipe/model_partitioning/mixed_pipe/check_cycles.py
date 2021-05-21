@@ -29,7 +29,7 @@ def check_cycle2(g: Graph, a: Node, b: Node, nms=NodeMemoryEstimator()):
     # https://cs.stackexchange.com/a/88325/130155
     # when dynamic topo sort is maintaned, we can
     # change depth_limit to rank b
-    creates_a_cycle = g.forward_dfs_and_check(source=ab, set_to_check={a, b}, depth_limit=None)
+    creates_a_cycle = g.forward_dfs_and_check_if_in_set(source=ab, set_to_check={a, b}, depth_limit=None)
 
     if not creates_a_cycle:
         if nms(a) + nms(b) > nms.THRESHOLD:

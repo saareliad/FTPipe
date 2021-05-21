@@ -20,17 +20,17 @@ mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/mult
 # layers graph
 # boolq
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42 --mode preproc
-mpirun -np 15 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42
-#python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42 --mode eval
+mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/boolq/stale_layer_graph.json --seed 42 --mode eval
 
 # multirc
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42 --mode preproc
-mpirun -np 15 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42
-#python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42 --mode eval
+mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42 --mode eval
 
 # wic
-# python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42 --mode preproc
-# mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42 --mode preproc
+mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42 --mode eval
 
 # rte

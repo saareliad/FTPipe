@@ -1,3 +1,4 @@
+import warnings
 from copy import deepcopy
 from typing import Dict, List, Tuple, Callable
 
@@ -5,6 +6,7 @@ import torch
 from torch.nn import Module
 
 from autopipe.autopipe.compiler.utils import pretty_format_obj
+from autopipe.autopipe.model_partitioning.stage_to_device import gen_stage_to_device_map
 from autopipe.autopipe.model_profiling import Graph
 from autopipe.autopipe.utils import nested_map, flatten
 
@@ -35,10 +37,6 @@ def create_pipeline_configuration(graph: Graph,
     basic_blocks = ",".join(
         map(lambda block: block.__name__, set(model_blocks.values())))
 
-    # function header
-    lines = [
-        f"def create_pipeline_configuration({GET_STAGES_ON_CPU_NAME}=False, batch_size={batch_size}):"
-    ]
 
     # create and return the partition config
     model_inputs, model_outputs = create_model_in_out_config(graph, is_batched)
@@ -57,6 +55,16 @@ def create_pipeline_configuration(graph: Graph,
         config = generate_config_with_input_propagation(config)
 
     config = generate_config_without_nested(config)
+
+    try:
+        config['stage_to_device_map'] = gen_stage_to_device_map(graph)
+    except Exception as e:
+        warnings.warn(f"could not create stage to device map: {str(e)}")
+
+    # function header
+    lines = [
+        f"def create_pipeline_configuration({GET_STAGES_ON_CPU_NAME}=False, batch_size={batch_size}):"
+    ]
 
     lines.extend([
         f"config = {pretty_format_obj(config)}",

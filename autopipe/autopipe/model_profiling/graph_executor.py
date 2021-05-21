@@ -11,6 +11,8 @@ from autopipe.autopipe.utils import layerDict, tensorDict, force_out_of_place, i
 from .control_flow_graph import (Graph, Node, NodeTypes)
 from .tracer import used_namespaces
 
+# TODO: allow mutliple hooks - list of hooks.
+
 
 class PreHook(abc.ABC):
     """
@@ -43,6 +45,7 @@ class PostHook(abc.ABC):
 
 def pre_hook_factory(fn) -> PreHook:
     class FunctionalPreHook(PreHook):
+        # TODO: should add asserts here
         def __call__(self, *args, **kwargs):
             return fn(*args, **kwargs)
 
@@ -50,6 +53,7 @@ def pre_hook_factory(fn) -> PreHook:
 
 
 def post_hook_factory(fn) -> PostHook:
+    # TODO: should add asserts here
     class FunctionalPostHook(PostHook):
         def __call__(self, *args, **kwargs):
             return fn(*args, **kwargs)

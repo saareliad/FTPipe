@@ -1,5 +1,6 @@
 import types
 import warnings
+from itertools import chain
 
 import torch
 
@@ -67,7 +68,8 @@ class AutomaticPipelinePropagator(PipelineDataPropagator):
     def pack_send_context(self, model_out, *ctx):
         # ctx here is just the label y, in case we send it in the pipeline.
         # otherwise, it just returns model_out.
-        return *model_out, *ctx
+        return tuple(x.detach().contiguous() if isinstance(x, torch.Tensor) else x for x in chain(model_out, ctx))
+        # return *model_out, *ctx
 
     def preload_from_dataloader(self, dlitr):
         # Return: two tuples

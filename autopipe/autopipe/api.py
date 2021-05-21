@@ -11,7 +11,7 @@ from autopipe.autopipe import NodeWeightFunction, EdgeWeightFunction, Graph, com
     compute_and_cache, move_tensors, trace_module, infer_req_grad, GraphProfiler, pre_hook_factory, post_hook_factory, \
     execute_graph, profile_network
 from autopipe.autopipe.model_partitioning.pipedream.pipedream_partition_no_hir import partition_pipedream
-from autopipe.autopipe.model_profiling import profiler
+from autopipe.autopipe.model_profiling.infer_is_contiguous import infer_is_contiguous
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -255,10 +255,14 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                                        res_cache_name=trace_cache_name)
 
         # FIXME: the mem is not saved in cache now.
-        weights, max_memory_usage_r, max_memory_usage_nr = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
-                                          graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
-                                          basic_blocks, force_no_recomp_scopes, save_memory_mode, use_graph_profiler,
-                                          use_network_profiler)
+        weights, max_memory_usage_r, max_memory_usage_nr = compute_and_maybe_cache(get_full_profiles,
+                                                                                   profiles_cache_name,
+                                                                                   graph, model, model_args,
+                                                                                   model_kwargs, n_iter, profile_ops,
+                                                                                   max_depth,
+                                                                                   basic_blocks, force_no_recomp_scopes,
+                                                                                   save_memory_mode, use_graph_profiler,
+                                                                                   use_network_profiler)
 
         # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
         # profiler.set_max_memory_usage(graph)
@@ -287,33 +291,33 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
                       force_no_recomp_scopes, save_memory_mode, use_graph_profiler, use_network_profiler):
     print("-I- profiling model (recomp)")
     recomputation_times, max_mem_usage_bytes_r = get_profiles(graph,
-                                       model,
-                                       model_args=model_args,
-                                       model_kwargs=model_kwargs,
-                                       use_network_profiler=use_network_profiler,
-                                       use_graph_profiler=use_graph_profiler,
-                                       save_memory_mode=save_memory_mode,
-                                       profile_ops=profile_ops, recomputation=True,
-                                       n_iter=n_iter,
-                                       max_depth=max_depth,
-                                       basic_blocks=basic_blocks,
-                                       force_no_recomp_scopes=force_no_recomp_scopes)
+                                                              model,
+                                                              model_args=model_args,
+                                                              model_kwargs=model_kwargs,
+                                                              use_network_profiler=use_network_profiler,
+                                                              use_graph_profiler=use_graph_profiler,
+                                                              save_memory_mode=save_memory_mode,
+                                                              profile_ops=profile_ops, recomputation=True,
+                                                              n_iter=n_iter,
+                                                              max_depth=max_depth,
+                                                              basic_blocks=basic_blocks,
+                                                              force_no_recomp_scopes=force_no_recomp_scopes)
     print("-I- profiling model (no recomp)")
     warnings.warn("Need to reset max mem usage!!")
     for node in graph.nodes:
         node.max_memory_bytes = 0
     no_recomputation_times, max_mem_usage_bytes_nr = get_profiles(graph,
-                                          model,
-                                          model_args=model_args,
-                                          model_kwargs=model_kwargs,
-                                          use_network_profiler=use_network_profiler,
-                                          use_graph_profiler=use_graph_profiler,
-                                          save_memory_mode=save_memory_mode,
-                                          profile_ops=profile_ops, recomputation=False,
-                                          n_iter=n_iter,
-                                          max_depth=max_depth,
-                                          basic_blocks=basic_blocks,
-                                          force_no_recomp_scopes=force_no_recomp_scopes)
+                                                                  model,
+                                                                  model_args=model_args,
+                                                                  model_kwargs=model_kwargs,
+                                                                  use_network_profiler=use_network_profiler,
+                                                                  use_graph_profiler=use_graph_profiler,
+                                                                  save_memory_mode=save_memory_mode,
+                                                                  profile_ops=profile_ops, recomputation=False,
+                                                                  n_iter=n_iter,
+                                                                  max_depth=max_depth,
+                                                                  basic_blocks=basic_blocks,
+                                                                  force_no_recomp_scopes=force_no_recomp_scopes)
     warnings.warn("Need to reset max mem usage!!")
     for node in graph.nodes:
         node.max_memory_bytes = 0
@@ -461,22 +465,22 @@ def build_profiled_graph(model: nn.Module,
     """
 
     graph = build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                                   basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
-
+                                                   basic_blocks, save_memory_mode, trace_on_gpu,
+                                                   res_cache_name=trace_cache_name)
 
     print("-I- profiling model")
     weights, max_mem_usage_bytes = get_profiles(graph,
-                           model,
-                           model_args=model_args,
-                           model_kwargs=model_kwargs,
-                           use_network_profiler=use_network_profiler,
-                           use_graph_profiler=use_graph_profiler,
-                           save_memory_mode=save_memory_mode,
-                           profile_ops=profile_ops, recomputation=recomputation,
-                           n_iter=n_iter,
-                           max_depth=max_depth,
-                           basic_blocks=basic_blocks,
-                           force_no_recomp_scopes=force_no_recomp_scopes)
+                                                model,
+                                                model_args=model_args,
+                                                model_kwargs=model_kwargs,
+                                                use_network_profiler=use_network_profiler,
+                                                use_graph_profiler=use_graph_profiler,
+                                                save_memory_mode=save_memory_mode,
+                                                profile_ops=profile_ops, recomputation=recomputation,
+                                                n_iter=n_iter,
+                                                max_depth=max_depth,
+                                                basic_blocks=basic_blocks,
+                                                force_no_recomp_scopes=force_no_recomp_scopes)
     for n in graph.nodes:
         n.weight = weights.get(n.scope, ExecTimes(0, 0))
 
@@ -485,10 +489,13 @@ def build_profiled_graph(model: nn.Module,
     return graph
 
 
-def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
+def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode,
+                                           trace_on_gpu,
                                            res_cache_name=None) -> Graph:
+    # (and contagious...)
     if res_cache_name:
-        return compute_and_cache(build_graph_with_nparams_and_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
+        return compute_and_cache(build_graph_with_nparams_and_grad_reqs, res_cache_name, model, model_args,
+                                 model_kwargs, max_depth,
                                  basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None,
                                  _cache_cls_to_use=GraphCache)
 
@@ -517,6 +524,9 @@ def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
     infer_req_grad(graph, model, args=model_args, kwargs=model_kwargs)
     print("-I- inferred gradient requirements")
+    print("-I- infering s_contiguous")
+    infer_is_contiguous(graph, model, args=model_args, kwargs=model_kwargs)
+    print("-I- inferred infer_is_contiguous")
 
     print("-I- inferring params per node")
     graph.calculate_params_per_node(model)
@@ -553,7 +563,8 @@ def get_profiles(graph: Graph, model: nn.Module,
                       pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
 
         # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
-        mem_usage_bytes = profiler.set_max_memory_usage(graph)  # FIXME: can't use cached profiles like this.
+        # TODO: can't use cached profiles like this, so added it as output.
+        mem_usage_bytes = profiler.set_max_memory_usage(graph)
         # profiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
 
         # print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")

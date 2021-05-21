@@ -1,10 +1,12 @@
 from typing import Type
 
 from .automatic_prop import AutomaticPipelinePropagator
+from .automatic_prop_non_contig import AutomaticPipelinePropagatorNonContig
 from .interface import PipelineDataPropagator
 
 AVAILABLE_PROPAGATORS = {
-    'auto': AutomaticPipelinePropagator
+    'auto': AutomaticPipelinePropagator,  # HACK: has call for contagious.
+    'auto_non_contig': AutomaticPipelinePropagatorNonContig
 }
 
 

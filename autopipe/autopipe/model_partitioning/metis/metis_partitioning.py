@@ -39,7 +39,7 @@ def metis_partition(graph: Graph,
         graph.topo_sort()
 
     if use_layers_only_graph:
-        layers_graph, layers_to_original = graph.layers_graph()
+        layers_graph, layers_to_original = graph.new_graph_without_constants()
         G = layers_graph
     else:
         G = graph
