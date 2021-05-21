@@ -31,3 +31,5 @@ dependencies:
     - timm
     - sortedcollections
     - graphviz
+    - adjustText
+    - seaborn
