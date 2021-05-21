@@ -836,11 +836,15 @@ class GPipePartitionManager(SinglePartitionManager):
     def run_batch_backward(self, batch_idx: int, num_batches: int, next_backward_batch_idx=None):
         """ Runs the backwards pass + step for all partitions except the last partition """
 
-        last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
-        last_due_end = batch_idx + 1 == num_batches
-        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
+        the_bwd_of_last_fwd_due_step_every = ((batch_idx + 1) % self.step_every) == 0
+        the_bwd_of_last_fwd_due_end = batch_idx + 1 == num_batches
 
-        is_last_micro_batch = last_due_step_every or last_due_end
+        # is_the_last_bwd_micro_batch = the_bwd_of_last_fwd_due_end
+        # raise NotImplementedError()
+
+        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, the_bwd_of_last_fwd_due_end)
+
+        is_last_micro_batch = the_bwd_of_last_fwd_due_step_every or the_bwd_of_last_fwd_due_end
         partition = self.partition
         partition.is_last_micro_batch = is_last_micro_batch  # No recomputation needed
 
@@ -852,11 +856,14 @@ class GPipePartitionManager(SinglePartitionManager):
         # Order is important
         if not is_last_micro_batch:
             self.partition.recompute(batch_idx)
-        g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
+        g = self.comm_handler.wait_recv_gradients(batch_idx, the_bwd_of_last_fwd_due_end)
 
         # recv the next gradients
         if next_backward_batch_idx is not None:
-            next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
+            # HACK: it is false since we start with the last...
+            next_backward_batch_idx_last_due_end = False
+            # if we would do a mistake here: it would create the buffers again, overwriting prev ones.
+            # it may be possible we call irecv without the buffers being fully initialized
             self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
                                                  next_backward_batch_idx_last_due_end)
 
@@ -947,6 +954,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 else:
                     # TODO: can catch the first bwd micro-batch of the next mini-batch
                     next_backward_batch_idx_to_run = None
+
 
                 ro = run_batch_backward(batch_idx_to_run, num_batches,
                                         next_backward_batch_idx=next_backward_batch_idx_to_run)

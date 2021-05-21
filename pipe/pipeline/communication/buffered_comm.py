@@ -132,6 +132,7 @@ class BufferSimpleCommBase(SimpleCommBase):
         # TODO: can start it earlier, after the forward send.
             The implication of not doing so is slightly longer first bwd recv.
             this is bearable for better code simplicity.
+        # FIXME: num_batches is redunent
         """
         # Special case: Last batch with different size
         if self._last_pre_recv_gradients == batch_idx:   # FIXME: will get bug if using only 1 batch...
@@ -215,6 +216,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                                              create=False,
                                              prev_stream_to_use=s)
                 self.fwd_recv_buffers = fwd_recv_buffers
+                # do we need to synchronize the stream? no since  create=False.
                 # print(f"rank: {self.rank}: new buffer sizes: {shapes}")
 
             else:
@@ -223,6 +225,8 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.set_tensor_dtypes(dtypes)
                 fwd_recv_buffers.replace_next()
                 self.changed_shapes_last_batch_fwd = True
+                # DO need to synchronize the stream? No, I handle it inside replace_next
+
                 # Note: it is not used.
                 # if not isinstance(self.changed_shapes_last_batch_fwd, dict):
                 #     self.changed_shapes_last_batch_fwd = dict()
@@ -234,6 +238,7 @@ class BufferSimpleCommBase(SimpleCommBase):
 
         if not fwd_recv_buffers.is_initialized():
             fwd_recv_buffers.create()
+            # do we need to synchronize the stream? no, I made create a blocking call, sync it is done inside.
 
 
     def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
@@ -259,12 +264,16 @@ class BufferSimpleCommBase(SimpleCommBase):
                                              is_bwd=True,
                                              create=False,
                                              prev_stream_to_use=s)
+                # do we need to synchronize the stream? no since  create=False.
+
                 self.bwd_recv_buffers = bwd_recv_buffers
             else:
                 bwd_recv_buffers = self.bwd_recv_buffers
                 self.set_tensor_shapes(shapes)
                 self.set_tensor_dtypes(dtypes)
                 bwd_recv_buffers.replace_next()
+                # do we need to synchronize the stream? no since  it happens inside replace_next.
+
                 if not isinstance(self.changed_shapes_last_batch_bwd, dict):
                     self.changed_shapes_last_batch_bwd = dict()
                 self.changed_shapes_last_batch_bwd[bwd_recv_buffers.pointer] = True
@@ -276,8 +285,11 @@ class BufferSimpleCommBase(SimpleCommBase):
             if self.bwd_recv_buffers.max_buffers == 1:
                 self.changed_shapes_last_batch_bwd = False
                 bwd_recv_buffers = self._bwd_recv_buffers()
+                # do need to synchronize the stream? no since I handled it in create()
+
                 self.bwd_recv_buffers = bwd_recv_buffers
             else:
+                # TODO: this may be depreacted
                 bwd_recv_buffers = self.bwd_recv_buffers
                 assert isinstance(self.changed_shapes_last_batch_bwd, dict)
                 if self.changed_shapes_last_batch_bwd[bwd_recv_buffers.pointer]:
@@ -293,6 +305,7 @@ class BufferSimpleCommBase(SimpleCommBase):
 
         if not bwd_recv_buffers.is_initialized():
             bwd_recv_buffers.create()
+            # do need to synchronize the stream? no since I handled it in create()
 
     def _fwd_recv_buffers_train(self, create=False):
         return make_buff(self,

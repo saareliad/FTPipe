@@ -48,12 +48,16 @@ class Buffers:
 
     def create(self):
         self._is_initialized = True
-        for i in range(self.max_buffers):
-            self.buffers = [self.create_fn() for _ in range(self.max_buffers)]
+        with torch.cuda.stream(self.clone_stream):
+            for i in range(self.max_buffers):
+                self.buffers = [self.create_fn() for _ in range(self.max_buffers)]
+        self.clone_stream.synchronize()
         return self.reset_state()
 
     def replace_next(self):
-        self.buffers[self.pointer] = self.create_fn()
+        with torch.cuda.stream(self.clone_stream):
+            self.buffers[self.pointer] = self.create_fn()
+        self.clone_stream.synchronize()
 
     def reset_state(self):
         # self._is_initialized = True

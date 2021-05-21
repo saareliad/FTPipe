@@ -37,7 +37,7 @@ class SmallerLastBatchPolicy(Enum):
 
 
 # DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
-DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.ProportionalStep
+DEFAULT_STEP_EVERY_SMALLER_LAST_BATCH_POLICY = SmallerLastBatchPolicy.DropReminder
 
 
 # from data import AVAILABLE_DATASETS
