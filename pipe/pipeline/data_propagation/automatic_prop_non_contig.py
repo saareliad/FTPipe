@@ -1,4 +1,4 @@
-from pipe.pipeline.data_propagation import PipelineDataPropagator
+from pipe.pipeline.data_propagation.automatic_prop import PipelineDataPropagator
 
 
 class AutomaticPipelinePropagatorNonContig(PipelineDataPropagator):
