@@ -6,6 +6,6 @@
     "checkpoints_save_name_prefix": "new_stale_seq",
     "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/multirc/stale/",
     "dont_drop_last": false,
-    "step_every": 2,
-    "bs_train": 4
+    "step_every": 4,
+    "bs_train": 2
 }

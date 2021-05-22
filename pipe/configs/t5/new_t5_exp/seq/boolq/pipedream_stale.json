@@ -6,6 +6,6 @@
     "dont_drop_last": false,
     "checkpoints_save_name_prefix": "stale",
     "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/boolq/stale/",
-    "step_every": 5,
-    "bs_train": 4
+    "step_every": 10,
+    "bs_train": 2
 }

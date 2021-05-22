@@ -14,7 +14,6 @@
     "trainer": {
         "type": "t5",
         "args": {
-            "loss_multiplier": 2.59
         }
     },
     "statistics": "squad_loss_per_batch",
@@ -52,7 +51,9 @@
     "verbose_comm": false,
     "flush_rate": -1,
     "work_scheduler": "1f1b",
-    "cudnn_benchmark": true,
+    "cudnn_benchmark": false,
+    "deterministic_mode": true,
+    "cudnn_deterministic": true,
     "max_buffers": 1,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,

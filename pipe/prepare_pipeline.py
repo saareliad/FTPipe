@@ -835,7 +835,7 @@ def get_optimizer_parameter_groups(args, partition):
         # No weight decay for some parameters.
         model = partition.partition
         opt_args = args.optimizer['args']
-        no_decay = ["bias", "LayerNorm.weight"]
+        no_decay = {"bias", "LayerNorm.weight", "T5LayerNorm.weight"}
         optimizer_grouped_parameters = [
             {
                 "params": [

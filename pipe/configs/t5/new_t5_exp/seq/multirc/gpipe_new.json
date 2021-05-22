@@ -8,7 +8,7 @@
     "checkpoints_save_name_prefix": "gpipe_new",
     "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/multirc/gpipe/",
     "save_checkpoints":  false,
-    "epochs": 2,
+    "epochs": 1,
     "dont_drop_last": false,
     "steps": -1
 }

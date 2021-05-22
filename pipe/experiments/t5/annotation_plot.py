@@ -221,7 +221,15 @@ def epoch_speedup_dict(exp_gpipe_fn, exp_stale_fn):
 
 
 def epoch_speedup_dict_from_cumsum_times(times_gpipe, times_stale):
-    assert len(times_gpipe) == len(times_stale)
+    try:
+        assert len(times_gpipe) == len(times_stale), str((len(times_gpipe), len(times_stale)))
+    except AssertionError as e:
+        if len(times_gpipe) - len(times_stale) == 1:
+            warnings.warn("allowing 1 difference")
+            times_gpipe = times_gpipe[:-1]
+        else:
+            raise e
+
     d = dict()
     for i in range(len(times_stale)):
         d[i] = times_gpipe[i] / times_stale[i]
@@ -300,6 +308,142 @@ def compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_st
     print("epoch_speedup", epoch_speedup_from_cumsum_times(seq_stale_times, virtual_times_stale, ))
 
 
+class MultiRC:
+    @staticmethod
+    def all_speedups_boolq():
+
+        ### SEQ
+        seq_gpipe_dict, seq_gpipe_times = Hack.get_multirc_seq_hack_gpipe_times_and_dict()
+        # seq_stale_dict, seq_stale_times = get_rte_seq_hack_stale_times_and_dict()
+
+        # seq_stale_fn = "results/FOR_PAPER/all_results_glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_1_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_1_seed_42.txt"
+        # seq_exp_stale_fn = os.path.join("results/t5/glue/rte", "glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_1_seed_42.json")
+        # seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
+        #                                                                           checkpoints_eval_fn=seq_stale_fn)
+
+        ### MPIPE
+        exp_results_dir = "results/t5/super_glue/boolq/"
+        exp_stale_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_8_se_2_seed_42.json")
+        exp_gpipe_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_8_se_1_seed_42.json")
+
+        gpipe_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_8_se_1_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_8_se_1_seed_42.txt"
+        stale_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_8_se_2_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_8_se_2_seed_42.txt"
+
+
+        virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
+                                                                                  checkpoints_eval_fn=gpipe_fn)
+        virtual_stale_dict, virtual_times_stale = get_fixed_dict_and_times_single(exp_fn=exp_stale_fn,
+                                                                                  checkpoints_eval_fn=stale_fn)
+
+        compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
+                             virtual_stale_dict, virtual_times_gpipe, virtual_times_stale)
+
+class WIC:
+    @staticmethod
+    def all_speedups_wic():
+
+        ### SEQ
+        seq_gpipe_dict, seq_gpipe_times = Hack.get_wic_seq_hack_gpipe_times_and_dict()
+        # seq_stale_dict, seq_stale_times = get_rte_seq_hack_stale_times_and_dict()
+
+        # seq_stale_fn = "results/FOR_PAPER/all_results_glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.txt"
+        # seq_exp_stale_fn = os.path.join("results/t5/glue/rte", "glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.json")
+        # seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
+        #                                                                           checkpoints_eval_fn=seq_stale_fn)
+
+        ### MPIPE
+        exp_results_dir = "results/t5/super_glue/wic/"
+        exp_stale_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_128_se_2_seed_42.json")
+        exp_gpipe_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42.json")
+
+        gpipe_fn = "results/new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42.txt"
+        stale_fn = "results/new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_128_se_8_seed_42_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_128_se_8_seed_42.txt"
+
+
+        virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
+                                                                                  checkpoints_eval_fn=gpipe_fn)
+        virtual_stale_dict, virtual_times_stale = get_fixed_dict_and_times_single(exp_fn=exp_stale_fn,
+                                                                                  checkpoints_eval_fn=stale_fn)
+
+        compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
+                             virtual_stale_dict, virtual_times_gpipe, virtual_times_stale)
+
+
+class BoolQ:
+    @staticmethod
+    def all_speedups_boolq():
+
+        ### SEQ
+        seq_gpipe_dict, seq_gpipe_times = Hack.get_boolq_seq_hack_gpipe_times_and_dict()
+        # seq_stale_dict, seq_stale_times = get_rte_seq_hack_stale_times_and_dict()
+
+        # seq_stale_fn = "results/FOR_PAPER/all_results_glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.txt"
+        # seq_exp_stale_fn = os.path.join("results/t5/glue/rte", "glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.json")
+        # seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
+        #                                                                           checkpoints_eval_fn=seq_stale_fn)
+
+        ### MPIPE
+        exp_results_dir = "results/t5/super_glue/boolq/"
+        exp_stale_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42.json")
+        exp_gpipe_fn = os.path.join(exp_results_dir,
+                                    "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
+
+        gpipe_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
+        stale_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42.txt"
+
+
+        virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
+                                                                                  checkpoints_eval_fn=gpipe_fn)
+        virtual_stale_dict, virtual_times_stale = get_fixed_dict_and_times_single(exp_fn=exp_stale_fn,
+                                                                                  checkpoints_eval_fn=stale_fn)
+
+        compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
+                             virtual_stale_dict, virtual_times_gpipe, virtual_times_stale)
+
+
+class RTE:
+    @staticmethod
+    def all_speedups_rte():
+
+        ### SEQ
+        seq_gpipe_dict, seq_gpipe_times = Hack.get_rte_seq_hack_gpipe_times_and_dict()
+        seq_stale_fn = "results/FOR_PAPER/all_results_glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.txt"
+        seq_exp_stale_fn = os.path.join("results/t5/glue/rte", "glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.json")
+        seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
+                                                                                  checkpoints_eval_fn=seq_stale_fn)
+
+        ### MPIPE
+        # exp_results_dir = "results/t5/super_glue/rte/"
+        # exp_stale_fn = os.path.join(exp_results_dir,
+        #                             "rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_stale_bs_40_se_5_seed_42.json")
+        # exp_gpipe_fn = os.path.join(exp_results_dir,
+        #                             "rte_virtual_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_virtual_stages_t5_tfds_gpipe_bs_40_se_10_seed_42.json")
+
+        exp_results_dir = "results_b4_20_5_changes/t5/glue/rte"
+        exp_stale_fn = os.path.join(exp_results_dir,
+                                    "new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_40_se_5_seed_42.json")
+        exp_results_dir = "results_new_t5/t5/glue/rte"
+        exp_gpipe_fn = os.path.join(exp_results_dir, "rte_virtual_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.json")
+
+        # TODO: gpipe needs to re-run
+        gpipe_fn = "results_new_t5/all_results_rte_virtual_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
+        stale_fn = "results/FOR_PAPER/all_results_new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_40_se_5_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_40_se_5_seed_42.txt"
+
+
+        virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
+                                                                                  checkpoints_eval_fn=gpipe_fn)
+        virtual_stale_dict, virtual_times_stale = get_fixed_dict_and_times_single(exp_fn=exp_stale_fn,
+                                                                                  checkpoints_eval_fn=stale_fn)
+
+        compute_all_speedups(seq_gpipe_dict, seq_gpipe_times, seq_stale_dict, seq_stale_times, virtual_gpipe_dict,
+                             virtual_stale_dict, virtual_times_gpipe, virtual_times_stale)
+
+
 ################
 class Hack:
     @staticmethod
@@ -318,6 +462,93 @@ class Hack:
             400.83459973335266,
             400.93730449676514
         ]}
+
+        gpipe_dict, times_gpipe = Hack.extrapolate_gpipe_times_and_acc_seq(d, exp_gpipe_fn, gpipe_fn)
+
+        return gpipe_dict, times_gpipe
+
+    @staticmethod
+    def get_boolq_seq_hack_gpipe_times_and_dict():
+        # FIXME: add new after exp is done.
+        #### load virtual stages for accuracy:
+
+        # TODO: put here the exp of boolq-gpipe-seq
+        # exp_gpipe_fn = os.path.join(exp_results_dir,
+        #                             "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
+
+        gpipe_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
+        # exp_gpipe_fn = "results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json"
+
+        # TODO: copy-pasta here from the exp of boolq-gpipe-seq.
+        # results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json
+        # do it so we have some numbers. anyway its negligible noise not worth another 12 hour run...
+        # d = {"train_epochs_times": [
+        #     397.09888553619385,
+        #     401.3545401096344,
+        #     400.58319187164307,
+        #     401.8276650905609,
+        #     400.83459973335266,
+        #     400.93730449676514
+        # ]}
+
+        gpipe_dict, times_gpipe = Hack.extrapolate_gpipe_times_and_acc_seq(d, exp_gpipe_fn, gpipe_fn)
+
+        return gpipe_dict, times_gpipe
+
+
+    @staticmethod
+    def get_wic_seq_hack_gpipe_times_and_dict():
+        # FIXME: add new after exp is done.
+        #### load virtual stages for accuracy:
+
+        # TODO: put here the exp of wic-gpipe-seq
+        # exp_gpipe_fn = os.path.join(exp_results_dir,
+        #                             "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
+
+        gpipe_fn = "results/new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42.txt"
+        # exp_gpipe_fn = "results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json"
+
+        # TODO: copy-pasta here from the exp of wic-gpipe-seq.
+        # results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json
+        # do it so we have some numbers. anyway its negligible noise not worth another 12 hour run...
+        # d = {"train_epochs_times": [
+        #     397.09888553619385,
+        #     401.3545401096344,
+        #     400.58319187164307,
+        #     401.8276650905609,
+        #     400.83459973335266,
+        #     400.93730449676514
+        # ]}
+
+        gpipe_dict, times_gpipe = Hack.extrapolate_gpipe_times_and_acc_seq(d, exp_gpipe_fn, gpipe_fn)
+
+        return gpipe_dict, times_gpipe
+
+
+
+    @staticmethod
+    def get_multirc_seq_hack_gpipe_times_and_dict():
+        # FIXME: add new after exp is done.
+        #### load virtual stages for accuracy:
+
+        # TODO: put here the exp of multirc-gpipe-seq
+        # exp_gpipe_fn = os.path.join(exp_results_dir,
+        #                             "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
+
+        # gpipe_fn = "results/new_args_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42_layer_graph_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_128_se_8_seed_42.txt"
+        # exp_gpipe_fn = "results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json"
+
+        # TODO: copy-pasta here from the exp of multirc-gpipe-seq.
+        # results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json
+        # do it so we have some numbers. anyway its negligible noise not worth another 12 hour run...
+        # d = {"train_epochs_times": [
+        #     397.09888553619385,
+        #     401.3545401096344,
+        #     400.58319187164307,
+        #     401.8276650905609,
+        #     400.83459973335266,
+        #     400.93730449676514
+        # ]}
 
         gpipe_dict, times_gpipe = Hack.extrapolate_gpipe_times_and_acc_seq(d, exp_gpipe_fn, gpipe_fn)
 
@@ -348,7 +579,7 @@ class Hack:
         return gpipe_dict, times_gpipe
 
 
-class Plots:
+class AnnotationPlotsRTE:
     @staticmethod
     def winning_RTE_seq_gpipe_vs_MIXED_stale():
         set_style()
@@ -370,10 +601,10 @@ class Plots:
         time_to_best_result(gpipe_dict, stale_dict, times_gpipe, times_stale)
 
         ##### EPOCHS
-        Plots.winning_epochs(acc_without_ft, gpipe_dict, stale_dict)
+        AnnotationPlotsRTE.winning_epochs(acc_without_ft, gpipe_dict, stale_dict)
 
         ###### TTA
-        Plots.winning_tta(acc_without_ft, gpipe_dict, stale_dict, times_gpipe, times_stale)
+        AnnotationPlotsRTE.winning_tta(acc_without_ft, gpipe_dict, stale_dict, times_gpipe, times_stale)
 
     @staticmethod
     def winning_epochs(acc_without_ft, gpipe_dict, stale_dict, dirname="results/paper_plots/",
@@ -438,13 +669,18 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     exps = {
-        "winning_RTE_seq_gpipe_vs_MIXED_stale": Plots.winning_RTE_seq_gpipe_vs_MIXED_stale,
+        "winning_RTE_seq_gpipe_vs_MIXED_stale": AnnotationPlotsRTE.winning_RTE_seq_gpipe_vs_MIXED_stale,
+    }
 
+    all_results = {
+        "all_speedups_rte" : RTE.all_speedups_rte
     }
 
     allplots = {}
     if args.exp in exps:
         exps[args.exp]()
+    elif args.exp in all_results:
+        all_results[args.exp]()
     elif args.exp in allplots:
         allplots[args.exp]()
     else:

@@ -80,7 +80,7 @@ d = [
         'pipeline': 'stale',
         'alg': 'mixed',
         'dataset': 'rte',
-        'speedup_over_seq': 2.402954
+        'speedup_over_seq': 2.474085518499304  # FIXME: what is going on here?
     },
 
     {
