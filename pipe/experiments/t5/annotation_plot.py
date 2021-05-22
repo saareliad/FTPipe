@@ -381,10 +381,10 @@ class BoolQ:
         seq_gpipe_dict, seq_gpipe_times = Hack.get_boolq_seq_hack_gpipe_times_and_dict()
         # seq_stale_dict, seq_stale_times = get_rte_seq_hack_stale_times_and_dict()
 
-        # seq_stale_fn = "results/FOR_PAPER/all_results_glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.txt"
-        # seq_exp_stale_fn = os.path.join("results/t5/glue/rte", "glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_40_se_10_seed_42.json")
-        # seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
-        #                                                                           checkpoints_eval_fn=seq_stale_fn)
+        seq_stale_fn = "results/FOR_PAPER/all_results_new_t5_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_20_se_10_seed_42.txt"
+        seq_exp_stale_fn = os.path.join("results/t5/super_glue/boolq", "new_t5_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream_t5_tfds_stale_bs_20_se_10_seed_42.json")
+        seq_stale_dict, seq_stale_times = get_fixed_dict_and_times_single(exp_fn=seq_exp_stale_fn,
+                                                                                  checkpoints_eval_fn=seq_stale_fn)
 
         ### MPIPE
         exp_results_dir = "results/t5/super_glue/boolq/"
@@ -393,8 +393,8 @@ class BoolQ:
         exp_gpipe_fn = os.path.join(exp_results_dir,
                                     "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
 
-        gpipe_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
-        stale_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42.txt"
+        gpipe_fn = "results/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
+        stale_fn = "results/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_20_se_5_seed_42.txt"
 
 
         virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
@@ -473,15 +473,23 @@ class Hack:
         #### load virtual stages for accuracy:
 
         # TODO: put here the exp of boolq-gpipe-seq
-        # exp_gpipe_fn = os.path.join(exp_results_dir,
-        #                             "new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
-
-        gpipe_fn = "results/FOR_PAPER/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
+        exp_results_dir = "results/t5/super_glue/boolq/"
+        exp_gpipe_fn = os.path.join(exp_results_dir,
+                                    "new_t5_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_20_se_10_seed_42.json")
+        # results/t5/super_glue/boolq/new_t5_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_20_se_10_seed_42.json
         # exp_gpipe_fn = "results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json"
+        gpipe_fn = "results/all_results_new_args_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_20_se_10_seed_42.txt"
 
         # TODO: copy-pasta here from the exp of boolq-gpipe-seq.
         # results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json
         # do it so we have some numbers. anyway its negligible noise not worth another 12 hour run...
+
+        d = {
+            "train_epochs_times":
+            extract_train_epoch_times(load_experiment(exp_gpipe_fn))
+
+        }
+
         # d = {"train_epochs_times": [
         #     397.09888553619385,
         #     401.3545401096344,
@@ -673,7 +681,8 @@ if __name__ == '__main__':
     }
 
     all_results = {
-        "all_speedups_rte" : RTE.all_speedups_rte
+        "all_speedups_rte" : RTE.all_speedups_rte,
+        "all_speedups_boolq": BoolQ.all_speedups_boolq,
     }
 
     allplots = {}

@@ -9,6 +9,9 @@
 # sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
 # sudo ldconfig
 
+# https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html#ubuntu-lts
+#sudo apt-get install cuda-drivers-440 -f
+
 # local dir
 DIR_NAME=$USER
 USER_NAME=$USER
@@ -53,6 +56,7 @@ cd -
 
 git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch || exit 1
+git checkout v1.7.1
 git checkout --recurse-submodules v1.7.1
 git submodule sync
 git submodule update --init --recursive
@@ -63,6 +67,7 @@ git submodule update --init --recursive
 #git checkout --recurse-submodules v1.6.0
 #git submodule sync
 #git submodule update --init --recursive
+#export USE_NCCL=0
 
 export TORCH_CUDA_ARCH_LIST="7.5+PTX"
 export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
@@ -77,7 +82,7 @@ FTPIPE_ROOT=~/workspace/FTPipe/
  cd ${FTPIPE_ROOT}
 conda env update -f pipe/env_utils/env_add_to_build_from_source.yml
 
-pip uninstall pillow
+pip uninstall pillow -y
 CC="cc -mavx2" pip install -U --force-reinstall pillow-simd
 # (2) Install torchvision from source.
 pip install git+https://github.com/pytorch/vision.git@v0.8.1
