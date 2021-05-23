@@ -1,3 +1,19 @@
+from torch.nn import CrossEntropyLoss
+from torch import nn
+import torch.nn.functional as F
+import torch
+import warnings
+import os
+import math
+import copy
+from transformers.models.t5.modeling_t5 import (logging,
+                                                ACT2FN, T5Config, find_pruneable_heads_and_indices,
+                                                prune_linear_layer, PreTrainedModel, DUMMY_INPUTS,
+                                                DUMMY_MASK, get_device_map, add_start_docstrings,
+                                                replace_return_docstrings, Seq2SeqModelOutput,
+                                                BaseModelOutput, assert_device_map, T5EncoderModel,
+                                                add_start_docstrings_to_model_forward, Seq2SeqLMOutput
+                                                )
 import operator
 
 from models.normal.NLP_models.stateless import StatelessEmbedding
@@ -27,24 +43,6 @@ def is_not_None(a):
 # limitations under the License.
 """ PyTorch T5 model. """
 
-from transformers.models.t5.modeling_t5 import (logging,
-                                                ACT2FN, T5Config, find_pruneable_heads_and_indices,
-                                                prune_linear_layer, PreTrainedModel, DUMMY_INPUTS,
-                                                DUMMY_MASK, get_device_map, add_start_docstrings,
-                                                replace_return_docstrings, Seq2SeqModelOutput,
-                                                BaseModelOutput, assert_device_map, T5EncoderModel,
-                                                add_start_docstrings_to_model_forward, Seq2SeqLMOutput
-                                                )
-
-import copy
-import math
-import os
-import warnings
-
-import torch
-import torch.nn.functional as F
-from torch import nn
-from torch.nn import CrossEntropyLoss
 
 # from transformers.modeling_utils import ACT2FN
 # from ...file_utils import (
@@ -332,8 +330,9 @@ class T5Attention(nn.Module):
         self.d_model = config.d_model
         self.key_value_proj_dim = config.d_kv
         self.n_heads = config.num_heads
-        self.dropout = config.dropout_rate
         self.inner_dim = self.n_heads * self.key_value_proj_dim
+
+        self.dropout = nn.Dropout(p=config.dropout_rate)
 
         # Mesh TensorFlow initialization to avoid scaling before softmax
         self.q = nn.Linear(self.d_model, self.inner_dim, bias=False)
@@ -519,9 +518,10 @@ class T5Attention(nn.Module):
             scores
         )  # (batch_size, n_heads, seq_length, key_length)
         # TODO: this is dangerous, self.training is always true.
-        attn_weights = F.dropout(
-            attn_weights, p=self.dropout, training=self.training
-        )  # (batch_size, n_heads, seq_length, key_length)
+        # attn_weights = F.dropout(
+        #     attn_weights, p=self.dropout, training=self.training
+        # )  # (batch_size, n_heads, seq_length, key_length)
+        attn_weights = self.dropout(attn_weights)
 
         # Mask heads if we want to
         if is_not_None(layer_head_mask):
@@ -711,7 +711,8 @@ class T5Block(nn.Module):
         outputs = (hidden_states,)
 
         outputs = outputs + (present_key_value_state,) + attention_outputs
-        return outputs  # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+        # hidden-states, present_key_value_states, (self-attention weights), (self-attention position bias), (cross-attention weights), (cross-attention position bias)
+        return outputs
 
 
 class T5PreTrainedModel(PreTrainedModel):
@@ -945,8 +946,8 @@ class T5Stack(T5PreTrainedModel):
         hidden_states = self.dropout(inputs_embeds)
 
         for i, (layer_module, past_key_value) in enumerate(zip(self.block, past_key_values)):
-            layer_head_mask = None # head_mask[i]
-            encoder_layer_head_mask = None # encoder_head_mask[i]
+            layer_head_mask = None  # head_mask[i]
+            encoder_layer_head_mask = None  # encoder_head_mask[i]
             # Model parallel
             if self.model_parallel:
                 torch.cuda.set_device(hidden_states.device)
@@ -1245,7 +1246,6 @@ class T5Model(T5PreTrainedModel):
 
         self.shared_embed_weight = stateless_shared.pop_weight()
 
-
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
         self.device_map = (
@@ -1452,7 +1452,6 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
 
         self.shared_embed_weight = stateless_shared.pop_weight()
 
-
     @add_start_docstrings(PARALLELIZE_DOCSTRING)
     def parallelize(self, device_map=None):
         self.device_map = (
@@ -1636,7 +1635,6 @@ class T5ForConditionalGeneration(T5PreTrainedModel):
             loss_fct = CrossEntropyLoss(ignore_index=-100)
             loss = loss_fct(lm_logits.view(-1, lm_logits.size(-1)), labels.view(-1))
             # TODO(thom): Add z_loss https://github.com/tensorflow/mesh/blob/fa19d69eafc9a482aff0b59ddd96b025c0cb207d/mesh_tensorflow/layers.py#L666
-
 
         if self.output_only:
             return loss
