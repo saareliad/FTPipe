@@ -324,7 +324,7 @@ class CoarsenedWeightFunction:
 
 
 class NodeMemoryEstimator:
-    THRESHOLD = 11 * 1e9
+    THRESHOLD = 32 * 1e9
 
     def __init__(self, optimizer_multiply=1):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply

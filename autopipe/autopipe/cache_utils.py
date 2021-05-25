@@ -28,6 +28,8 @@ class TorchCache:
             exception_happened = type is not None
             if not exception_happened:
                 assert self.v is not None, "You should enter a value"
+
+                # todo: CREATE DIR
                 torch.save(self.v, self.cache_name)
             else:
                 print("exception_happened")

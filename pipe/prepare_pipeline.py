@@ -530,14 +530,18 @@ def prepare_pipeline(args, shared_ctx=None, comm_version=1):
             del handler
             gc.collect()
 
-    training_tensor_dtypes = parsed_config.training_tensor_dtypes
-    eval_tensor_shapes = parsed_config.eval_tensor_shapes
-    training_tensor_shapes = parsed_config.training_tensor_shapes
+            training_tensor_dtypes = parsed_config.training_tensor_dtypes
+            eval_tensor_shapes = parsed_config.eval_tensor_shapes
+            training_tensor_shapes = parsed_config.training_tensor_shapes
 
-    # NOTE: here its the sliced model.
-    model = parsed_config.model
-
-    model.device = device
+            # NOTE: here its the sliced model.
+            model = parsed_config.model
+            del parsed_config.model
+            model.device = device
+            model = model.to(device)
+            gc.collect()
+            torch.cuda.synchronize(device)
+            gc.collect()
 
     stage_depth = pipe_config.get_depth_for_stage(args.stage)
     pipeline_depth = pipe_config.pipeline_depth

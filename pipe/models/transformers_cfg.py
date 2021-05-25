@@ -116,6 +116,27 @@ def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
                 },
                 stateless_tied=True)
 
+
+def layer_graph_t5_11b_tied_lmheads_512_4_4p_bw12_squad1_pipedream():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-11b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
+
+
+
 def layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream():
     return dict(model_type='new_t5_stateless',
                 model_name_or_path='t5-3b',
@@ -195,6 +216,23 @@ def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_async_squad1_mpipe():
                 },
                 stateless_tied=True)
 
+def layer_graph_t5_11b_tied_lmheads_512_4_4p_bw12_async_squad1_mpipe():
+    return dict(model_type='new_t5_stateless',
+                model_name_or_path='t5-11b',
+                do_lower_case=False,
+                output_past=False,
+                output_attentions=False,
+                output_hidden_states=False,
+                do_resize_token_embedding=True,
+                explicitly_set_dict={
+                    "return_dict": False,
+                    "use_cache": False,
+                    "output_only": True,
+                    "output_attentions": False,
+                    "precomputed_masks": False,
+                    "output_hidden_states": False
+                },
+                stateless_tied=True)
 
 
 def op_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe():
@@ -880,8 +918,8 @@ functions_list = getmembers(
     sys.modules[__name__],
     lambda o: isfunction(o) and o.__module__ == __name__)
 
-from pipe.models.oldt5 import oldt5_functions_list
-functions_list.extend(oldt5_functions_list)
+# from pipe.models.oldt5 import oldt5_functions_list
+# functions_list.extend(oldt5_functions_list)
 
 # dict of all functions in current file.
 # name --> function

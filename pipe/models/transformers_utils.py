@@ -1,7 +1,7 @@
 from enum import Enum, auto
 
 from .transformers_cfg import MODEL_TYPES
-
+import transformers
 
 class GetConfigFrom(Enum):
     HardCoded = auto()
@@ -45,7 +45,7 @@ def pretrained_model_config_and_tokenizer(
 
     # use_cdn = model_name_or_path not in {"t5-11b"}
     extra_kwargs = {}
-    if model_name_or_path in {"t5-11b"}:
+    if model_name_or_path in {"t5-11b"} and transformers.__version__ < ('4.1.1'):
         extra_kwargs['use_cdn'] = False
 
     model = model_class.from_pretrained(
