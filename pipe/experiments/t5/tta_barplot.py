@@ -29,7 +29,7 @@ d = [
         'pipeline': 'gpipe',
         'alg': 'mixed',
         'dataset': 'wic',
-        'total_time_to_accuracy': 3.347102
+        'total_time_to_accuracy':  6.094234 / (171.03629716237387 / 144.3297009) #3.347102 #
     },
 
     {

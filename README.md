@@ -52,7 +52,7 @@ export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps # Select a location that’s
 accessible to the given $UID
 export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log # Select a location that’s
 accessible to the given $UID
-nvidia-cuda-mps-control -f # Start deamon in foreground
+nvidia-cuda-mps-control -d # Start deamon in background
 ```
 
 To shutdown:

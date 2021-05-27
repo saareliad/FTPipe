@@ -11,7 +11,7 @@ python -m autopipe.partition new_t5 \
  --analysis_batch_size \
  4 \
  --partitioning_batch_size \
- 4 \
+ 2 \
  --ct \
  new_trace_cache_t53b_512_4_op \
  --cp \

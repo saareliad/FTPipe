@@ -93,6 +93,14 @@ class PipelineConfig:
         stage_cls = d['stages'][stage_id]['stage_cls']
         return stage_cls(layers, tensors, device=device)
 
+    def filter_layers_and_tensors_for_stage(self, layers: Dict[str, Tensor],
+                      tensors: Dict[str, Tensor], stage_id: int, device='cpu'):
+        d = self.d
+        stage_cls = d['stages'][stage_id]['stage_cls']
+        filtered_layers = {i:v  for i,v in layers.items() if i in stage_cls.LAYER_SCOPES}
+        filtered_tensors = {i:v  for i,v in tensors.items() if i in stage_cls.TENSORS}
+        return filtered_layers, filtered_tensors
+
     def get_inputs_req_grad_for_stage(self, stage_id: int) -> Dict[str, bool]:
         my_inputs = self.d['stages'][stage_id]['inputs']
         if 'req_grad' in next(iter(my_inputs.values())):

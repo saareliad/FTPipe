@@ -68,5 +68,5 @@
     "precomputed_masks": false,
     "save_checkpoints":  true,
     "load_model_one_by_one": false,
-    "save_checkpoint_every_x_steps": 500
+    "save_checkpoint_every_x_steps": 100
 }

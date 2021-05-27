@@ -37,6 +37,11 @@ python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/stale_layer_gr
 mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/stale_layer_graph.json --seed 42
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/stale_layer_graph.json --seed 42 --mode eval
 
+# rte
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/gpipe_layer_graph.json --seed 42 --mode preproc
+mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/gpipe_layer_graph.json --seed 42
+python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/rte/gpipe_layer_graph.json --seed 42 --mode eval
+echo OK
 # seqpipe layergraph
 
 # wic

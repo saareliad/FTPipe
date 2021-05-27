@@ -6,7 +6,7 @@
     "out_filename": "test_vs",
     "distributed_backend": "mpi",
     "model": "op_t5_3b_tied_lmheads_64_4_8p_bw12_async_squad1_mpipe",
-    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 0, 5, 7, 6, 4, 2, 3, 1],
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 1, 6, 0, 3, 5, 7, 4, 2],
     "nprocs": 16,
     "dataset": "t5_tfds",
     "mixture_or_task_name": "super_glue_wic_v102",
@@ -17,9 +17,9 @@
         }
     },
     "statistics": "squad_loss_per_batch",
-    "bs_train": 32,
-    "bs_test": 32,
-    "step_every": 4,
+    "bs_train": 64,
+    "bs_test": 64,
+    "step_every": 2,
     "max_seq_length": 64,
     "answer_max_seq_length": 4,
     "num_data_workers": 5,
@@ -52,7 +52,9 @@
     "flush_rate": -1,
     "work_scheduler": "1f1b",
     "supremum_staleness": 100,
-    "cudnn_benchmark": true,
+    "cudnn_benchmark": false,
+    "deterministic_mode": true,
+    "cudnn_deterministic": true,
     "max_buffers": 1,
     "keep_buffers_alive": false,
     "train_batches_limit": -1,
@@ -66,5 +68,5 @@
     "precomputed_masks": false,
     "save_checkpoints":  true,
     "load_model_one_by_one": false,
-    "save_checkpoint_every_x_steps": 500
+    "save_checkpoint_every_x_steps": 200
 }
