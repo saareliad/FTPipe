@@ -116,8 +116,7 @@ def layer_graph_t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream():
                 },
                 stateless_tied=True)
 
-
-def layer_graph_t5_11b_tied_lmheads_512_4_4p_bw12_squad1_pipedream():
+def layer_graph_t5_11b_tied_lmheads_512_4_4p_bw12_async_squad1_pipedream():
     return dict(model_type='new_t5_stateless',
                 model_name_or_path='t5-11b',
                 do_lower_case=False,

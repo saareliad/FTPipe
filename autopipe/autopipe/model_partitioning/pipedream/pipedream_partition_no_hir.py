@@ -40,6 +40,9 @@ def partition_pipedream(
 
 ):
     print("PipeDream Partitioning")
+    warnings.warn("using node mem estimateor threshold as mem constraint, ignoring memory_size arg")
+    memory_size = node_mem_estimator.THRESHOLD
+
     num_machines = num_gpus
     # we want results to be in milliseconds,
     network_bandwidth = edge_weight_function.bw * 1e6  # GBps -> KBps
