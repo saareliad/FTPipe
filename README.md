@@ -1,16 +1,24 @@
 
 # FTPipe
 
-This repository contains code used for FTPipe USENIX ATC21 paper and previous and future works.
+This repository contains code used for FTPipe USENIX ATC21 paper* and future works.
 
-The code for the Pipeline Staleness Mitigation paper (in preparation) is also included.
+Code for Pipeline Staleness Mitigation is also included.
+
+Arxiv and Citation comming soon.
+
+*Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism
 
 ## Overview
-This repository is used to automatically partition and train neural networks with various methods of pipeline-parallelism.
+This repository is used to explore various methods of pipeline-model-parallelism.
+It is capable of automatically partitionining, training and fine-tuning giant neural networks, wth synchronous or asynchronous pipeline.
 
 
 ## Usage
 
+Note: The full readme is still WIP and TBD. Howver there is a partial recipe below and some [examples](https://github.com/saareliad/FTPipe/tree/master/prepare_new_t5) of recent scripts we used.  Feel free to contact via email.
+
+0. clone the repository.
 1. To run partitioning, prepare a `Task`, which is simply a model and example inputs for it. Place it [here](autopipe/tasks).
 
 2. Choose partitioning and analysis settings, for example:
@@ -19,7 +27,7 @@ This repository is used to automatically partition and train neural networks wit
     ```
     This will create, compile, and autogenerate the partitioned model and place it [here](models/partitioned).
     
-    _Note: some hyper-parameters in mpipe partitioning method are still hardcoded and not available as cmd options._
+    _Note: some hyper-parameters in mpipe partitioning, env and so on are still hardcoded and not available as cmd options._
 
 3. Register the partitioned model to the pipeline runtime. 
 
@@ -42,8 +50,8 @@ This repository is used to automatically partition and train neural networks wit
    ```    
     Finally, a json file with results will be created and placed as defined in the config.
     
-## accelerating mixed pipe with MPS
-As $UID, run the commands (in a new screen)
+## Accelerating mixed pipe with MPS
+As $UID, run the following commands
 ```
 ulimit -n 16384
 
