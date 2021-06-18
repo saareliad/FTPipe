@@ -41,6 +41,9 @@ def set_style():
         "font.family": "serif",
         "font.serif": ["Times", "Palatino", "serif"]
     })
+    import matplotlib
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    matplotlib.rcParams['ps.fonttype'] = 42
 
 
 width = 7
@@ -441,12 +444,23 @@ class RTE:
         exp_gpipe_fn = os.path.join(exp_results_dir, "rte_virtual_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.json")
         gpipe_fn = "results_new_t5/all_results_rte_virtual_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
 
+
+
+
+
+
+
+
+
         # TODO: gpipe needs to re-run
         #### V2
         # exp_gpipe_fn = os.path.join("results/t5/glue/rte", "new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.json")
         # gpipe_fn = "results/all_results_new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
 
         stale_fn = "results/FOR_PAPER/all_results_new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_40_se_5_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_stale_bs_40_se_5_seed_42.txt"
+
+
+
 
 
         virtual_gpipe_dict, virtual_times_gpipe = get_fixed_dict_and_times_single(exp_fn=exp_gpipe_fn,
@@ -466,7 +480,7 @@ class Hack:
         #### load virtual stages for accuracy:
         exp_gpipe_fn = "results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json"
         gpipe_fn = "results_new_t5/all_results_rte_virtual_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
-        gpipe_fn = "results/all_results_new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
+        # gpipe_fn = "results/all_results_new_args_rte_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe_t5_tfds_gpipe_bs_40_se_10_seed_42.txt"
         # results_new_t5/t5/glue/rte/glue_rte_12_epochs_layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_squad1_pipedream_t5_tfds_gpipe_bs_40_se_10_seed_42.json
         # do it so we have some numbers. anyway its negligible noise not worth another 12 hour run...
         d = {"train_epochs_times": [

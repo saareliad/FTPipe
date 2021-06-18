@@ -21,6 +21,9 @@ def set_style():
         "font.family": "serif",
         "font.serif": ["Times", "Palatino", "serif"]
     })
+    import matplotlib
+    matplotlib.rcParams['pdf.fonttype'] = 42
+    matplotlib.rcParams['ps.fonttype'] = 42
 
 
 d = [
@@ -29,14 +32,14 @@ d = [
         'pipeline': 'gpipe',
         'alg': 'mixed',
         'dataset': 'wic',
-        'total_time_to_accuracy':  6.094234 / (171.03629716237387 / 144.3297009) #3.347102 #
+        'total_time_to_accuracy':  3.504893654333921 #2.6583318504130666  #6.094234 / (171.03629716237387 / 144.3297009) #3.347102 # 144.3297009 * (gmean([128,128,17]) +  1) / 3600 # gmean([129,129,18,195]) * 144.3297009 / 3600
     },
 
     {
         'pipeline': 'gpipe',
         'alg': 'seq',
         'dataset': 'wic',
-        'total_time_to_accuracy': 6.094234
+        'total_time_to_accuracy': 4.153435009198269 #6.094234
     },
 
     {
@@ -70,7 +73,7 @@ d = [
         'pipeline': 'stale',
         'alg': 'mixed',
         'dataset': 'wic',
-        'total_time_to_accuracy': 2.800590  ## TODO
+        'total_time_to_accuracy': 0.35981158045305245 #0.4058636 #2.800590  ## TODO
     },
     #     {
     #     'pipeline': 'stale',
@@ -182,4 +185,4 @@ for p, v in zip(patches, values):
 
 # , axes[1].patches[1], axes[1].patches[3]
 os.makedirs("results/paper_plots/", exist_ok=True)
-plt.savefig("results/paper_plots/new_VirtualStages_barplot_TTA.pdf", transparent=False, bbox_inches='tight')
+plt.savefig("results/paper_plots/new_new_VirtualStages_barplot_TTA.pdf", transparent=False, bbox_inches='tight')
