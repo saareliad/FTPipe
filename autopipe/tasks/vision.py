@@ -111,7 +111,7 @@ class ParsePartitioningOptsVision(Parser):
         bw_str = str(args.bw).replace(".", "_")
         model_str = str(args.model).replace("-", "_")
         model_str += f"c{args.crop}"
-        output_file = f"{model_str}_{args.n_partitions}p_bw{bw_str}"
+        output_file = f"{args.output_file}{model_str}_{args.n_partitions}p_bw{bw_str}"
         if args.async_pipeline:
             output_file += "_async"
 

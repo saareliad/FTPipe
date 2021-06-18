@@ -1,0 +1,71 @@
+{
+    "logdir": "logs/t5/virtual_stages/",
+    "data_dir": "/home_local/saareliad/data",
+    "out_dir": "results/t5/glue/rte",
+    "auto_file_name": true,
+    "out_filename": "new_args_rte",
+    "distributed_backend": "mpi",
+    "model": "layer_graph_t5_3b_tied_lmheads_320_8_8p_bw12_async_squad1_mpipe",
+    "stage_to_device_map": [0, 1, 2, 3, 4, 5, 6, 7, 0, 3, 1, 6, 4, 5, 2, 7],
+    "nprocs": 16,
+    "dataset": "t5_tfds",
+    "mixture_or_task_name": "glue_rte_v002",
+    "preproc_batch_size": 128,
+    "trainer": {
+        "type": "t5",
+        "args": {
+        }
+    },
+    "statistics": "squad_loss_per_batch",
+    "bs_train": 8,
+    "bs_test": 8,
+    "step_every": 5,
+    "num_data_workers": 10,
+    "optimizer": {
+        "type": "adafactor",
+        "args": {
+            "lr": 0.001,
+            "weight_decay": 0,
+	    "scale_parameter": true,
+	    "relative_step": false
+        }
+    },
+    "lr_scheduler": {
+        "type": "get_constant_schedule_with_warmup",
+        "preproc_args": {
+        },
+        "args": {
+            "num_warmup_steps": 200,
+            "last_epoch": -1
+        }
+    },
+    "epochs": -1,
+    "steps": 4200,
+    "seed_from_cmd": false,
+    "seed": 42,
+    "bs_train_from_cmd": false,
+    "bs_test_from_cmd": false,
+    "num_chunks": 1,
+    "verbose_comm": false,
+    "flush_rate": -1,
+    "work_scheduler": "virtual_stages_1f1b",
+    "supremum_staleness": 100,
+    "cudnn_benchmark": false,
+    "deterministic_mode": true,
+    "cudnn_deterministic": true,
+    "max_buffers": 1,
+    "keep_buffers_alive": false,
+    "train_batches_limit": -1,
+    "test_batches_limit": 0,
+    "log_frequency": 200,
+    "model_name_or_path": "t5-3b",
+    "max_seq_length": 320,
+    "answer_max_seq_length": 8,
+    "do_lower_case": false,
+    "overwrite_cache": false,
+    "dont_drop_last": false,
+    "model_type": "t5",
+    "precomputed_masks": false,
+    "save_checkpoints":  true,
+    "load_model_one_by_one": false
+}

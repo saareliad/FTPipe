@@ -89,7 +89,6 @@ def get_separate_dls_from_args(args,
                                pipe_config: Optional[PipelineConfig] = None,
                                dataset_keywords: Optional[Dict[str, Any]] = None,
                                verbose=False,
-                               # currently unused:
                                shuffle_train=True, ):
     if dataset_keywords is None:
         dataset_keywords = dict()

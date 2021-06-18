@@ -3,14 +3,14 @@ from itertools import chain
 from typing import List, Tuple, Dict
 
 from .utils import get_sorted_partition_inputs, pretty_format_obj
-from ..model_profiling import Node
+from ..model_profiling import Node, Graph
 from ..utils import nested_map
 
 tab = '    '
 dtab = tab + tab
 
 
-def generate_init_method(nodes: List[Node], class_name: str, layers: List[Node],
+def generate_init_method(graph: Graph, nodes: List[Node], class_name: str, layers: List[Node],
                          is_param_dict: Dict[str, bool], buffs_and_params: List[Node]) -> Tuple[str, Dict[Node, str]]:
     """creates the partition constructor and the mapping between layers and field ids
     """
@@ -42,7 +42,7 @@ def generate_init_method(nodes: List[Node], class_name: str, layers: List[Node],
     device = f"{dtab}self.device = torch.device(device)"
     move = f"{dtab}self.to(self.device)"
 
-    structure = nested_map(lambda x: 1, [n.req_grad for n in get_sorted_partition_inputs(nodes)])
+    structure = nested_map(lambda x: 1, [n.req_grad for n in get_sorted_partition_inputs(graph, nodes)])
 
     cfg = f"{dtab}self.input_structure = {pretty_format_obj(structure)}"
 

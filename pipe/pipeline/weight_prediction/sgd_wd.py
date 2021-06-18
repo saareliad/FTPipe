@@ -1,7 +1,7 @@
 import torch
 
 from .interface import WeightPredictor
-from .sym_pred_optimizers import auto_lambdify, WDSympySGD
+from .sym_pred_optimizers import auto_lambdify, WDSympySGD, WDSympySGDMsnag
 
 
 class SGDWDClonedWeightPrediction(WeightPredictor):
@@ -23,7 +23,7 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
 
         # Automaticallty create functions to compute coeffs given staleness
         res, _ = auto_lambdify(MAX_ALLOWEDD_STALENESS,
-                               WDSympySGD,
+                               WDSympySGDMsnag,
                                simplify=True)
         self.res = res
 
@@ -45,7 +45,9 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
                         continue
                     momentum = pg['momentum']
                     for p in pg['params']:
-                        p.add_(-lr * momentum, os_state[p]["momentum_buffer"])
+                        p.data.add_(-lr * momentum, os_state[p]["momentum_buffer"])
+                        if p.grad is not None:
+                            p.data.add_(p.grad, alpha=-lr)
             return
 
         if not self.n_steps:
@@ -55,10 +57,15 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
         res = self.res[self.n_steps]
         res_v = res['v']
         res_theta = res['theta']
+
         f_v = res_v['f']
         f_theta = res_theta['f']
         fs_v = res_v["free_symbols"]
         fs_theta = res_theta["free_symbols"]
+
+        res_first_grad = res['\\phi']
+        fs_first_grad = res_first_grad["free_symbols"]
+        f_first_grad = res_first_grad['f']
 
         os_state = self.optimizer.state
         self.true_weights_storage.create_cloned_if_needed()
@@ -79,9 +86,13 @@ class SGDWDClonedWeightPrediction(WeightPredictor):
 
                 coeff_v = f_v(*[d[a] for a in fs_v])
                 coeff_theta = f_theta(*[d[a] for a in fs_theta])
+                coeff_first_grad = f_first_grad(*[d[a] for a in fs_first_grad])
                 for p in pg['params']:
-                    p.mul_(coeff_theta).add_(coeff_v,
-                                             os_state[p]["momentum_buffer"])
+                    p.data.mul_(coeff_theta).add_(os_state[p]["momentum_buffer"], alpha=coeff_v)
+
+                    # Partially accumulated gradient. aiding in the first step.
+                    if p.grad is not None:
+                        p.data.add_(p.grad, alpha=coeff_first_grad)
 
     def revert(self):
         if not self.n_steps:

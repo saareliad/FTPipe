@@ -2,14 +2,20 @@ import os
 from typing import Dict
 
 import torch
+import transformers
 from torch.utils.data import TensorDataset
 
 from pipe.data.datasets import CommonDatasetHandler, register_dataset
 from autopipe.autopipe.cache_utils import compute_and_cache
-from pipe.experiments.experiments import auto_file_name
 from .preproc import _shift_right, get_attention_mask, get_inverted_encoder_attention_mask
-from .t5_tfds_eval import T5Evaluator
+from .t5_tfds_eval import get_t5_sequence_length_from_args
 
+try:
+    import t5
+    import tensorflow.compat.v1 as tf
+    import mesh_tensorflow.transformer.dataset as transformer_dataset
+except:
+    print("-W- can't import t5 stuff")
 
 # try:
 #     import t5
@@ -30,51 +36,50 @@ def get_t5_available_tasks(verbose=False):
     return t5.data.TaskRegistry.names()
 
 
-def get_t5_sequence_length_from_args(args):
-    return {
-        "inputs": args.max_seq_length,
-        "targets": args.answer_max_seq_length
-    }
-
-
 def torch_tensor_dict_from_args(args,
                                 config,
                                 dataset_split="train",
                                 preproc_device="cpu"):
+    """This is the main function to get dataset from.
+
+    # Example of the process this is finally going to go through.
+
+    # def rte_tensor_dataset(config,
+    #                        preproc_device="cuda:0",
+    #                        preproc_batch_size=128):
+    #     ds = like_mtf(mixture_or_task_name="glue_rte_v002",
+    #                   sequence_length={   # note: these are example sizes.
+    #                       "inputs": 128,
+    #                       "targets": 16
+    #                   },
+    #                   dataset_split="train",
+    #                   use_cached=False,
+    #                   pack=False)
+    #
+    #     d = to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device)
+    #     tensors = list(d.values())
+    #     # NOTE: our tracer should automatically drops None arguments, hence the input are only non-Nones.
+    #     tensor_dataset = torch.utils.data.TensorDataset(*tensors)
+    #     return tensor_dataset
+
+    """
     mixture_or_task_name = args.mixture_or_task_name
     sequence_length = get_t5_sequence_length_from_args(args)
     # preproc_device = getattr(args, "preproc_device")
     preproc_batch_size = getattr(args, "preproc_batch_size", 128)
+
 
     ds = like_mtf(mixture_or_task_name=mixture_or_task_name,
                   sequence_length=sequence_length,
                   dataset_split=dataset_split,
                   use_cached=False,
                   pack=False)
-
     return to_torch_tensor_dict(config,
                                 ds,
                                 preproc_device=preproc_device,
                                 preproc_batch_size=preproc_batch_size)
 
 
-def rte_tensor_dataset(config,
-                       preproc_device="cuda:0",
-                       preproc_batch_size=128):
-    # sequence_length={"inputs": 512, "targets": 84},
-    ds = like_mtf(mixture_or_task_name="glue_rte_v002",
-                  sequence_length={
-                      "inputs": 128,
-                      "targets": 16
-                  },
-                  dataset_split="train",
-                  use_cached=False,
-                  pack=False)
-
-    d = to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device)
-    tensors = list(d.values())
-    tensor_dataset = torch.utils.data.TensorDataset(*tensors)
-    return tensor_dataset
 
 
 def to_torch_tensor_dict(config, ds, preproc_batch_size, preproc_device):
@@ -129,7 +134,7 @@ def our_collate_fn(batch, device, config):
     else:
         # print("-W- preprocessing will happen inside the model...")
         inverted_encoder_attention_mask = None
-        decoder_attention_mask = None
+        # decoder_attention_mask = None
 
     d = {}
     d['input_ids'] = input_ids
@@ -137,7 +142,15 @@ def our_collate_fn(batch, device, config):
     d['decoder_input_ids'] = decoder_input_ids
     d['decoder_attention_mask'] = decoder_attention_mask
     d['inverted_encoder_attention_mask'] = inverted_encoder_attention_mask
-    d['lm_labels'] = lm_labels
+
+    if transformers.__version__ > ('4.1.1'):  # 3.3.1
+        d['labels'] = lm_labels
+    else:
+        d['lm_labels'] = lm_labels
+
+    to_del = [i for i in d if d[i] is None]
+    for i in to_del:
+        del d[i]
 
     return d
 
@@ -147,12 +160,14 @@ def like_mtf(mixture_or_task_name: str,
              dataset_split="train",
              use_cached=False,
              pack=True):
-    import t5
-    import tensorflow.compat.v1 as tf
-    import mesh_tensorflow.transformer.dataset as transformer_dataset
+    print("like-mtf: pre import")
+
+    # import t5
+    # import tensorflow.compat.v1 as tf
+    # import mesh_tensorflow.transformer.dataset as transformer_dataset
 
     # https://github.com/google-research/text-to-text-transfer-transformer/blob/5053a463eac3423284c327bf36e61988189239c1/t5/models/mesh_transformer.py
-
+    print("like-mtf: import done")
     mixture_or_task = t5.data.get_mixture_or_task(mixture_or_task_name)
     ds = mixture_or_task.get_dataset(sequence_length,
                                      split=dataset_split,
@@ -169,14 +184,16 @@ def like_mtf(mixture_or_task_name: str,
     feature_keys = tuple(k for k in mixture_or_task.output_features
                          if k in tf.data.get_output_shapes(ds))
 
+
+    # todo: This has beed change in master:
+    # https://github.com/google-research/text-to-text-transfer-transformer/blob/master/t5/models/hf_model.py#L126
     ds = transformer_dataset.pack_or_pad(ds,
                                          sequence_length,
                                          pack=pack,
                                          feature_keys=feature_keys,
                                          ensure_eos=True)
 
-    ds = ds.map(_map_fn,
-                num_parallel_calls=t5.data.preprocessors.num_parallel_calls())
+    ds = ds.map(_map_fn)
     """
     # https://github.com/tensorflow/mesh/blob/6f5e3f10b5fe2bbd613bbe11b18a63d52f2749f4/mesh_tensorflow/transformer/utils.py
             encoder_sequence_id=mtf_features.get("inputs_segmentation", None),
@@ -254,22 +271,6 @@ def get_separated_dataset(just, DATA_DIR, args, **dataset_keywords):
     dev_dataset = compute_and_cache(compute_subset_eval, small_cache_name_eval)
 
     return train_dataset, dev_dataset
-
-
-def evaluate_t5_tfds(args, cp_number, device="cpu"):
-    DIR_NAME = "results/t5_eval_dir/"
-    model_dir = os.path.join(DIR_NAME, auto_file_name(args))
-    batch_size = getattr(args, "single_worker_eval_batch_size", 32)
-    generate_kwargs = getattr(args, "generate_kwargs", {})
-    # generate_kwargs['max_length'] = args.answer_max_length
-    evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
-    results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
-                             sequence_length=get_t5_sequence_length_from_args(args),
-                             batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
-                             summary_dir=None,
-                             **generate_kwargs
-                             )
-    return results
 
 
 class SEP_T5_TFDS_DatasetHandler(CommonDatasetHandler):

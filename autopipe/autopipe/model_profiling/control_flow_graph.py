@@ -4,15 +4,15 @@ from collections import defaultdict
 from copy import deepcopy
 from enum import IntEnum
 from itertools import chain
-from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set
+from typing import Tuple, Optional, Callable, Dict, Iterable, List, Type, Set, Union
 
 import networkx as nx
 from torch import Tensor, nn as nn
+from torch.nn import Parameter, Module
 
 from autopipe.autopipe.union_find import UnionFind
 from autopipe.autopipe.utils import ExecTimes, layerDict, tensorDict
 
-from torch.nn import Parameter, Module
 
 class NodeTypes(IntEnum):
     """
@@ -30,12 +30,14 @@ class NodeTypes(IntEnum):
 
 
 class Node:
-    def __init__(self, node_type: NodeTypes, idx, scope):
+    def __init__(self, node_type: NodeTypes, idx, scope: str):
+        assert scope is not None
         self.type = node_type
         self.id = idx
         self.scope = scope
+        self.scope_to_hold_to: Union[str, None] = None  # annotation to keep during merges.
 
-        self.topo_sort_id = id  # hack: start with ID. (potential danger)
+        self.topo_sort_id = idx  # hack: start with ID. (potential danger)
         self.stage_id = 0
         self.gpu_id = None  # New feature
         self.weight: Optional[ExecTimes] = None
@@ -43,18 +45,22 @@ class Node:
         self.num_parameters: Optional[int] = 0
         self.compound_edge_weights = defaultdict(float)
         self.out_edges: List[Node] = []
-        self.args = []
+        self.args: List[Node] = []
         self.kwargs = defaultdict(list)
         self.value_type = None
 
         self.tensor_dtype = None
         self.tensor_shape = None
         self.req_grad = False
+        self.is_contiguous = None
 
         self.constant_value = None
 
     # def __repr__(self):
     #     return self.scope
+
+    def is_graph_input(self):
+        return self.type is NodeTypes.IN
 
     def maybe_create_compound_edge_weights(self, edge_weight_function):
         if not self.compound_edge_weights:
@@ -120,7 +126,7 @@ class Node:
             raise KeyError(f"original is not in args and not in kwargs, original={original}")
 
     @classmethod
-    def from_other(cls, other):
+    def from_other(cls, other: "Node"):
         node = cls(other.type, other.id, other.scope)
         node.stage_id = other.stage_id
         node.gpu_id = other.gpu_id
@@ -139,8 +145,56 @@ class Node:
 
         node.constant_value = other.constant_value
         node.max_memory_bytes = other.max_memory_bytes
+        node.scope_to_hold_to = other.scope_to_hold_to
+        node.is_contiguous = other.is_contiguous
 
         return node
+
+    def load_state(self, state: dict, out_edges, args, kwargs):
+        node = self
+        node.args = args
+        node.kwargs = kwargs
+        node.out_edges = out_edges
+
+        node.topo_sort_id = state['topo_sort_id']
+        node.stage_id = state['stage_id']
+        node.gpu_id = state['gpu_id']
+        node.weight = state['weight']
+        node.constant_value = state['constant_value']
+        node.value_type = state['value_type']
+        node.tensor_dtype = state['tensor_dtype']
+        node.tensor_shape = state['tensor_shape']
+        node.req_grad = state['req_grad']
+        node.compound_edge_weights = state['compound_edge_weights']
+        node.num_parameters = state['num_parameters']
+        node.max_memory_bytes = state['max_memory_bytes']
+        node.scope_to_hold_to = state['scope_to_hold_to']
+        node.is_contiguous = state['is_contiguous']
+        return node
+
+    def state_dict(self):
+        node = self
+        state = dict(id=node.id,
+                     scope=node.scope,
+                     type=node.type,
+                     topo_sort_id=node.topo_sort_id,
+                     stage_id=node.stage_id,
+                     gpu_id=node.gpu_id,
+                     weight=node.weight,
+                     num_parameters=node.num_parameters,
+                     out_edges=[n.id for n in node.out_edges],
+                     args=[n.id for n in node.args],
+                     kwargs={n.id: kw for n, kw in node.kwargs.items()},
+                     value_type=node.value_type,
+                     constant_value=node.constant_value,
+                     tensor_dtype=node.tensor_dtype,
+                     tensor_shape=node.tensor_shape,
+                     req_grad=node.req_grad,
+                     compound_edge_weights=deepcopy(node.compound_edge_weights),
+                     max_memory_bytes=node.max_memory_bytes,
+                     scope_to_hold_to=node.scope_to_hold_to,
+                     is_contiguous=node.is_contiguous)
+        return state
 
     def __repr__(self):
         return str(f"id: {self.id}, scope:{self.scope}, type:{self.type}")
@@ -151,7 +205,7 @@ NodeWeightFunction = Callable[[Node], int]
 EdgeWeightFunction = Callable[[Node, Node], int]
 
 
-class Graph():
+class Graph:
     def __init__(self, nodes: Optional[GraphNodes], input_kw_ids: Optional[Dict[int, str]],
                  output_ids: Optional[List[int]], depth: Optional[int],
                  basic_blocks: Optional[Tuple[Type[nn.Module], ...]]):
@@ -164,14 +218,19 @@ class Graph():
 
     def merge(self, uid: int, vid: int, edge_weight_function: EdgeWeightFunction, dynamic_topo_sort=False,
               uf: Optional[UnionFind] = None, partial_uf: Optional[UnionFind] = None):
-        if vid in self.output_ids:
-            self.output_ids[self.output_ids.index(vid)] = uid
-        assert uid != vid
-        # print(f"merge {(uid,vid)} ")
+        """merges u<-v
         # TODO: check if its legal merge. currently its user's responsibility.
-        # does not exits a path from the set {n : u < n < v} to v.
+        user has to check if does not exits a path from the set {n : u < n < v} to v.
+        according to topo-sort.
+        """
+
+        assert uid != vid
         u = self._nodes[uid]
         v = self._nodes[vid]
+
+        if vid in self.output_ids:
+            warnings.warn(f"merging u<-v s.t v is an output node: v: {v} u:{u}")
+            self.output_ids[self.output_ids.index(vid)] = uid
 
         u.remove_output(v)
         v.remove_input(u)
@@ -180,7 +239,6 @@ class Graph():
 
         for a in v.in_edges:
             a.maybe_create_compound_edge_weights(edge_weight_function=edge_weight_function)
-
 
         # Merge node weights
         # TODO: we don't know about other x->v or u->y
@@ -219,7 +277,13 @@ class Graph():
 
         # merge node parameters
         u.num_parameters += v.num_parameters
+
+        # u.max_memory_bytes = max(v.max_memory_bytes)
+
         u.max_memory_bytes += v.max_memory_bytes
+
+        if v.scope_to_hold_to is not None:
+            u.scope_to_hold_to = v.scope_to_hold_to
 
         # TODO: dynamic topo_sort
         if dynamic_topo_sort:
@@ -267,9 +331,6 @@ class Graph():
                 w = a.compound_edge_weights[u.id]
                 del a.compound_edge_weights[u.id]
                 a.compound_edge_weights[v.id] += w  # defaultdict
-
-    #
-    # def _update_compound_weights_on_replaced_output(self, nn, u, v, edge_weight_function, uf):
 
     def __len__(self) -> int:
         return len(self._nodes)
@@ -565,25 +626,7 @@ class Graph():
         """
         node_states = dict()
         for node in self.nodes:
-            state = dict(id=node.id,
-                         scope=node.scope,
-                         type=node.type,
-                         topo_sort_id=node.topo_sort_id,
-                         stage_id=node.stage_id,
-                         gpu_id=node.gpu_id,
-                         weight=node.weight,
-                         num_parameters=node.num_parameters,
-                         out_edges=[n.id for n in node.out_edges],
-                         args=[n.id for n in node.args],
-                         kwargs={n.id: kw for n,
-                                              kw in node.kwargs.items()},
-                         value_type=node.value_type,
-                         constant_value=node.constant_value,
-                         tensor_dtype=node.tensor_dtype,
-                         tensor_shape=node.tensor_shape,
-                         req_grad=node.req_grad,
-                         compound_edge_weights=deepcopy(node.compound_edge_weights),
-                         max_memory_bytes=node.max_memory_bytes)
+            state = node.state_dict()
             node_states[node.id] = state
 
         return {"node_data": node_states,
@@ -599,32 +642,28 @@ class Graph():
         basic_blocks = graph_state['basic_blocks']
         input_kw_ids = graph_state['input_kw_ids']
 
-        nodes = dict()
         node_states = graph_state['node_data']
+
+        # init basic nodes
+        nodes = dict()
         for state in sorted(node_states.values(), key=lambda s: s['id']):
             node = Node(state['type'], state['id'], state['scope'])
             nodes[node.id] = node
 
+        # load state into them.
+
         for state in sorted(node_states.values(), key=lambda s: s['id']):
             node = nodes[state['id']]
 
-            node.topo_sort_id = state['topo_sort_id']
-            node.stage_id = state['stage_id']
-            node.gpu_id = state['gpu_id']
-            node.weight = state['weight']
-            node.args = [nodes[n] for n in state['args']]  # NOTE: must be same order!
-            node.kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
-            node.constant_value = state['constant_value']
-            node.value_type = state['value_type']
-            node.tensor_dtype = state['tensor_dtype']
-            node.tensor_shape = state['tensor_shape']
-            node.req_grad = state['req_grad']
-            node.compound_edge_weights = state['compound_edge_weights']
-            node.num_parameters = state['num_parameters']
-            node.max_memory_bytes = state['max_memory_bytes']
+            args = [nodes[n] for n in state['args']]  # NOTE: must be same order!
+            kwargs = {nodes[n]: kw for n, kw in state['kwargs'].items()}
+            out_edges = sorted({nodes[n] for n in state['out_edges']}, key=lambda x: x.id)
 
-        for node in nodes.values():
-            node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)
+            node.load_state(state, out_edges, args, kwargs)
+
+        #
+        # for node in nodes.values():
+        #     node.out_edges = sorted({nodes[n] for n in node_states[node.id]['out_edges']}, key=lambda x: x.id)
 
         self._nodes = nodes
         self.basic_blocks = basic_blocks
@@ -658,7 +697,7 @@ class Graph():
     def from_other(cls, graph: "Graph") -> "Graph":
         return cls(None, None, None, None, None).load_state(graph.state())
 
-    def layers_graph(self) -> Tuple["Graph", Dict[int, int]]:
+    def new_graph_without_constants(self) -> Tuple["Graph", Dict[int, int]]:
         """
         creates a graph g with nodes of type CONSTANT 
         or nodes who solely depend on constants are removed
@@ -814,7 +853,7 @@ class Graph():
 
         return stages
 
-    def _remove_parallel_edges(self) -> "Graph":
+    def get_copy_without_parallel_edges(self) -> "Graph":
         """the control flow graph can contain parallel in/out edges
         those edges are important for control flow but are detrimental for partitioning
         this function creates a new Graph without parallel edges"""
@@ -895,6 +934,7 @@ class Graph():
 
             # Fix graph:
             #             self.input_kw_ids = input_kw_ids
+            # FIXME: this sometimes assign  larger ids to inputs than non-inputs.
             input_kw_ids = {}
             for i, v in self.input_kw_ids.items():
                 topo_sort_id = self[i].topo_sort_id
@@ -918,7 +958,7 @@ class Graph():
             _nodes = {n.topo_sort_id: n for n in self.nodes}
             self._nodes = _nodes
 
-    def forward_dfs_and_check(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
+    def forward_dfs_and_check_if_in_set(self, source: Node, set_to_check: Set[Node], depth_limit: Optional[int] = None):
         if depth_limit is None:
             depth_limit = len(self)
         # dfs
@@ -965,6 +1005,7 @@ class Graph():
             n.num_parameters = x
 
         # return params_per_node
+
 
 def remove_dups(lnodes: List[Node], myself):
     s = set(lnodes)

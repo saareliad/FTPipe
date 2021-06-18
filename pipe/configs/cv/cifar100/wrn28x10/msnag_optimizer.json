@@ -10,7 +10,7 @@
     },
     "nesterov_set_for_last_partition": true,
     "weight_prediction": {
-        "type": "msnag",
+        "type": "aggmsnag",
         "args": {
             "pred_mem": "clone",
             "nag_with_predictor": true

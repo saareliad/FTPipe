@@ -9,6 +9,7 @@ import torch
 from tqdm import tqdm
 from transformers import T5ForConditionalGeneration
 
+from pipe.experiments.experiments import auto_file_name
 from pipe.models.load_pipeline_weights_to_hf import T5HFLoader
 from pipe.models.t5_for_generation import T5ForConditionalGeneration as ModelParallelT5ForConditionalGeneration
 
@@ -286,3 +287,26 @@ def write_lines_to_file(lines, filename):
         tf.io.gfile.remove(filename)
     with tf.io.gfile.GFile(filename, "w") as output_file:
         output_file.write("\n".join([str(l) for l in lines]))
+
+
+def get_t5_sequence_length_from_args(args):
+    return {
+        "inputs": args.max_seq_length,
+        "targets": args.answer_max_seq_length
+    }
+
+
+def evaluate_t5_tfds(args, cp_number, device="cpu"):
+    DIR_NAME = "results/t5_eval_dir/"
+    model_dir = os.path.join(DIR_NAME, auto_file_name(args))
+    batch_size = getattr(args, "single_worker_eval_batch_size", 32)
+    generate_kwargs = getattr(args, "generate_kwargs", {})
+    # generate_kwargs['max_length'] = args.answer_max_length
+    evaluator = T5Evaluator(args, model_dir=model_dir, device=device, model=None)
+    results = evaluator.eval(mixture_or_task_name=args.mixture_or_task_name,
+                             sequence_length=get_t5_sequence_length_from_args(args),
+                             batch_size=batch_size, checkpoint_steps=cp_number, split="validation",
+                             summary_dir=None,
+                             **generate_kwargs
+                             )
+    return results

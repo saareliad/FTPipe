@@ -176,6 +176,8 @@ def parse_cli():
         help="Training epochs to run",
         default=-1,
     )
+    parser.add_argument("--epochs_from_cmd", action="store_true")
+
 
     parser.add_argument(
         "--steps",
@@ -183,6 +185,8 @@ def parse_cli():
         help="Training steps to run",
         default=-1,
     )
+    parser.add_argument("--steps_from_cmd", action="store_true")
+
     parser.add_argument(
         "--step_every",
         type=int,
@@ -224,6 +228,8 @@ def parse_cli():
     # TODO: option for weight stashing just statistics.
 
     parser.add_argument("--explicit_eval_cp", required=False, type=str, help="explicit name for eval cp")
+    parser.add_argument("--eval_device", required=False, type=str, default="cuda:0", help="device to eval on first input")
+    parser.add_argument("--single_worker_eval_batch_size", required=False, type=int, default=32, help="batch size used at T5 generation")
     args = parser.parse_args()
 
     if args.base_config_path:
@@ -397,6 +403,16 @@ def main(args, shared_ctx=None):
 
     if getattr(args, "cudnn_deterministic", False):
         torch.backends.cudnn.deterministic = True
+
+    if getattr(args, "deterministic_mode", False):
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        try:
+            torch.use_deterministic_algorithms(True)
+        except:
+            pass
+
+
 
     ###############################
     # Prepare for pipeline

@@ -121,11 +121,15 @@ def get_sgd_weight_predictor(sgd_type: str,
                              scheduler=None,
                              nag_with_predictor=False,
                              true_weights_storage=None) -> WeightPredictor:
-    if pred_type != 'msnag':
-        raise NotImplementedError(pred_type)
+
     has_weight_decay = any(
         [pg['weight_decay'] != 0 for pg in optimizer.param_groups])
     if has_weight_decay:
+        if pred_type == 'msnag':
+            raise NotImplementedError(f"this is constantyly changed to to aggmsnag since it is better, use it instead. For measuring msnag alone - change the code")
+        if pred_type != 'aggmsnag':
+            raise NotImplementedError()
+
         if sgd_type == 'sgd1':
             if pred_mem == 'clone':
                 return SGDWDClonedWeightPrediction(
@@ -139,6 +143,8 @@ def get_sgd_weight_predictor(sgd_type: str,
         else:
             raise NotImplementedError()
     else:
+        if pred_type != 'msnag':
+            raise NotImplementedError(pred_type)
         fix_fn_cls = SGD_TYPE_TO_MSNAG_CLASS.get(sgd_type, None)
         fix_fn = fix_fn_cls()
         pred_cls = PRED_MEM_TO_CLASS.get(pred_mem, None)

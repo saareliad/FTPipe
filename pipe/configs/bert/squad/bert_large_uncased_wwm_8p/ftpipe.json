@@ -59,7 +59,7 @@
     "doc_stride": 128,
     "max_query_length": 64,
     "threads": 80,
-    "overwrite_cache": true,
+    "overwrite_cache": false,
     "dont_drop_last": false,
     "model_type": "bert",
     "output_dir": "results/squad/out_dir/",

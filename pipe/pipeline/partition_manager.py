@@ -2,6 +2,7 @@ import logging
 import os
 import types
 import warnings
+from typing import Union
 
 import torch
 from torch import Tensor
@@ -16,7 +17,7 @@ from .partition import (Partition, LastPartition, FirstPartition,
                         PartitionWithoutRecomputation,
                         )
 from .partition import get_buffers_for_ddp_sync
-from .trainers import PipelineSupportedTrainerType
+from .trainers import PipelineSupportedTrainerType, GapAwareTrainerMixin
 from .trainers.interface import MultiPartitionTrainer  # , GradNormStepperMixin
 from .trainers.statistics.gap import try_record_real_gap_from_current
 from .true_weights_storage import TrueWeightsStorage
@@ -124,6 +125,7 @@ class SinglePartitionManager:
         self.gap_aware: GapAwareBase
         self.weight_stasher: WeightStasher
         self.true_weights_storage: TrueWeightsStorage
+        self.partition: Partition
 
     def _maybe_init_ddp(self, comm_handler, partition, stage, sync_buffers):
         is_replicated = False
@@ -140,7 +142,7 @@ class SinglePartitionManager:
 
         return is_replicated
 
-    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
+    def _init_partition(self, partition, use_recomputation, disable_clone_inputs, req_grad,
                         ):
 
         if self.stage_depth == 0:
@@ -192,7 +194,7 @@ class SinglePartitionManager:
                     _REQ_GRAD=True,
                     req_grad=req_grad,
                 )
-        if is_mp:
+        if disable_clone_inputs:
             # We do the clone ourself.
             # if hasattr(partition_cls, "_CLONE_INPUTS"):
             partition_cls._CLONE_INPUTS = False
@@ -251,8 +253,7 @@ class SinglePartitionManager:
                 for _ in range(fake_draw):
                     next(self.dl_iter)
 
-    def set_weight_predictor(self, weight_predictor: WeightPredictor,
-                             nag_with_predictor: bool):
+    def set_weight_predictor(self, weight_predictor: WeightPredictor):
         self.weight_predictor = weight_predictor
 
     def set_lr_scheduler(self, lr_scheduler):
@@ -488,12 +489,11 @@ class SinglePartitionManager:
         # NOTE: in MPI version there was hacky zero and sync here
         g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
 
+        # recv the next gradients.
         if next_backward_batch_idx is not None:
             next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
             self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
                                                  next_backward_batch_idx_last_due_end)
-
-        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Allow skipping steps (Gradient aggregation)
         old_lrs = None
@@ -541,6 +541,7 @@ class SinglePartitionManager:
             # ####### Preparing to step
 
             if self.gap_aware:
+                trainer: Union[GapAwareTrainerMixin, PipelineSupportedTrainerType]
                 # Get delay and modify gradients.
                 if self.step_every > 1:
                     raise NotImplementedError()  # TODO:
@@ -684,8 +685,7 @@ class GPipePartitionManager(SinglePartitionManager):
 
         self.saved_for_backward = dict()
 
-    def _init_partition(self, partition, use_recomputation, is_mp, req_grad,
-                        ):
+    def _init_partition(self, partition, use_recomputation, disable_input_clone, req_grad):
         # NOTE: it will be called from super().__init__
         TO_DEVICE = False
         is_last_partition = self.is_last_partition
@@ -701,7 +701,7 @@ class GPipePartitionManager(SinglePartitionManager):
             else:
                 partition_cls = GPipePartition
 
-            if is_mp:
+            if disable_input_clone:
                 # We do the clone ourself.
                 partition_cls._CLONE_INPUTS = False
             self.partition = partition_cls(partition,
@@ -836,11 +836,15 @@ class GPipePartitionManager(SinglePartitionManager):
     def run_batch_backward(self, batch_idx: int, num_batches: int, next_backward_batch_idx=None):
         """ Runs the backwards pass + step for all partitions except the last partition """
 
-        last_due_step_every = ((batch_idx + 1) % self.step_every) == 0
-        last_due_end = batch_idx + 1 == num_batches
-        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, last_due_end)
+        the_bwd_of_last_fwd_due_step_every = ((batch_idx + 1) % self.step_every) == 0
+        the_bwd_of_last_fwd_due_end = batch_idx + 1 == num_batches
 
-        is_last_micro_batch = last_due_step_every or last_due_end
+        # is_the_last_bwd_micro_batch = the_bwd_of_last_fwd_due_end
+        # raise NotImplementedError()
+
+        self.comm_handler.pre_recv_gradients(batch_idx, num_batches, the_bwd_of_last_fwd_due_end)
+
+        is_last_micro_batch = the_bwd_of_last_fwd_due_step_every or the_bwd_of_last_fwd_due_end
         partition = self.partition
         partition.is_last_micro_batch = is_last_micro_batch  # No recomputation needed
 
@@ -852,14 +856,16 @@ class GPipePartitionManager(SinglePartitionManager):
         # Order is important
         if not is_last_micro_batch:
             self.partition.recompute(batch_idx)
-        g = self.comm_handler.wait_recv_gradients(batch_idx, last_due_end)
+        g = self.comm_handler.wait_recv_gradients(batch_idx, the_bwd_of_last_fwd_due_end)
 
+        # recv the next gradients
         if next_backward_batch_idx is not None:
-            next_backward_batch_idx_last_due_end = next_backward_batch_idx + 1 == num_batches
+            # HACK: it is false since we start with the last...
+            next_backward_batch_idx_last_due_end = False
+            # if we would do a mistake here: it would create the buffers again, overwriting prev ones.
+            # it may be possible we call irecv without the buffers being fully initialized
             self.comm_handler.pre_recv_gradients(next_backward_batch_idx, num_batches,
                                                  next_backward_batch_idx_last_due_end)
-
-        # self.comm_handler.post_recv_gradients(batch_idx, num_batches)
 
         # Compute gradients
         if (not do_step) and self.is_replicated:
@@ -948,6 +954,7 @@ class GPipePartitionManager(SinglePartitionManager):
                 else:
                     # TODO: can catch the first bwd micro-batch of the next mini-batch
                     next_backward_batch_idx_to_run = None
+
 
                 ro = run_batch_backward(batch_idx_to_run, num_batches,
                                         next_backward_batch_idx=next_backward_batch_idx_to_run)

@@ -9,9 +9,6 @@ from autopipe.autopipe.utils import ExecTimes, flatten
 from ..model_profiling import Node, NodeTypes
 
 
-# __all__ = ["get_weight_functions"]
-
-
 def get_weight_functions(args, verbose=True):
     # (1) get classes
     # (2) get keywords, parse special arguments
@@ -55,6 +52,9 @@ class NodeWeightFunction:
 
 
 class EdgeWeightFunction:
+    GPU_MEMORY_BW = 550
+    NON_CONTIGIOUS_PENATLY = True
+
     def __init__(self,
                  bw_GBps,
                  bwd_to_fwd_ratio=-1,
@@ -71,12 +71,18 @@ class EdgeWeightFunction:
         self.penalize_non_tensors = penalize_non_tensors
         self.ensure_positive = ensure_positive
 
-    def __call__(self, u: Node, v: Node):
+    def __call__(self, u: Node, v: Node, non_contig_penalty=False):
         if u.compound_edge_weights:
-            if self.ratio == 0:
+            if self.ratio == 0:  # forward
                 # TODO: this can change
+                # different GPUs
                 if u.gpu_id != v.gpu_id or (u.gpu_id is None and v.gpu_id is None):
                     return u.compound_edge_weights[v.id]
+                elif u.gpu_id == v.gpu_id:  # and (u.gpu_id is not None):
+                    # This is a problem since weight already includes BW inside the calculation. same gpu bw.
+                    warnings.warn(
+                        "experimental - compound weight but on same GPU - should it happen? check it is not an output node.")
+                    return u.compound_edge_weights[v.id] / (self.GPU_MEMORY_BW / self.bw)
                 else:
                     raise NotImplementedError("not supported yet")
                     # return u.compound_edge_weights[v.id] / (550 / self.bw)
@@ -86,6 +92,8 @@ class EdgeWeightFunction:
 
                 if u.gpu_id != v.gpu_id or (u.gpu_id is None and v.gpu_id is None):
                     return u.compound_edge_weights[v.id]
+                elif u.gpu_id == v.gpu_id:
+                    return u.compound_edge_weights[v.id] / (self.GPU_MEMORY_BW / self.bw)
                 else:
                     raise NotImplementedError("not supported yet")
 
@@ -105,7 +113,7 @@ class EdgeWeightFunction:
                 # can check size for torch.Size or whatever, or be accurate for bool. but its not interesting
 
             else:
-                # its a tensor, calculate the volume
+                # its a tensor, (or tuple of such). calculate the volume
                 volume = 0
                 for shape, dtype in zip(flatten(u.tensor_shape),
                                         flatten(u.tensor_dtype)):
@@ -115,16 +123,20 @@ class EdgeWeightFunction:
                         tmp *= torch.empty(1, dtype=dtype).element_size()
                         if u.req_grad and v.req_grad:
                             bwd_volume += tmp
+                    elif dtype is type(None) and not self.penalize_non_tensors:
+                        warnings.warn("experimentally allowing None inside a tuple.")
+                        tmp = 4
                     else:
-                        warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. PENALIZING!")
+                        warnings.warn(
+                            f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. valtype:{u.value_type} PENALIZING!")
                         return self.penalty
                         # raise ValueError(f"dtype={dtype}, type(dtype)={type(dtype)}")
                     volume += tmp
 
             # TODO: take (partial) care of heterogeneous bandwidth in refinement.
             # 1MB / (1GB/sec) = 1MB /(1e3MB/sec) = 1e-3 sec = ms
-            if u.gpu_id == v.gpu_id:  # u.gpu_id is not None and v.gpu_id is not None and
-                bw = 550  # TODO: check the exact number, its some high number
+            if u.gpu_id is not None and v.gpu_id is not None and u.gpu_id == v.gpu_id:
+                bw = self.GPU_MEMORY_BW  # TODO: check the exact number, its some high number
             else:
                 bw = self.bw
 
@@ -137,6 +149,8 @@ class EdgeWeightFunction:
                 w = self.MULT_FACTOR * bwd_volume
             elif self.ratio == 0:
                 # just forward
+                if not u.is_contiguous and non_contig_penalty:
+                    volume += volume*bw/self.GPU_MEMORY_BW
                 w = self.MULT_FACTOR * volume
             else:
                 w = self.MULT_FACTOR * (bwd_volume + volume)
@@ -175,10 +189,10 @@ class CoarsenedWeightFunction:
     def __init__(self,
                  edge_weight_function: EdgeWeightFunction,
                  node_weight_function: NodeWeightFunction,
-                 do_longest_path=False,
+                 do_critical_path=False,
                  ):
         self.mode = "ratio"
-        self.do_longest_path = do_longest_path
+        self.do_critical_path = do_critical_path
         self.ewf = edge_weight_function
         self.nwf = node_weight_function
 
@@ -225,7 +239,7 @@ class CoarsenedWeightFunction:
         return self.nwf(node) <= comm
 
     def calculate_comp(self, nodes: Iterable[Node]):
-        if not self.do_longest_path:
+        if not self.do_critical_path:
             comp_fwd = sum(node.weight.forward_time for node in nodes)
             comp_bwd = sum(node.weight.backward_time for node in nodes)
         else:
@@ -310,32 +324,41 @@ class CoarsenedWeightFunction:
 
 
 class NodeMemoryEstimator:
-    def __init__(self, optimizer_multiply=3):
+    THRESHOLD = 11 * 1e9
+
+    def __init__(self, optimizer_multiply=1):  # grad, param, optimizer. adafactor is less though
         self.optimizer_multiply = optimizer_multiply
 
     @staticmethod
-    def cuda_activations_and_grads_mem(u: Node):
-        if u.value_type in [int, bool, float, torch.Size, type(None)]:
-            return 0
-        if u.type is NodeTypes.CONSTANT or u.value_type in [torch.device, torch.dtype, str, slice]:
-            return 0
+    def cuda_activations_and_grads_mem(u: Node):  # DEPRECATED.
+        if u.type is NodeTypes.LAYER or u.type is NodeTypes.BUFF_PARAM:
+            # FIXME: this is wrong, sine some layers don't allocate new memory at all.
 
-        # its a tensor, calculate the volume
-        bwd_volume = 0
-        volume = 0
-        for shape, dtype in zip(flatten(u.tensor_shape),
-                                flatten(u.tensor_dtype)):
-            if isinstance(shape, torch.Size):
-                tmp = reduce(operator.mul, shape, 1)
-                # include dtype size
-                tmp *= torch.empty(1, dtype=dtype).element_size()  # maybe use cache?
-                if u.req_grad:
-                    bwd_volume += tmp
-                volume += tmp
-            else:
-                warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. ignoring volume!")
+            if u.value_type in [int, bool, float, torch.Size, type(None)]:
+                return 0
+            if u.type is NodeTypes.CONSTANT or u.value_type in [torch.device, torch.dtype, str, slice]:
+                return 0
 
-        return volume + bwd_volume
+            # its a tensor, calculate the volume
+            bwd_volume = 0
+            volume = 0
+            for shape, dtype in zip(flatten(u.tensor_shape),
+                                    flatten(u.tensor_dtype)):
+                if isinstance(shape, torch.Size):
+                    tmp = reduce(operator.mul, shape, 1)
+                    # include dtype size
+                    tmp *= torch.empty(1, dtype=dtype).element_size()  # maybe use cache?
+                    if u.req_grad:
+                        bwd_volume += tmp
+                    volume += tmp
+                else:
+                    warnings.warn(f"Unknown dtype={dtype}, type(dtype)={type(dtype)}, node:{u}. ignoring volume!")
+
+            return volume + bwd_volume
+        else:
+            ## TODO: memory profiling - only for layers and tensors
+            # The reason is we don't want to profile views.
+            return 0
 
     def __call__(self, node: Node):
         # cuda_memory_estimation_naive

@@ -1,0 +1,10 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "weight_stashing": false,
+    "checkpoints_save_name_prefix": "stale_adafactor",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/rte/stale/",
+    "step_every": 10,
+    "bs_train": 4,
+    "bs_test": 4
+}

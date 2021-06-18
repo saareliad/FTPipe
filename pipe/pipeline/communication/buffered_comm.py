@@ -1,3 +1,4 @@
+import inspect
 import warnings
 from collections import OrderedDict
 
@@ -7,6 +8,7 @@ from pipe.models.simple_partitioning_config import PipelineConfig
 from pipe.pipeline.communication.buffer import Buffers
 from pipe.pipeline.communication.common_simple_comm import SimpleCommBase
 from pipe.pipeline.communication.interface import FuturesHandlerBase
+from pipe.pipeline.communication.wrapper import None_tensor
 
 
 class BufferSimpleCommBase(SimpleCommBase):
@@ -22,7 +24,11 @@ class BufferSimpleCommBase(SimpleCommBase):
                 dtype = self.tensor_dtypes[tensor_name]
                 shape = self.tensor_shapes[tensor_name]
                 if not isinstance(dtype, torch.dtype):
-                    if issubclass(dtype, (list, tuple)):
+                    if dtype is None:  # RECV None
+                        _tmp = None_tensor()
+                        dtype = _tmp.dtype
+                        shape = _tmp.shape
+                    elif issubclass(dtype, (list, tuple)): # Usually: RECV torch.Size
                         if shape is not None:
                             # HACK: https://github.com/saareliad/pytorch_gpipe_private_fork/issues/45
                             dtype = torch.int64  # torch.tensor([1,3,3]).dtype
@@ -106,57 +112,42 @@ class BufferSimpleCommBase(SimpleCommBase):
         self._last_pre_recv_gradients = None
 
     def get_data_forward(self, batch_idx, num_batches, last_due_end):
+        # print(self.rank, batch_idx, num_batches, last_due_end)
         self._ensure_fwd_recv_buffers_size_set(last_due_end)
         fwd_recv_buffers = self.fwd_recv_buffers
-        fwd_recv_buffers.recv_next(batch_idx)
-        # print(f"rank {self.rank} get_data_forward, waiting")
-        x = fwd_recv_buffers.wait_first()
-        # print(f"rank {self.rank} get_data_forward, got {x}")
-        x = self.fix_after_recv(x)
-        # FIXME used to avoid this clone
-        # FIXME used to avoid this clone
-        # FIXME used to avoid this clone
-        # TODO: this clone can happen in another stream
-        x = [v.clone() if isinstance(v, torch.Tensor) else v for v in x]
+        fwd_recv_buffers.recv_next(batch_idx)   # NOTE: may be redundant, handling it.
+        x = fwd_recv_buffers.wait_first()  # Note: it synchronizes.
         # pre-Start the next fwd Irecv:
         if fwd_recv_buffers.max_buffers > 1 and not last_due_end:
             next_last_due_end = batch_idx + 2 == num_batches
             self._ensure_fwd_recv_buffers_size_set(last_due_end=next_last_due_end)
             fwd_recv_buffers.recv_next(batch_idx + 1)
 
-        # elif fwd_recv_buffers.max_buffers == 1 and not last_due_end:
-        #     pass
-        #     # TODO: need to sync the clone, then start.
-        #     #  From one hand: We don't want to block execution, so do it on another thread.
-        #     #  From the other hand: cuda+threading is horrible. Python+threading is horrible...
-
+        x = self.fix_after_recv(x)
         return x
 
     def pre_recv_gradients(self, batch_idx, num_batches, last_due_end):
         """ Used to start the recv before recomputation.
         Called at the beginning of "backward"
-        # TODO: can start it earlier, after the forward send
+        # TODO: can start it earlier, after the forward send.
+            The implication of not doing so is slightly longer first bwd recv.
+            this is bearable for better code simplicity.
+        # FIXME: num_batches is redunent
         """
         # Special case: Last batch with different size
-        if self._last_pre_recv_gradients == batch_idx:
+        if self._last_pre_recv_gradients == batch_idx:   # FIXME: will get bug if using only 1 batch...
             return  # already taken care off
 
         self._ensure_bwd_recv_buffers_size_set(last_due_end)
-        bwd_recv_buffers = self.bwd_recv_buffers
-        bwd_recv_buffers.recv_next(batch_idx)
+        self.bwd_recv_buffers.recv_next(batch_idx)
         self._last_pre_recv_gradients = batch_idx
 
     def wait_recv_gradients(self, *args):
-        # the *args are due to inheritance and redunent here.
+        # the *args are due to inheritance and redundant here.
         # its due to multiprocessing comm handler
         g = self.bwd_recv_buffers.wait_first()
         g = self.fix_after_recv(g, True)
         return g
-
-    def post_recv_gradients(self, batch_idx, num_batches):
-        """ Hack: start the next recv here."""
-        # Wait for next if appropriate
-        raise NotImplementedError("TO BE DEPRECATED")
 
     def eval(self):
         """Sets evaluation mode.
@@ -173,7 +164,7 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.changed_shapes_last_batch_fwd = False
                 self.fwd_recv_buffers = self._fwd_recv_buffers_eval(
                     create=True)
-            elif self.fwd_recv_buffers.is_initialized():
+            elif not self.fwd_recv_buffers.is_initialized():
                 self.fwd_recv_buffers.create()
 
     def train(self):
@@ -191,12 +182,12 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.changed_shapes_last_batch_fwd = False
                 self.fwd_recv_buffers = self._fwd_recv_buffers_train(
                     create=True)
-            elif self.fwd_recv_buffers.is_initialized():
+            elif not self.fwd_recv_buffers.is_initialized():
                 self.fwd_recv_buffers.create()
 
             # Backward buffers:
             if self.changed_shapes_last_batch_bwd:
-                self.changed_shapes_last_batch_fwd = False
+                self.changed_shapes_last_batch_bwd = False
                 self.bwd_recv_buffers = self._bwd_recv_buffers()  # create=True
             else:
                 self.bwd_recv_buffers.reset_state()
@@ -215,14 +206,18 @@ class BufferSimpleCommBase(SimpleCommBase):
 
             if self.fwd_recv_buffers.max_buffers == 1:
                 self.changed_shapes_last_batch_fwd = True
+                s = self.fwd_recv_buffers.clone_stream
                 del self.fwd_recv_buffers
                 fwd_recv_buffers = make_buff(self,
                                              dtypes=dtypes,
                                              max_buffers=1,
                                              shapes=shapes,
                                              is_bwd=False,
-                                             create=False)
+                                             create=False,
+                                             prev_stream_to_use=s)
                 self.fwd_recv_buffers = fwd_recv_buffers
+                # do we need to synchronize the stream? no since  create=False.
+                # print(f"rank: {self.rank}: new buffer sizes: {shapes}")
 
             else:
                 fwd_recv_buffers = self.fwd_recv_buffers
@@ -230,6 +225,8 @@ class BufferSimpleCommBase(SimpleCommBase):
                 self.set_tensor_dtypes(dtypes)
                 fwd_recv_buffers.replace_next()
                 self.changed_shapes_last_batch_fwd = True
+                # DO need to synchronize the stream? No, I handle it inside replace_next
+
                 # Note: it is not used.
                 # if not isinstance(self.changed_shapes_last_batch_fwd, dict):
                 #     self.changed_shapes_last_batch_fwd = dict()
@@ -241,6 +238,8 @@ class BufferSimpleCommBase(SimpleCommBase):
 
         if not fwd_recv_buffers.is_initialized():
             fwd_recv_buffers.create()
+            # do we need to synchronize the stream? no, I made create a blocking call, sync it is done inside.
+
 
     def _ensure_bwd_recv_buffers_size_set(self, last_due_end):
         # Special case: Last batch with different size
@@ -256,19 +255,25 @@ class BufferSimpleCommBase(SimpleCommBase):
             dtypes = self.training_tensor_dtypes
 
             if self.bwd_recv_buffers.max_buffers == 1:
+                s = self.bwd_recv_buffers.clone_stream
                 del self.bwd_recv_buffers
                 bwd_recv_buffers = make_buff(self,
                                              dtypes=dtypes,
                                              max_buffers=1,
                                              shapes=shapes,
                                              is_bwd=True,
-                                             create=False)
+                                             create=False,
+                                             prev_stream_to_use=s)
+                # do we need to synchronize the stream? no since  create=False.
+
                 self.bwd_recv_buffers = bwd_recv_buffers
             else:
                 bwd_recv_buffers = self.bwd_recv_buffers
                 self.set_tensor_shapes(shapes)
                 self.set_tensor_dtypes(dtypes)
                 bwd_recv_buffers.replace_next()
+                # do we need to synchronize the stream? no since  it happens inside replace_next.
+
                 if not isinstance(self.changed_shapes_last_batch_bwd, dict):
                     self.changed_shapes_last_batch_bwd = dict()
                 self.changed_shapes_last_batch_bwd[bwd_recv_buffers.pointer] = True
@@ -280,8 +285,11 @@ class BufferSimpleCommBase(SimpleCommBase):
             if self.bwd_recv_buffers.max_buffers == 1:
                 self.changed_shapes_last_batch_bwd = False
                 bwd_recv_buffers = self._bwd_recv_buffers()
+                # do need to synchronize the stream? no since I handled it in create()
+
                 self.bwd_recv_buffers = bwd_recv_buffers
             else:
+                # TODO: this may be depreacted
                 bwd_recv_buffers = self.bwd_recv_buffers
                 assert isinstance(self.changed_shapes_last_batch_bwd, dict)
                 if self.changed_shapes_last_batch_bwd[bwd_recv_buffers.pointer]:
@@ -297,6 +305,7 @@ class BufferSimpleCommBase(SimpleCommBase):
 
         if not bwd_recv_buffers.is_initialized():
             bwd_recv_buffers.create()
+            # do need to synchronize the stream? no since I handled it in create()
 
     def _fwd_recv_buffers_train(self, create=False):
         return make_buff(self,
@@ -455,7 +464,8 @@ def make_buff(comm_handler: BufferSimpleCommBase,
               shapes,
               dtypes=None,
               max_buffers=1,
-              create=False):
+              create=False,
+              prev_stream_to_use=None):
     """Create recv buffer.
         TODO: This should be moved to comm handler
     """
@@ -466,13 +476,15 @@ def make_buff(comm_handler: BufferSimpleCommBase,
         b = Buffers(max_buffers,
                     comm_handler.create_gradients_rcv_buffers,
                     comm_handler.recv_gradients,
-                    is_grad=True)
+                    is_grad=True,
+                    prev_stream_to_use=prev_stream_to_use)
 
     else:
         b = Buffers(max_buffers,
                     comm_handler.create_activations_recv_buffers,
                     comm_handler.recv_activations,
-                    is_grad=False)
+                    is_grad=False,
+                    prev_stream_to_use=prev_stream_to_use)
 
     if create:
         b.create()

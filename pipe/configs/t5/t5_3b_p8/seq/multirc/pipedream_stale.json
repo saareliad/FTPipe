@@ -1,0 +1,11 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "weight_stashing": false,
+    "work_scheduler": "1f1b",
+    "checkpoints_save_name_prefix": "new_stale_seq",
+    "model": "t5_3b_tied_lmheads_512_4_8p_bw12_squad1_pipedream",
+    "dont_drop_last": true,
+    "step_every": 2,
+    "bs_train": 4
+}

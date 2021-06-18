@@ -61,5 +61,5 @@
     "precomputed_masks": true,
     "save_checkpoints":  true,
     "checkpoints_save_name_prefix": "stale_adafactor",
-    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/super_glue_rte/"
+    "checkpoints_save_dir": "/nfs_Disk2/t5/3b/super_glue_rte_new/"
 }

@@ -4,8 +4,8 @@ from collections import defaultdict
 
 from sympy import lambdify
 
-from .sympy_optimizer import NormalSympyAdam, WDSympySGDMsnag
-from .sympy_optimizer import Symbol, run_sim, tplus_time
+from pipe.pipeline.weight_prediction.sym_pred_optimizers.sympy_optimizer import NormalSympyAdam, WDSympySGDMsnag
+from pipe.pipeline.weight_prediction.sym_pred_optimizers.sympy_optimizer import Symbol, run_sim, tplus_time
 
 
 def lambdify_dict(coeff):
@@ -137,12 +137,12 @@ if __name__ == "__main__":
 
     # sgd()
 
-    import ptvsd
+    # import ptvsd
+    #
+    # port = 3000 + 0
+    # address = ('127.0.0.1', port)
+    # print(f"-I- rank {0} waiting for attachment on {address}")
+    # ptvsd.enable_attach(address=address)
+    # ptvsd.wait_for_attach()
 
-    port = 3000 + 0
-    address = ('127.0.0.1', port)
-    print(f"-I- rank {0} waiting for attachment on {address}")
-    ptvsd.enable_attach(address=address)
-    ptvsd.wait_for_attach()
-
-    adam()
+    sgd()

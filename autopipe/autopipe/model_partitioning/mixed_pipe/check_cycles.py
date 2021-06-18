@@ -2,10 +2,11 @@ from typing import Set
 
 import networkx as nx
 
+from autopipe.autopipe.model_partitioning.heuristics import NodeMemoryEstimator
 from autopipe.autopipe.model_profiling.control_flow_graph import Graph, Node
 
 
-def check_cycle2(g: Graph, a: Node, b: Node):
+def check_cycle2(g: Graph, a: Node, b: Node, nms=NodeMemoryEstimator()):
     """
     Checks if contracting (merging) (a,b) breaks topo order
     Args:
@@ -20,7 +21,7 @@ def check_cycle2(g: Graph, a: Node, b: Node):
     # Add node AB, with outputs of combined A,B
     # start DFS from AB. if encountering A or B : there is a cycle.
 
-    ab = Node(None, None, None)
+    ab = Node(None, None, "dummy_not_None_scope")
     ab.out_edges = sorted(set(a.out_edges + b.out_edges) - {a, b}, key=lambda x: x.id)
 
     # TODO: dynamic topo sort. than we can just check path from a,b after removing edges.
@@ -28,7 +29,12 @@ def check_cycle2(g: Graph, a: Node, b: Node):
     # https://cs.stackexchange.com/a/88325/130155
     # when dynamic topo sort is maintaned, we can
     # change depth_limit to rank b
-    creates_a_cycle = g.forward_dfs_and_check(source=ab, set_to_check={a, b}, depth_limit=None)
+    creates_a_cycle = g.forward_dfs_and_check_if_in_set(source=ab, set_to_check={a, b}, depth_limit=None)
+
+    if not creates_a_cycle:
+        if nms(a) + nms(b) > nms.THRESHOLD:
+            return True  ### Failse due memory  # HACK #FIXME:
+
     return creates_a_cycle
 
 

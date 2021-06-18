@@ -5,7 +5,7 @@ from typing import NamedTuple  # for bwd compatibility
 import numpy as np
 import pandas as pd
 
-from experiments.experiments import load_experiment
+from pipe.experiments.experiments import load_experiment
 
 
 def is_json(fn):
@@ -56,7 +56,7 @@ class InferStuff:
         ga = "gap_aware" in self.config
         ws = "weight_stashing" in self.config and self.config["weight_stashing"]
         pipedream = "work_scheduler" in self.config and (
-                self.config["work_scheduler"] == "PIPEDREAM")
+                self.config["work_scheduler"].lower() == "pipedream")
         sync = "is_sync" in self.config and self.config['is_sync']
         ddp = "ddp" in self.config and self.config['ddp']
 

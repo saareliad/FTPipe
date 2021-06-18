@@ -286,12 +286,12 @@ class LastPartition(Partition):
                 if not rg:
                     warnings.warn(
                         "Backpropagation will not happen beyond last partition since it has a single input which does not requires grad")
-                x = x.requires_grad_(rg)
+                x = x.detach().requires_grad_(rg)
                 self.input_buffer[micro_batch_idx] = x
                 x = self.layers(x)
             else:
                 # Option 2
-                x = list(get_r(x, self.req_grad))
+                x = list(get_dr(x, self.req_grad))
 
                 # FIXME: it can be problematic to filter, since it can filter unwanted
                 # TODO: without filtering: we save un-needed stuff.

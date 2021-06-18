@@ -5,7 +5,6 @@ from .wrapper import TensorWrapper
 from .buffered_comm import BufferSimpleCommBase
 
 
-
 # filter_none = partial(filter, lambda t: t is not None)
 # TODO: maybe avoid reversed if problems
 # TODO: can avoid synchronized?
@@ -68,22 +67,6 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
 
             assert len(x) == len(ranks_dict_items)
 
-            new_x = []
-            for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
-
-                if is_grad and tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
-                    cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
-                else:
-                    cname = tensor_name
-                tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
-                tensor = tensor.detach().contiguous()
-                new_x.append(tensor)
-            x = new_x
-
-            if not self.cpu:
-                # FIXME: in MPI we must synchronize.
-                torch.cuda.current_stream(self.device).synchronize()
-
             for tensor, (tensor_name, send_ranks) in zip(x, ranks_dict_items):
                 tensor_tag = self.tensor_tags[tensor_name] + (self.TOTAL_TAGS * batch_idx)
                 if is_grad:
@@ -94,10 +77,21 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
 
                     # NOTE valid accuracy used to crash with num_chunks > 1 when we synchronize here once
 
+                    if is_grad and tensor_name.endswith(self.GRAD_UGLY_SHAMEFUL_NAME):
+                        cname = tensor_name[:-(len(self.GRAD_UGLY_SHAMEFUL_NAME))]
+                    else:
+                        cname = tensor_name
+                    tensor = self.tensor_comm_warper.convert_activations_send(cname, tensor)
+                    tensor = tensor.detach().contiguous()
+
                     if self.verbose:
                         self.logger.info(
                             f"rank={self.local_rank}: isend, dst={send_rank}, tag={tensor_tag}, name={tensor_name}, shape={tensor.shape}"
                         )
+
+                    if not self.cpu:
+                        # FIXME: in MPI we must synchronize.
+                        torch.cuda.current_stream(self.device).synchronize()
 
                     request_obj = dist.isend(tensor,
                                              send_rank,
@@ -106,6 +100,8 @@ class P2PCommunicationHandler(BufferSimpleCommBase):
         return request_objects
 
     def send_activations(self, x, batch_idx):
+        # if self.rank == 0:
+        #     print("send_activations", self.rank, batch_idx, [a.shape if isinstance(a,torch.Tensor) else None for a in x])
         return self._send_tensors_p2p(x, batch_idx, self.send_ranks.items(), False)
 
     def send_gradients(self, x, batch_idx):

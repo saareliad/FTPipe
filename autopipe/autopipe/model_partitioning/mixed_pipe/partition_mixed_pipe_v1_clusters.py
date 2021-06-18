@@ -532,7 +532,7 @@ def break_ccs_on_same_gpu_to_stages(graph, id_to_node_worked_on, unbroken_stages
 
 def ccs_on_same_gpu_has_path_via_missing_nodes(cur_set, graph, id_to_node_worked_on, prev_topo_sort_id, topo_sort_id,
                                                unbroken_stage):
-    # Check if nothing is missing (it is possible due to layers_graph)
+    # Check if nothing is missing (it is possible due to new_graph_without_constants)
     # Example: 9->13
     # prev: {7,8, 9}
     # unbroken: {13,14,15}
@@ -669,7 +669,7 @@ def partition_2dbin_pack(graph: Graph,
     graph.topo_sort()
 
     if use_layers_graph:
-        work_graph, lookup = graph.layers_graph()
+        work_graph, lookup = graph.new_graph_without_constants()
     else:
         work_graph, lookup = graph, None
 

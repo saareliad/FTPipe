@@ -1,3 +1,4 @@
+import warnings
 from collections import defaultdict
 from itertools import chain
 
@@ -6,6 +7,7 @@ from torch import Tensor
 
 from .tracer import NodeTypes
 from .control_flow_graph import Graph, Node
+from ..model_partitioning.heuristics import NodeMemoryEstimator
 from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplace_arithmetic_ops, ExecTimes, \
     force_out_of_place
 
@@ -13,7 +15,9 @@ from ..utils import detach_tensors, flatten, move_tensors, set_grad_mode, inplac
 class GraphProfiler():
     def __init__(self, recomputation=False, n_iter=10, force_no_recomp_scopes=None, profile_ops=True,
                  save_memory_mode=False):
-        self.profile_memory = True
+        self.profile_memory = save_memory_mode # TODO: profile memroy without save memory mode.
+        if not save_memory_mode:
+            warnings.warn("Will not profile memory (since save_memory_mode=False)")
         self.forward_times = defaultdict(list)
         self.backward_times = defaultdict(list)
         self.forward_mem = defaultdict(list)
@@ -35,15 +39,14 @@ class GraphProfiler():
 
     def time_forward(self, node, function, args, kwargs):
         if self.save_memory_mode:
-            if self.profile_memory:
-                torch.cuda.reset_peak_memory_stats()
-                base_mem = torch.cuda.max_memory_allocated()
-
             function, args, kwargs = move_tensors((function, args, kwargs),
                                                   'cuda')
+        if self.profile_memory:
+            torch.cuda.reset_peak_memory_stats()
+            base_mem = torch.cuda.memory_allocated() # FIXM
 
         with force_out_of_place(function):
-            if self.should_profile(node, function, args, kwargs):
+            if self.should_profile(node, function, args, kwargs, is_bwd=False, output=None):
                 recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
                 for _ in range(self.n_iter):
                     args, kwargs = detach_tensors((args, kwargs))
@@ -71,7 +74,7 @@ class GraphProfiler():
     def time_backward(self, node, function, args, kwargs, output):
 
         with force_out_of_place(function):
-            if self.should_profile(node, function, args, kwargs, output=output):
+            if self.should_profile(node, function, args, kwargs, is_bwd=True, output=output):
                 recomputation = self.recomputation and (not self.force_no_recomp_scopes(node.scope))
                 if not recomputation:
                     self.backward_no_recomputation(node, function,
@@ -103,7 +106,7 @@ class GraphProfiler():
             torch.cuda.synchronize(device='cuda')
             if self.profile_memory:
                 torch.cuda.reset_peak_memory_stats()
-                base_mem = torch.cuda.max_memory_allocated()
+                base_mem = torch.cuda.memory_allocated()
             start.record()
             torch.autograd.backward(tensors=tensors,
                                     grad_tensors=grads,
@@ -124,25 +127,31 @@ class GraphProfiler():
                 torch.cuda.synchronize(device='cuda')
                 start = torch.cuda.Event(enable_timing=True)
                 end = torch.cuda.Event(enable_timing=True)
+                mid1 = torch.cuda.Event(enable_timing=True)
+                mid2 = torch.cuda.Event(enable_timing=True)
                 grads = GraphProfiler.pre_get_grads(function, args, kwargs)
                 torch.cuda.synchronize(device='cuda')
+                # Note: it also measures time of fwd.
+                # TODO: retain graph is on so its problematic?
                 if self.profile_memory:
                     torch.cuda.reset_peak_memory_stats()
-                    base_mem = torch.cuda.max_memory_allocated()
+                    base_mem = torch.cuda.memory_allocated()
 
                 start.record()
                 output = function(*args, **kwargs)
+                mid1.record()
                 tensors = self.only_tensors_that_require_grad(output)
+                mid2.record()
                 # grads = GraphProfiler.get_grads(tensors)  # pre exectured to avoid recording memory allocation times
                 torch.autograd.backward(tensors=tensors,
                                         grad_tensors=grads)
                 end.record()
 
                 torch.cuda.synchronize(device='cuda')
-                self.backward_times[node].append(start.elapsed_time(end))
+                self.backward_times[node].append(start.elapsed_time(end) - mid1.elapsed_time(mid2))
                 if self.profile_memory:
                     peak_usage = torch.cuda.max_memory_allocated()
-                    self.forward_mem[node].append(peak_usage - base_mem)
+                    self.backward_mem[node].append(peak_usage - base_mem)
                 GraphProfiler.delete_grads(node, function, (args, kwargs))
 
     def get_weights(self):
@@ -158,14 +167,26 @@ class GraphProfiler():
 
         return weights
 
-    def set_max_memory_usage(self, graph: Graph):
+    # @staticmethod
+    # def activations_estimated_set_max_memory_usage(graph: Graph):
+    #     for node in graph.nodes:
+    #         node.max_memory_bytes = NodeMemoryEstimator.cuda_activations_and_grads_mem(node)
+
+    def set_max_memory_usage(self, graph: Graph, ignore_retain_graph=True):
+        d = dict()
         for node in graph.nodes:
-            if node not in self.forward_mem or node not  in self.backward_mem:
+            if node not in self.forward_mem or node not in self.backward_mem:
                 continue
             fwd = self.forward_mem[node]
-            bwd = self.backward_times[node]
+            bwd = self.backward_mem[node] # TODO: ignore outlier [99999, 555, 555, 555], it comes from retain_graph
+            if ignore_retain_graph:
+                fwd = fwd[1:]
+                bwd = bwd[1:]
             max_usage = max(max(fwd), max(bwd))
             node.max_memory_bytes = max(node.max_memory_bytes, max_usage)
+            d[node.scope] = node.max_memory_bytes
+        print("max_mem_usage_per_node", d)
+        return d
 
     def print_times(self, backward=False):
         if backward:
@@ -182,6 +203,10 @@ class GraphProfiler():
     @staticmethod
     def only_tensors_with_grad_fn(ts):
         return [t for t in flatten(ts) if isinstance(t, Tensor) and (t.grad_fn is not None)]
+
+    @staticmethod
+    def only_tensors(ts):
+        return [t for t in flatten(ts) if isinstance(t, Tensor)]
 
     @staticmethod
     def delete_grads(node, function, ts):
@@ -222,7 +247,7 @@ class GraphProfiler():
         total = sum(vs)
         return total / (len(vs))
 
-    def should_profile(self, node, function, args, kwargs, output=None):
+    def should_profile(self, node, function, args, kwargs, is_bwd, output=None):
         if node.type not in [NodeTypes.LAYER, NodeTypes.OP]:
             return False
 
@@ -239,10 +264,12 @@ class GraphProfiler():
             inplace_tensor_magic = (namespace == "Tensor") and (func_name in inplace_arithmetic_ops)
 
             if inplace_tensor_magic or inplace_tensor_function or inplace_torch_function:
+                warnings.warn(f"can't trace inplace op {node}")
                 return False
 
         if output is None:
-            tmp_arg, tmp_kwargs = detach_tensors((args, kwargs))
+            # FIXME: running forward pass just so if know if we want to profile it?!
+            tmp_arg, tmp_kwargs = detach_tensors((args, kwargs))  # TODO: for inplace there is not clone here...
             output = function(*tmp_arg, **tmp_kwargs)
             del tmp_arg
             del tmp_kwargs
@@ -250,9 +277,17 @@ class GraphProfiler():
         output_w_grads = GraphProfiler.only_tensors_that_require_grad(output)
         output_w_grad_fn = GraphProfiler.only_tensors_with_grad_fn(output)
 
-        should_profile = len(output_w_grads) > 0 or len(output_w_grad_fn) > 0
+        res = len(output_w_grads) > 0 or len(output_w_grad_fn) > 0
+        return res
+        # TODO: can compute for non tensors...
 
-        return should_profile
+
+        if not res and is_bwd:
+            return False
+        else:
+            # (profile if there is a tensor in the result)
+            return len(GraphProfiler.only_tensors(output)) > 0  # profile just tensor operations.
+
 
     def _debug_stats(self):
         not_fwd = set(self.not_profiled['fwd'])

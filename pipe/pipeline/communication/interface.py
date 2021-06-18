@@ -101,9 +101,6 @@ class CommunicationHandlerBase(abc.ABC):
     def wait_recv_gradients(self, *args):
         pass
 
-    def post_recv_gradients(self, batch_idx, num_batches):
-        pass
-
     def get_data_forward(self, batch_idx, num_batches, last_due_end):
         pass
 

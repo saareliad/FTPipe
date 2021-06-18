@@ -3,7 +3,7 @@ from typing import Callable, Dict, Any
 import torch
 
 from .control_flow_graph import Node, Graph
-from .graph_executor import execute_graph
+from .graph_executor import execute_graph, pre_hook_factory, post_hook_factory
 from ..utils import nested_map, detach_tensors
 
 
@@ -15,8 +15,8 @@ def infer_req_grad(graph: Graph, model: torch.nn.Module, args=None, kwargs=None)
 
     with torch.enable_grad():
         visitor = Visitor()
-        execute_graph(model, graph, model_args=args, model_kwargs=kwargs, pre_hook=visitor.prehook,
-                      post_hook=visitor.posthook)
+        execute_graph(model, graph, model_args=args, model_kwargs=kwargs, pre_hook=pre_hook_factory(visitor.prehook),
+                      post_hook=post_hook_factory(visitor.posthook))
 
 
 class Visitor():

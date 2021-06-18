@@ -1,6 +1,6 @@
 from enum import Enum, auto
 # from .transformers_cfg import MODEL_TYPES
-
+import transformers
 
 class GetConfigFrom(Enum):
     HardCoded = auto()
@@ -42,13 +42,21 @@ def pretrained_model_config_and_tokenizer(
         do_lower_case=do_lower_case,
         cache_dir=cache_dir if cache_dir else None)
 
-    use_cdn = model_name_or_path not in {"t5-11b"}
-    model = model_class.from_pretrained(
-        model_name_or_path,
-        from_tf=bool('.ckpt' in model_name_or_path),
-        config=config,
-        cache_dir=cache_dir if cache_dir else None,
-        use_cdn=use_cdn)
+    if transformers.__version__ > ('4.1.1'):  # 3.3.1
+        model = model_class.from_pretrained(
+            model_name_or_path,
+            from_tf=bool('.ckpt' in model_name_or_path),
+            config=config,
+            cache_dir=cache_dir if cache_dir else None,
+            )
+    else:
+        use_cdn = model_name_or_path not in {"t5-11b"}
+        model = model_class.from_pretrained(
+            model_name_or_path,
+            from_tf=bool('.ckpt' in model_name_or_path),
+            config=config,
+            cache_dir=cache_dir if cache_dir else None,
+            use_cdn=use_cdn)
 
     if do_resize_token_embedding:
         resize_token_embeddings(model, tokenizer)

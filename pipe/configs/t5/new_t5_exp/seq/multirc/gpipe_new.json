@@ -1,0 +1,14 @@
+{
+    "base_config_path": "common.json",
+    "base_config_path_is_relative": true,
+    "work_scheduler": "GPIPE",
+    "step_every": 8,
+    "bs_train": 1,
+    "bs_test": 1,
+    "checkpoints_save_name_prefix": "gpipe_new",
+    "checkpoints_save_dir": "/mnt/qnap/saareliad/no_virtual_stages/checkpoints/t5/3b/multirc/gpipe/",
+    "save_checkpoints":  false,
+    "epochs": 1,
+    "dont_drop_last": false,
+    "steps": -1
+}

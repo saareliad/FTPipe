@@ -3,6 +3,7 @@ import math
 import os
 import random
 import time
+import warnings
 from collections import defaultdict
 from multiprocessing import Pool
 from typing import Tuple, Dict, Optional, NamedTuple
@@ -727,19 +728,21 @@ def acyclic_partition(
         use_layers_graph: bool = True
 ) -> Graph:
     if node_weight_function is None:
+        warnings.warn("using dummy weight function")
         node_weight_function = DefaultWeightFunction()
     if edge_weight_function is None:
+        warnings.warn("using dummy weight function")
         edge_weight_function = DefaultEdgeWeightFunction()
 
     if use_layers_graph:
-        work_graph, lookup = graph.layers_graph()
+        work_graph, lookup = graph.new_graph_without_constants()
     else:
         work_graph = graph
 
     params_per_node = calculate_params_per_node(model, work_graph)
 
     worker_args = [
-        dict(graph=work_graph._remove_parallel_edges().state(),
+        dict(graph=work_graph.get_copy_without_parallel_edges().state(),
              params_per_node=params_per_node,
              k=k,
              meta_algorithm=meta_algorithm,

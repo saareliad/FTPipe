@@ -306,7 +306,7 @@ def time_op(device, func, *inputs: tuple, **kwargs):
     cuda_mem = 0
     if device.type == 'cuda':
         torch.cuda.reset_max_memory_allocated(device=device)
-        base_mem = torch.cuda.max_memory_allocated(device=device)
+        base_mem = torch.cuda.memory_allocated(device=device)  # FIXME:
 
         # measure execution time
         start = torch.cuda.Event(enable_timing=True)

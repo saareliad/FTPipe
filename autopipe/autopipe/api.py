@@ -11,6 +11,7 @@ from autopipe.autopipe import NodeWeightFunction, EdgeWeightFunction, Graph, com
     compute_and_cache, move_tensors, trace_module, infer_req_grad, GraphProfiler, pre_hook_factory, post_hook_factory, \
     execute_graph, profile_network
 from autopipe.autopipe.model_partitioning.pipedream.pipedream_partition_no_hir import partition_pipedream
+from autopipe.autopipe.model_profiling.infer_is_contiguous import infer_is_contiguous
 
 
 def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_kwargs: Optional[Dict] = None,
@@ -27,6 +28,7 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                METIS_opt: Optional[Dict] = None,
                acyclic_opt: Optional[Dict] = None,
                binpack_opt: Optional[Dict] = None,
+               mpipe_opt: Optional[Dict] = None,
                force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                save_memory_mode: bool = False,
                trace_on_gpu=False,
@@ -117,7 +119,7 @@ def pipe_model(model: nn.Module, batch_dim: int, model_args: tuple = (), model_k
                             max_depth=depth, basic_blocks=basic_blocks, node_weight_function=node_weight_function,
                             edge_weight_function=edge_weight_function, use_layers_only_graph=use_layers_only_graph,
                             recomputation=recomputation, partitioning_method=partitioning_method, METIS_opt=METIS_opt,
-                            acyclic_opt=acyclic_opt, binpack_opt=binpack_opt,
+                            acyclic_opt=acyclic_opt, binpack_opt=binpack_opt, mpipe_opt=mpipe_opt,
                             force_no_recomp_scopes=force_no_recomp_scopes, use_graph_profiler=use_graph_profiler,
                             use_network_profiler=use_network_profiler, profile_ops=profile_ops,
                             save_memory_mode=save_memory_mode, trace_on_gpu=trace_on_gpu, graph=graph,
@@ -140,8 +142,11 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                     basic_blocks: Optional[Union[List[nn.Module], Tuple[nn.Module]]] = None,
                     node_weight_function: Optional[NodeWeightFunction] = None,
                     edge_weight_function: Optional[EdgeWeightFunction] = None, use_layers_only_graph: bool = True,
-                    recomputation: bool = True, partitioning_method: str = "ACYCLIC", METIS_opt: Optional[Dict] = None,
-                    acyclic_opt: Optional[Dict] = None, binpack_opt: Optional[Dict] = None,
+                    recomputation: bool = True, partitioning_method: str = "ACYCLIC",
+                    METIS_opt: Optional[Dict] = None,
+                    acyclic_opt: Optional[Dict] = None,
+                    binpack_opt: Optional[Dict] = None,
+                    mpipe_opt: Optional[Dict] = None,
                     force_no_recomp_scopes: Optional[Callable[[str], bool]] = None, use_graph_profiler: bool = True,
                     use_network_profiler: bool = False, profile_ops: bool = True, save_memory_mode: bool = False,
                     trace_on_gpu=False,
@@ -215,6 +220,8 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
         acyclic_opt = dict()
     if binpack_opt is None:
         binpack_opt = dict()
+    if mpipe_opt is None:
+        mpipe_opt = dict()
 
     if not async_pipe or not recomputation or dont_use_async_meta_alg:
         if graph is None:
@@ -231,9 +238,13 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                             trace_cache_name=trace_cache_name)
 
         if nparts > 1:
+            # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+            # profiler.set_max_memory_usage(graph)
+            # GraphProfiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
+
             graph = partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function,
                                              edge_weight_function, use_virtual_stages, use_layers_only_graph, METIS_opt,
-                                             acyclic_opt, binpack_opt)
+                                             acyclic_opt, binpack_opt, mpipe_opt)
 
     else:
         # This requires heterogeneous profiling.
@@ -243,11 +254,19 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                                        basic_blocks, save_memory_mode, trace_on_gpu,
                                                        res_cache_name=trace_cache_name)
 
+        # FIXME: the mem is not saved in cache now.
+        weights, max_memory_usage_r, max_memory_usage_nr = compute_and_maybe_cache(get_full_profiles,
+                                                                                   profiles_cache_name,
+                                                                                   graph, model, model_args,
+                                                                                   model_kwargs, n_iter, profile_ops,
+                                                                                   max_depth,
+                                                                                   basic_blocks, force_no_recomp_scopes,
+                                                                                   save_memory_mode, use_graph_profiler,
+                                                                                   use_network_profiler)
 
-        weights = compute_and_maybe_cache(get_full_profiles, profiles_cache_name,
-                                          graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth,
-                                          basic_blocks, force_no_recomp_scopes, save_memory_mode, use_graph_profiler,
-                                          use_network_profiler)
+        # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+        # profiler.set_max_memory_usage(graph)
+        # GraphProfiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
 
         partition_profiled_graph_fn = functools.partial(partition_profiled_graph, model=model, nparts=nparts,
                                                         partitioning_method=partitioning_method,
@@ -256,11 +275,14 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
                                                         use_virtual_stages=use_virtual_stages,
                                                         use_layers_only_graph=use_layers_only_graph,
                                                         METIS_opt=METIS_opt,
-                                                        acyclic_opt=acyclic_opt, binpack_opt=binpack_opt)
+                                                        acyclic_opt=acyclic_opt, binpack_opt=binpack_opt,
+                                                        mpipe_opt=mpipe_opt)
 
         graph = partition_and_match_weights_until_last_partition_is_with_no_recomputation(graph, weights,
                                                                                           partitioning_method,
-                                                                                          partition_profiled_graph_fn)
+                                                                                          partition_profiled_graph_fn,
+                                                                                          max_memory_usage_r=max_memory_usage_r,
+                                                                                          max_memory_usage_nr=max_memory_usage_nr)
 
     return graph
 
@@ -268,31 +290,37 @@ def partition_model(model: nn.Module, model_args: tuple = (), model_kwargs: Opti
 def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_ops, max_depth, basic_blocks,
                       force_no_recomp_scopes, save_memory_mode, use_graph_profiler, use_network_profiler):
     print("-I- profiling model (recomp)")
-    recomputation_times = get_profiles(graph,
-                                       model,
-                                       model_args=model_args,
-                                       model_kwargs=model_kwargs,
-                                       use_network_profiler=use_network_profiler,
-                                       use_graph_profiler=use_graph_profiler,
-                                       save_memory_mode=save_memory_mode,
-                                       profile_ops=profile_ops, recomputation=True,
-                                       n_iter=n_iter,
-                                       max_depth=max_depth,
-                                       basic_blocks=basic_blocks,
-                                       force_no_recomp_scopes=force_no_recomp_scopes)
+    recomputation_times, max_mem_usage_bytes_r = get_profiles(graph,
+                                                              model,
+                                                              model_args=model_args,
+                                                              model_kwargs=model_kwargs,
+                                                              use_network_profiler=use_network_profiler,
+                                                              use_graph_profiler=use_graph_profiler,
+                                                              save_memory_mode=save_memory_mode,
+                                                              profile_ops=profile_ops, recomputation=True,
+                                                              n_iter=n_iter,
+                                                              max_depth=max_depth,
+                                                              basic_blocks=basic_blocks,
+                                                              force_no_recomp_scopes=force_no_recomp_scopes)
     print("-I- profiling model (no recomp)")
-    no_recomputation_times = get_profiles(graph,
-                                          model,
-                                          model_args=model_args,
-                                          model_kwargs=model_kwargs,
-                                          use_network_profiler=use_network_profiler,
-                                          use_graph_profiler=use_graph_profiler,
-                                          save_memory_mode=save_memory_mode,
-                                          profile_ops=profile_ops, recomputation=False,
-                                          n_iter=n_iter,
-                                          max_depth=max_depth,
-                                          basic_blocks=basic_blocks,
-                                          force_no_recomp_scopes=force_no_recomp_scopes)
+    warnings.warn("Need to reset max mem usage!!")
+    for node in graph.nodes:
+        node.max_memory_bytes = 0
+    no_recomputation_times, max_mem_usage_bytes_nr = get_profiles(graph,
+                                                                  model,
+                                                                  model_args=model_args,
+                                                                  model_kwargs=model_kwargs,
+                                                                  use_network_profiler=use_network_profiler,
+                                                                  use_graph_profiler=use_graph_profiler,
+                                                                  save_memory_mode=save_memory_mode,
+                                                                  profile_ops=profile_ops, recomputation=False,
+                                                                  n_iter=n_iter,
+                                                                  max_depth=max_depth,
+                                                                  basic_blocks=basic_blocks,
+                                                                  force_no_recomp_scopes=force_no_recomp_scopes)
+    warnings.warn("Need to reset max mem usage!!")
+    for node in graph.nodes:
+        node.max_memory_bytes = 0
     for n in graph.nodes:
         if n.scope not in no_recomputation_times:
             no_recomputation_times[n.scope] = ExecTimes(0, 0)
@@ -303,12 +331,18 @@ def get_full_profiles(graph, model, model_args, model_kwargs, n_iter, profile_op
                             no_recomputation_times[n.scope])
         for n in graph.nodes
     }
+
+    for node in graph.nodes:
+        t = max_mem_usage_bytes_r.get(node.scope, None)
+        if t is not None:
+            node.max_memory_bytes = t
+
     print("-I- model profiled")
-    return weights
+    return weights, max_mem_usage_bytes_r, max_mem_usage_bytes_nr
 
 
 def partition_profiled_graph(graph, model, nparts, partitioning_method, node_weight_function, edge_weight_function,
-                             use_virtual_stages, use_layers_only_graph, METIS_opt, acyclic_opt, binpack_opt):
+                             use_virtual_stages, use_layers_only_graph, METIS_opt, acyclic_opt, binpack_opt, mpipe_opt):
     partitioning_method = partitioning_method.lower()
     if partitioning_method == "metis":
         print("-I- using METIS partitioning algorithm")
@@ -339,10 +373,10 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
                                                        node_weight_function=node_weight_function,
                                                        **binpack_opt)
     elif partitioning_method == "mpipe":
-        graph, stage_to_gpu_map = partition_mpipe(graph, num_gpus=nparts,
+        graph, stage_to_gpu_map = partition_mpipe(model, graph, num_gpus=nparts,
                                                   node_weight_function=node_weight_function,
                                                   edge_weight_function=edge_weight_function,
-                                                  **binpack_opt)
+                                                  **mpipe_opt)
 
     elif partitioning_method == "pipedream":
         t1 = node_weight_function.MULT_FACTOR
@@ -375,11 +409,15 @@ def partition_profiled_graph(graph, model, nparts, partitioning_method, node_wei
 def build_profiled_graph(model: nn.Module,
                          model_args: tuple = (),
                          model_kwargs: Optional[Dict] = None,
-                         use_network_profiler: bool = False, use_graph_profiler: bool = True,
+                         use_network_profiler: bool = False,
+                         use_graph_profiler: bool = True,
                          save_memory_mode: bool = False,
                          trace_on_gpu=False,
-                         profile_ops: bool = True, recomputation: bool = False,
-                         n_iter: int = 10, max_depth: int = 1000, basic_blocks: Optional[List[nn.Module]] = None,
+                         profile_ops: bool = True,
+                         recomputation: bool = False,
+                         n_iter: int = 10,
+                         max_depth: int = 1000,
+                         basic_blocks: Optional[List[nn.Module]] = None,
                          force_no_recomp_scopes: Optional[Callable[[str], bool]] = None,
                          trace_cache_name=None) -> Graph:
     """
@@ -427,21 +465,22 @@ def build_profiled_graph(model: nn.Module,
     """
 
     graph = build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth,
-                                                   basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=trace_cache_name)
+                                                   basic_blocks, save_memory_mode, trace_on_gpu,
+                                                   res_cache_name=trace_cache_name)
 
     print("-I- profiling model")
-    weights = get_profiles(graph,
-                           model,
-                           model_args=model_args,
-                           model_kwargs=model_kwargs,
-                           use_network_profiler=use_network_profiler,
-                           use_graph_profiler=use_graph_profiler,
-                           save_memory_mode=save_memory_mode,
-                           profile_ops=profile_ops, recomputation=recomputation,
-                           n_iter=n_iter,
-                           max_depth=max_depth,
-                           basic_blocks=basic_blocks,
-                           force_no_recomp_scopes=force_no_recomp_scopes)
+    weights, max_mem_usage_bytes = get_profiles(graph,
+                                                model,
+                                                model_args=model_args,
+                                                model_kwargs=model_kwargs,
+                                                use_network_profiler=use_network_profiler,
+                                                use_graph_profiler=use_graph_profiler,
+                                                save_memory_mode=save_memory_mode,
+                                                profile_ops=profile_ops, recomputation=recomputation,
+                                                n_iter=n_iter,
+                                                max_depth=max_depth,
+                                                basic_blocks=basic_blocks,
+                                                force_no_recomp_scopes=force_no_recomp_scopes)
     for n in graph.nodes:
         n.weight = weights.get(n.scope, ExecTimes(0, 0))
 
@@ -450,10 +489,13 @@ def build_profiled_graph(model: nn.Module,
     return graph
 
 
-def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode, trace_on_gpu,
+def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_depth, basic_blocks, save_memory_mode,
+                                           trace_on_gpu,
                                            res_cache_name=None) -> Graph:
+    # (and contagious...)
     if res_cache_name:
-        return compute_and_cache(build_graph_with_nparams_and_grad_reqs, res_cache_name, model, model_args, model_kwargs, max_depth,
+        return compute_and_cache(build_graph_with_nparams_and_grad_reqs, res_cache_name, model, model_args,
+                                 model_kwargs, max_depth,
                                  basic_blocks, save_memory_mode, trace_on_gpu, res_cache_name=None,
                                  _cache_cls_to_use=GraphCache)
 
@@ -482,6 +524,9 @@ def build_graph_with_nparams_and_grad_reqs(model, model_args, model_kwargs, max_
             model, model_args, model_kwargs = move_tensors((model, model_args, model_kwargs), 'cpu')
     infer_req_grad(graph, model, args=model_args, kwargs=model_kwargs)
     print("-I- inferred gradient requirements")
+    print("-I- infering s_contiguous")
+    infer_is_contiguous(graph, model, args=model_args, kwargs=model_kwargs)
+    print("-I- inferred infer_is_contiguous")
 
     print("-I- inferring params per node")
     graph.calculate_params_per_node(model)
@@ -517,6 +562,11 @@ def get_profiles(graph: Graph, model: nn.Module,
         execute_graph(model, graph, model_args=model_args, model_kwargs=model_kwargs,
                       pre_hook=pre_hook, post_hook=post_hook, enforce_out_of_place=True)
 
+        # warnings.warn("PROFILER IS NOT USING MEMORY USAGE FOR NODES")
+        # TODO: can't use cached profiles like this, so added it as output.
+        mem_usage_bytes = profiler.set_max_memory_usage(graph)
+        # profiler.activations_estimated_set_max_memory_usage(graph)  # TODO: this is far from perfect
+
         # print(f"-I- profiling mem {torch.cuda.max_memory_allocated() / 1e9} GB")
 
         weights = profiler.get_weights()
@@ -535,9 +585,14 @@ def get_profiles(graph: Graph, model: nn.Module,
                                   recomputation=recomputation,
                                   save_memory_mode=save_memory_mode,
                                   force_no_recomp_scopes=force_no_recomp_scopes)
+
+        mem_usage_bytes = None
     else:
         raise ValueError("missing profiling method")
 
     assert weights is not None
 
-    return weights
+    if mem_usage_bytes is None:
+        mem_usage_bytes = dict()
+
+    return weights, mem_usage_bytes

@@ -32,8 +32,16 @@ def partition_and_match_weights_until_last_partition_is_with_no_recomputation(gr
                                                                               partitioning_method,
                                                                               partition_profiled_graph_fn,
                                                                               n_runs_limit=10,
-                                                                              do_exhustive_search_for_last_partition=True):
+                                                                              do_exhustive_search_for_last_partition=True,
+                                                                              max_memory_usage_r=None, max_memory_usage_nr=None):
     print("-I- partition_and_match_weights_until_last_partition_is_with_no_recomputation")
+
+    warnings.warn("need to set max memory usage: currently doing this only for recomputation.")  # TODO:
+    if max_memory_usage_r:
+        for node in graph.nodes:
+            if node.scope in max_memory_usage_r:
+                node.max_memory_bytes = max_memory_usage_r[node.scope]
+
     # protect graph:
     saved_state = graph.state()
     allowed_mistakes = 0

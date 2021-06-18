@@ -1,5 +1,5 @@
-import collections
 import inspect
+import collections
 import operator
 import os
 import re
@@ -63,6 +63,79 @@ def traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
             if full:
                 yield sub_module, scope, module, False
             yield from traverse_model(sub_module, depth - 1, scope, basic_blocks, full)
+
+
+# sub_layer, scope, parent, terminal
+def special_traverse_model(module: nn.Module, depth: int, prefix: Optional[str] = None,
+                   basic_blocks: Tuple[Type[nn.Module]] = (), special_blocks: Tuple[Type[nn.Module]] = (), next_special_bb_id=None,
+                           full: bool = False, mark = False) -> Iterator[
+    Tuple[nn.Module, str, nn.Module, Optional[bool], Optional[int]]]:
+    """
+    iterate over model layers yielding the layer,layer_scope,encasing_module
+    Parameters:
+    -----------
+    model:
+        the model to iterate over
+    depth:
+        how far down in the model tree to go
+    basic_blocks:
+        a list of modules that if encountered will not be broken down
+    full:
+        whether to yield only layers specified by the depth and basic_block options or to yield all layers
+    """
+    if next_special_bb_id is None:
+        next_special_bb_id = 0
+
+    if prefix is None:
+        prefix = type(module).__name__
+
+    for child_idx, (name, sub_module) in enumerate(module.named_children()):
+        scope = prefix + "/" + type(sub_module).__name__ + f"[{name}]"
+        if len(list(sub_module.children())) == 0 or isinstance(sub_module, tuple(basic_blocks)) or depth == 0:
+            if full:
+                if mark:
+                    if special_blocks and isinstance(sub_module, tuple(special_blocks)):
+                        # without this check:
+                        #   it will not work when special_block = basic_block and no children or depth=0, ...
+                        next_special_bb_id += 0.01
+                        yield sub_module, scope, module, True, next_special_bb_id
+                    else:
+                        yield sub_module, scope, module, True, None
+                else:
+                    yield sub_module, scope, module, True
+
+            else:
+                yield sub_module, scope, module
+        elif isinstance(sub_module, tuple(special_blocks)):
+            # if it is a part of module which is a basic block, it will get parent's mark.
+
+            # TODO: do we want to mark it?
+            if mark:
+                if not hasattr(module, "_next_special_bb_id"):
+                    next_special_bb_id += 0.01
+                sub_module._next_special_bb_id = next_special_bb_id
+
+            if full:
+                if mark:
+                    yield sub_module, scope, module, False, next_special_bb_id
+                else:
+                    yield sub_module, scope, module, False
+            yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
+                                              next_special_bb_id+child_idx, full, mark=mark)
+
+        else:
+            if full:
+                if mark:
+                    yield sub_module, scope, module, False, None
+                else:
+                    yield sub_module, scope, module, False
+
+            yield from special_traverse_model(sub_module, depth - 1, scope, basic_blocks, special_blocks,
+                                              next_special_bb_id+child_idx, full, mark=mark)
+
+    # clear the mess
+    if mark and hasattr(module, "_next_special_bb_id"):
+        delattr(module, "_next_special_bb_id")
 
 
 def traverse_params_buffs(module: nn.Module, prefix: Optional[str] = None) -> Iterator[Tuple[torch.tensor, str]]:
@@ -280,7 +353,101 @@ magics = {"__len__": "len",
           "__abs__": "abs",
           "__iter__": "iter"}
 
+# see https://pytorch.org/docs/stable/torch.html#tensor-creation-ops
+# track and add
+
 tensor_creation_ops = {
+    torch.tensor: torch,
+    torch.sparse_coo_tensor: torch,
+    torch.as_tensor: torch,
+    torch.as_strided: torch,
+    torch.from_numpy: torch,
+    torch.zeros: torch,
+    torch.zeros_like: torch,
+    torch.ones: torch,
+    torch.ones_like: torch,
+    torch.arange: torch,
+    torch.range: torch,
+    torch.linspace: torch,
+    torch.logspace: torch,
+    torch.eye: torch,
+    torch.empty: torch,
+    torch.empty_like: torch,
+    torch.empty_strided: torch,
+    torch.full: torch,
+    torch.full_like: torch,
+    torch.quantize_per_tensor: torch,
+    torch.quantize_per_channel: torch,
+    torch.dequantize: torch,
+    torch.complex: torch,
+    torch.polar: torch,
+    torch.heaviside: torch,
+    #
+    torch.cat: torch,
+    torch.chunk: torch,
+    # torch.dsplit: torch,
+    # torch.column_stack: torch,
+    torch.dstack: torch,
+    torch.gather: torch,
+    # torch.hsplit: torch,
+    torch.hstack: torch,
+    torch.index_select: torch,
+    torch.masked_select: torch,
+    torch.movedim: torch,
+    # torch.moveaxis: torch,
+    torch.narrow: torch,
+    torch.nonzero: torch,
+    torch.reshape: torch,
+    # torch.row_stack: torch,
+    torch.scatter: torch,
+    torch.scatter_add: torch,
+    torch.split: torch,
+    torch.squeeze: torch,
+    torch.stack: torch,
+    # torch.swapaxes: torch,
+    # torch.swapdims: torch,
+    torch.t: torch,
+    torch.take: torch,
+    # torch.take_along_dim: torch,
+    # torch.tensor_split: torch,
+    # torch.tile: torch,
+    torch.transpose: torch,
+    torch.unbind: torch,
+    torch.unsqueeze: torch,
+    # torch.vsplit: torch,
+    torch.vstack: torch,
+    torch.where: torch,
+
+
+    torch.align_tensors: torch,
+    torch.bartlett_window: torch,
+    torch.blackman_window: torch,
+    torch.from_file: torch,
+    torch.hamming_window: torch,
+    torch.hann_window: torch,
+
+    torch.rand: torch,
+    torch.randn: torch,
+    torch.randint: torch,
+    torch.randperm: torch,
+    # torch.all: torch,
+
+
+
+    # torch.less: torch,
+    # torch.less_equal: torch,
+    # torch.lt: torch, ## and more!!
+    # torch.min: torch,
+    # torch.matmul: torch,
+    # torch.isinf: torch,
+    # torch.clamp: torch,
+    # torch.abs: torch,
+    # torch.log: torch,
+    # torch.rsqrt: torch,
+    # torch.unflatten: torch
+}
+
+old_tensor_creation_ops = {
     torch.as_tensor: torch,
     torch.from_numpy: torch,
     torch.tensor: torch,
@@ -307,13 +474,15 @@ tensor_creation_ops = {
     torch.sparse_coo_tensor: torch,
     torch.zeros: torch,
     torch.cat: torch,
-    torch.stack: torch
+    torch.stack: torch,
+    torch.where: torch,
 }
 
 tensor_creation_ops_without_device_kw = {
     # TODO: maybe more...
     torch.cat: torch,
-    torch.stack: torch
+    torch.stack: torch,
+    torch.where: torch
 }
 
 
@@ -364,7 +533,11 @@ def convert_none_checks(input_file: str, output_file: str):
 
     if modified:
         lines = ['import operator\n']
+        lines.append("\n")
+        lines.append("\n")
         lines.append(inspect.getsource(is_None))
+        lines.append("\n")
+        lines.append("\n")
         lines.append(inspect.getsource(is_not_None))
         lines.append("\n")
         res = lines + res

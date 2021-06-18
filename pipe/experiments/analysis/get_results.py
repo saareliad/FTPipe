@@ -42,6 +42,12 @@ def filter_desc_df_lm(desc):
                for j in ['mean', 'max', 'min', 'std']]]
 
 
+def filter_desc_df_cv(desc):
+    df = desc
+    return df[[(i, j) for i in ['acc', 'total_time']
+               for j in ['mean', 'max', 'min', 'std']]]
+
+
 def write_squad_desc_df():
     ls = glob.glob
     records = []
@@ -103,10 +109,40 @@ def write_lm_desc_df():
     df.to_csv("df.csv", index=False)
 
 
+
+def write_cv_desc_df():
+    ls = glob.glob
+    records = []
+    for f in ls("*.json"):
+        d = {}
+        with open(f, "rb") as fd:
+            r = json.load(fd)
+            d['name'] = f
+            d['alg'] = alg(f)
+            d['seed'] = r['config']['seed']
+            d['agg'] = r['config']['step_every']
+            agg = d['agg']
+            mb = r['config']['bs_train']
+            d['batch'] = agg * mb
+            d['total_time'] = r['config']['exp_total_time']
+            d['acc'] = r['results']['test_acc'][-1]
+
+        records.append(d)
+
+    df = pd.DataFrame.from_records(records)
+    print(df)
+    desc = df.groupby(['alg', 'batch', 'agg']).describe()
+    desc = desc[['acc', 'total_time']]
+    print(desc)
+
+    # TODO: to csv with headers
+    desc.to_csv("desc.csv", index=True)
+    df.to_csv("df.csv", index=False)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Squad results analysis')
     parser.add_argument('-t', "--task",
-                        choices=["squad", "lm"],
+                        choices=["squad", "lm", "cv"],
                         default="squad",
                         help="Learning Task")
 
@@ -116,8 +152,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    WRITE = {'squad': write_squad_desc_df, 'lm': write_lm_desc_df}
-    FILTER = {'squad': filter_desc_df_squad, 'lm': filter_desc_df_lm}
+    WRITE = {'squad': write_squad_desc_df, 'lm': write_lm_desc_df, 'cv': write_cv_desc_df}
+    FILTER = {'squad': filter_desc_df_squad, 'lm': filter_desc_df_lm, 'cv': filter_desc_df_cv}
 
     if args.write:
         WRITE[args.task]()

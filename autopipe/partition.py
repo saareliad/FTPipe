@@ -16,6 +16,7 @@ from autopipe.autopipe.model_profiling.control_flow_graph import NodeTypes
 from autopipe.autopipe.utils import layerDict, tensorDict, move_tensors
 from autopipe.partitioning_scripts.partition_scripts_utils import bruteforce_main, choose_blocks, record_cmdline
 from autopipe.tasks import PartitioningTask, Parser, get_parser_and_partitioner
+from pipe.misc.sanity_check import run_sanity_check
 
 
 def parse_cli() -> Tuple[Namespace, Dict, PartitioningTask]:
@@ -47,6 +48,10 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
             raise ValueError(
                 f"override dict should not modify model creation arguments got {i}\nthe intended use is for modifying partitioning/hueristics related values")
         setattr(cmd_args, i, v)
+
+    if getattr(cmd_args, "sanity_check", False):
+        torch.manual_seed(0)
+        torch.cuda.synchronize()
 
     model = partitioner.get_model(cmd_args).train()
     sample = partitioner.get_input(cmd_args, analysis=False)
@@ -84,7 +89,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
         if not cmd_args.save_memory_mode:
             with torch.no_grad():
                 model, args, kwargs = move_tensors((model, args, kwargs), cmd_args.device)
-        cmd_args.basic_blocks = choose_blocks(model, cmd_args)
+        cmd_args.basic_blocks = choose_blocks(model, cmd_args, blocks_arg_name="basic_blocks")
+
+        cmd_args.mpipe_opt['special_blocks'] = choose_blocks(model, cmd_args, blocks_arg_name="special_blocks")
+        cmd_args.mpipe_opt['basic_blocks'] = cmd_args.basic_blocks
+
         # apply partitioning
         graph = pipe_model(model, partitioner.batch_dim, model_args=args, model_kwargs=kwargs,
                            n_iter=cmd_args.n_iter, nparts=cmd_args.n_partitions, depth=cmd_args.depth,
@@ -94,8 +103,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                            generate_explicit_del=cmd_args.generate_explicit_del,
                            generate_activation_propagation=not cmd_args.no_activation_propagation,
                            recomputation=not cmd_args.no_recomputation,
-                           partitioning_method=cmd_args.partitioning_method, METIS_opt=cmd_args.METIS_opt,
-                           acyclic_opt=cmd_args.acyclic_opt, binpack_opt=cmd_args.binpack_opt,
+                           partitioning_method=cmd_args.partitioning_method,
+                           METIS_opt=cmd_args.METIS_opt,
+                           acyclic_opt=cmd_args.acyclic_opt,
+                           binpack_opt=cmd_args.binpack_opt,
+                           mpipe_opt=cmd_args.mpipe_opt,
                            force_no_recomp_scopes=cmd_args.force_no_recomputation_scopes_fn,
                            save_memory_mode=cmd_args.save_memory_mode,
                            trace_on_gpu=cmd_args.trace_on_gpu,
@@ -152,6 +164,11 @@ def main(cmd_args: Namespace, model_args: Dict, partitioner: PartitioningTask, o
                                                      layers,
                                                      tensors)
         del layers, tensors
+
+        if getattr(cmd_args, "sanity_check", False):
+            print("-I- running sanity check")
+            run_sanity_check(cmd_args, partitioner, analysis_config, device=cmd_args.device,
+                             training=True, check_grads=True, ref_model=None, check_init=False)
 
         # run analysis log output in the generated file
         sample = partitioner.get_input(cmd_args, analysis=True)

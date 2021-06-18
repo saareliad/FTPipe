@@ -1,4 +1,4 @@
-name: pt
+name: pt2
 channels:
   - defaults
 dependencies:
@@ -23,6 +23,8 @@ dependencies:
     - timm
     - sortedcollections
     - graphviz
+    - adjustText
+    - seaborn
 
 
 

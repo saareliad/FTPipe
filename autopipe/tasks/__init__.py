@@ -45,6 +45,11 @@ def import_tasks_from_dir(tasks_dir=os.path.dirname(__file__)):
                 and (file.endswith('.py') or os.path.isdir(path))
         ):
             task_name = file[:file.find('.py')] if file.endswith('.py') else file
+
+            if task_name == "new_t5":
+                import transformers
+                if transformers.__version__ < ('4.4.1'):
+                    continue
             importlib.import_module('.tasks.' + task_name, package="autopipe")
 
 

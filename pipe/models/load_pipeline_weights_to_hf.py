@@ -3,6 +3,7 @@ import os
 import re
 
 import torch
+import transformers
 from transformers import AutoModel, AutoConfig, AutoTokenizer, T5ForConditionalGeneration
 
 from pipe.models.registery import AVAILABLE_MODELS
@@ -142,13 +143,21 @@ class HFLoader(Loader):
             cache_dir=cache_dir if cache_dir else None,
             **tokenizer_kw)
 
-        use_cdn = model_name_or_path not in {"t5-11b"}
-        model = self.MODEL_CLASS.from_pretrained(
-            model_name_or_path,
-            from_tf=bool('.ckpt' in model_name_or_path),
-            config=config,
-            cache_dir=cache_dir if cache_dir else None,
-            use_cdn=use_cdn)
+        if transformers.__version__ > ('4.1.1'):  # 3.3.1
+            model = self.MODEL_CLASS.from_pretrained(
+                model_name_or_path,
+                from_tf=bool('.ckpt' in model_name_or_path),
+                config=config,
+                cache_dir=cache_dir if cache_dir else None,
+            )
+        else:
+            use_cdn = model_name_or_path not in {"t5-11b"}
+            model = self.MODEL_CLASS.from_pretrained(
+                model_name_or_path,
+                from_tf=bool('.ckpt' in model_name_or_path),
+                config=config,
+                cache_dir=cache_dir if cache_dir else None,
+                use_cdn=use_cdn)
 
         if resize_embeds:
             resize_token_embeddings(model, tokenizer)

@@ -2,7 +2,7 @@ from collections import defaultdict
 from typing import Optional, Dict
 
 from .post_process import post_process_partition
-from ..mixed_pipe.partition_mixed_pipe import stages_from_bins, convert_handle_missing_print
+from ..mixed_pipe.partition_mixed_pipe_v1_clusters import stages_from_bins, convert_handle_missing_print
 from ...model_profiling import Graph, NodeWeightFunction, EdgeWeightFunction
 
 
@@ -39,7 +39,7 @@ def metis_partition(graph: Graph,
         graph.topo_sort()
 
     if use_layers_only_graph:
-        layers_graph, layers_to_original = graph.layers_graph()
+        layers_graph, layers_to_original = graph.new_graph_without_constants()
         G = layers_graph
     else:
         G = graph

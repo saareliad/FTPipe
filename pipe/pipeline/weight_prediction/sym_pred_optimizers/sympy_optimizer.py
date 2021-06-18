@@ -78,14 +78,21 @@ class WDSympySGD(SympySGD):
 
 
 class WDSympySGDMsnag(WDSympySGD):
+    collect_order = ["v", 'theta', '\phi']
     def __init__(self):
         super().__init__()
+        self.first_grad = Symbol('\phi')
+
 
     def prediction(self, nsteps):
         buff_hat = self.buff
         theta_hat = self.theta
         for i in range(1, nsteps + 1):
-            d_p = 0
+            if i == 1:
+                d_p = self.first_grad
+            else:
+                d_p = 0
+
             if self.weight_decay != 0:
                 d_p += self.weight_decay * theta_hat
 

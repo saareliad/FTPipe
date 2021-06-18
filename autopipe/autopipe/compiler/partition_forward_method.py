@@ -40,7 +40,7 @@ def generate_forward_method(stage_id: int,
     # constants are embedded in use site
     # function and layers are allocated temporary only if they have more than 1 use
 
-    inputs = get_sorted_partition_inputs(partition_nodes)
+    inputs = get_sorted_partition_inputs(graph, partition_nodes)
     enforce_out_of_place_for_partition_inputs(partition_nodes, inputs)
     i = 0
     input_ids = []
@@ -156,9 +156,9 @@ def generate_declaration(input_ids: List[str], partition_fields: Dict[Node,
 
     if move_tensors:
         lines.extend([f"\n{dtab}# moving inputs to current device no op if already on the correct device\n",
-                      f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args,self.input_structure), self.device)"])
+                      f"{dtab}{', '.join(input_ids)} = move_tensors(unflatten(args, self.input_structure), self.device)"])
     else:
-        lines.extend([f"{dtab}{', '.join(input_ids)} = unflatten(args,self.input_structure)"])
+        lines.extend([f"{dtab}{', '.join(input_ids)} = unflatten(args, self.input_structure)"])
 
     if len(input_ids) == 1:
         lines[-1] += "[0]"
@@ -335,6 +335,9 @@ def generate_constant(node):
 
 
 def generate_magic(variable_name, self_arg, func_name, param_list):
+    ### TODO: must go over this
+    ### these are defined in autopipe.utils.py
+
     ##############################
     # Magic Method delegation
     # intentionally explicit

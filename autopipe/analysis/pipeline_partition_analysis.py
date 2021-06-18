@@ -23,6 +23,7 @@ from .asgd_analysis import run_analysis as asgd_run_analysis
 from .deprecated_theoretical import maybe_do_theoretical_analysis
 from .profile_pipeline_stages import profile_execution, ProfileResult
 from .ssgd_analysis import run_analysis as ssgd_run_analysis
+from ..autopipe.model_partitioning.stage_to_device import sorted_stage_to_device_map
 
 
 def rounddict(d: Dict[Any, float], x=2):
@@ -52,6 +53,7 @@ def run_analysis(sample,
     if not stages_on_same_gpu:
         stages_on_same_gpu = list()
     # kwarg input
+    sample_save = sample
     if isinstance(sample, dict):
         sample = tuple([sample[i] for i in config.model_inputs()])
     elif not isinstance(sample, tuple):
@@ -83,7 +85,7 @@ def run_analysis(sample,
 
     # real statistics based on generated partitions
     if torch.cuda.is_available():
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
 
     profile_result = profile_execution(
         sample,
@@ -347,8 +349,8 @@ def run_analysis(sample,
             if seq_success:
                 s += f"\nexpected_speedup_compared_to_seq_no_recomp_no_comm: {expected_speedup_compared_to_seq_no_comm:.3f}"
 
-        data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,
-                               sequential_model, verbose)
+        data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample_save,
+                               sequential_model, verbose, config)
 
         if torch.cuda.is_available():
             s += f"\nAnalysis max cuda memory used {max_memory_allocated / 1e9:.2f}GB"
@@ -367,25 +369,8 @@ def run_analysis(sample,
     return metric_to_maximize, s
 
 
-def sorted_stage_to_device_map(n_partitions, stages_on_same_gpu):
-    pipeline_representation_stage_to_device_map = list()
-    for stage_id in range(n_partitions):
-        seen_devices = set()
-        if stage_id in stages_on_same_gpu:
-            device_id = min(stages_on_same_gpu[stage_id])
-        else:
-            device_id = len(seen_devices)
-        seen_devices.add(device_id)
-        pipeline_representation_stage_to_device_map.append(device_id)
-    # Canonize
-    tmp = sorted(set(pipeline_representation_stage_to_device_map))
-    tmp = {v: i for i, v in enumerate(tmp)}
-    pipeline_representation_stage_to_device_map = [tmp[i] for i in pipeline_representation_stage_to_device_map]
-    return pipeline_representation_stage_to_device_map
-
-
 def data_parallel_analysis(TRY_ASGD_ANALYSIS, TRY_SSGD_ANALYSIS, bw_GBps, expected_speedup, num_real_stages, sample,
-                           sequential_model, verbose):
+                           sequential_model, verbose, config: AnalysisPipelineConfig):
     if TRY_SSGD_ANALYSIS and torch.cuda.is_available() and (
             sequential_model is not None):
         n_workers = num_real_stages
