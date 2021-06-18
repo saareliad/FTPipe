@@ -1,17 +1,15 @@
 
 # FTPipe
 
-This repository contains code used for FTPipe USENIX ATC21 paper* and future works.
+This repository contains code used for FTPipe USENIX ATC21 paper and future works. (Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism.
+
+An arxiv version and citation are coming soon.
 
 Code for Pipeline Staleness Mitigation is also included.
 
-Arxiv and Citation comming soon.
-
-*Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism
-
 ## Overview
 This repository is used to explore various methods of pipeline-model-parallelism.
-It is capable of automatically partitionining, training and fine-tuning giant neural networks, wth synchronous or asynchronous pipeline.
+It is capable of automatically partitionining, training and fine-tuning giant neural networks, with both synchronous and asynchronous pipelines.
 
 
 ## Usage
