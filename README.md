@@ -1,7 +1,7 @@
 
 # FTPipe
 
-This repository contains code used for FTPipe paper and previous and future works.
+This repository contains code used for FTPipe USENIX ATC21 paper and previous and future works.
 
 The code for the Pipeline Staleness Mitigation paper (in preparation) is also included.
 
