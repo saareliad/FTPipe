@@ -20,9 +20,7 @@
 
   - sgd, adam, adamw
 
-- gap aware just for lost (ga_jfl)
-
-- combinations {wp, ws, ga/ga_jfl}
+- combinations {wp, ws, ga}
 - gradient aggregation in pipeline (`step_every`)
 
 Note that there is difference between stale and weight prediction with recomputation and without.
@@ -37,33 +35,21 @@ Weight predicion is often called `msnag` in code.
 - single gpu for small model.
 
 ## Setup env
-There are several options:
-1. use pre-build pytorch image and multiprocessing (parallel comm&comp, for single node)
-2. Install from soruce to use cuda-aware opennmpi (only partiall parallel comm&comp, for multi node)
-3. (deprecated) Use pre-built pytorch with cuda-aware openmpi (older version of pytorch: 1.3 nightly)
+There are several option to do so. here is the main one.
 
 ### From source (new)
 
-Follow instruction in [create_env.sh](env_utils/create_env.sh), then run it to build pytorch from source with cuda-aware openmpi.
+Follow instruction [here](env_utils/create_env_new_server.sh), then run it to build pytorch from source with cuda-aware openmpi.
 
 ```bash
-cp create_env.sh $BUILD_DIR
+cd env_utils
+cp create_env_new_server.sh $BUILD_DIR
 cd $BUILD_DIR
-vim create_env.sh
+vim create_env_new_server.sh
 # after editing...
-# bash create_env.sh
+bash create_env_new_server.sh
 ```
 
-### docker (experimental)
-
-need to edit it...
-[docker/Dockerfile_from_source](env_utils/docker/Dockerfile_from_source)
-
-### conda (deprecated)
-
-```bash
-make env  # (or run it step by step)
-```
 ## Get data
 ```bash
 python download/datasets/download_datasets.py
@@ -72,18 +58,19 @@ python download/datasets/download_datasets.py
 ## Run
 
 ### Choose a config
+See [configs](configs/) for config examples.
 
-Note the the examples below run the [dummy config](configs/dummy.json) (for dev usage).
-
-To choose a spesific config, add it:
+To choose a spesific config, add it to command line:
 
 ```bash
-mpirun -np 2 python main.py --config $PATH_TO_CONFIG
+mpirun -np 2 python -m pipe.main --config $PATH_TO_CONFIG
 ```
+without doing so, it will run the [dummy config](configs/dummy.json) (created for dev usage).
+
 ### Preprocess
-if preprocessing is needed, run the selected config with:
+if data preprocessing is needed, run the selected config with:
 ```bash
-python main.py --mode preproc --config $PATH_TO_CONFIG ...
+python -m pipe.main --mode preproc --config $PATH_TO_CONFIG ...
 ```
 
 ### MPI
@@ -91,144 +78,54 @@ python main.py --mode preproc --config $PATH_TO_CONFIG ...
 cuda aware openmpi:
 
 ```bash
-mpirun -np 2 python main.py
+mpirun -np 2 python -m pipe.main --config $PATH_TO_CONFIG
 ```
-
-on the rishon sever:
-
-```bash
-salloc -n2 --gres=gpu:2 <COMMAND>
-```
-
-Note that OpenMPI may require special settings depending on the GPU.
 
 ### Multiprocessing
 
 ```bash
-python  main.py --nprocs 2 --mode mp
-```
-
-### Via torch.distributed.launch model
-
-Not supported. To be removed.
-
-- will not work for MPI backend.
-- (NOTE) nccl/gloo does broadcasting which we do not support yet.
-
-```bash
-python -m torch.distributed.launch --nnodes 1 --master_port 6005 --nproc_per_node 2 main.py --cpu --distributed_backend gloo
+python -m pipe.main --nprocs 2 --mode mp --config $PATH_TO_CONFIG
 ```
 
 ## Pitfalls
 
 - **_recomputation and normalization layers_** For some normalization layers (e.g BatchNormalization) the recomputation does two forward passes (dummy, and during recomputation), therefore we monkey patch it during the dummy pass. Can do with with re-writing the layer too, which is slightly more efficient than monkey patching.
 
-- **_recomputation correct random seed_** We use the same random same seed for the two recomputation forward passes.
+- **_recomputation: uses a correct random seed_** We use the same random same seed for the two recomputation forward passes.
 
-- **_NLP_** check you overwrite cash when needed.
+- **_Sending large tensors with MPI_** takes extra memory due buffer allocations.
 
-- **_Sending large tensors with MPI_** takes extra memory due buffer allocations. should consider sharing the tensor (e.g for tied weights), or having a single copy of its `.data`.
+- **_NLP models_** check you overwrite cash.
 
-## Adding a model
+### Other Known challenges
 
-### Example for a transformer model
-
-TODO: add the new way, below is deprecated
-
-1. partition the model
-2. add the model under `modles.partitioned.FN`
-3. (can skip this part) create a function name `FN()` in `models.transformers_cfg` defining the config.
-4. add that function to `models.transformers_cfg.MODEL_TOKENIZER_AND_CONFIG_FUNCTIONS`
-5. register it with `models.cfg_to_model._register_model` by passing a dummy dict:
-
-  ```python
-  _register_model(dict(FN=dict()), None)
-  ```
-
-## Adding a new learning task [WIP]
-TODO: update this.
-
-A major design change is needed before letting other humans do it
-
-Currently this is very spaghetti code, we have to add:
-1. `dataset` file (for getting train and dev/test datasets, sometimes seprerated to x and y so every stage will load only what it needs locally)
-2. `trainer` class (to calculate loss and statistics, handle backward, handle step)
-3. `statistics` statistics collection class
-4. `task` class (packing/unpacking between dataset and partitions) This is somewhat not-needed as all classes do about same thing since we use sepreate x,y datasets. It needs to be changed only if we want to send the labels in the pipeline for some reason.
-
-Then, unfortunatly, there is a tedious work of editing:
-1. `datasets/dataset.py`
-2. `pipeline/training/__init__.py`
-3. `pipeline/stats/__init__.py`
-4. `pipeline/tasks/__init__.py`
-5. `prepare_pipeline.py` (special cmd args to the task)
-
-Not fun and dangerous design.
-
-Then adding all thous names to a json config.
-
-Current structure (to be changed/automated too) is
-1. `configs/task_name/dataset_name/model_name/common.json`
-2. Then all algorithms are added to the config dir.
-
-Most stuff is handled by inheritence or functional programing to utilize existing (non-optimal) system which handles many small details.
-
-Ideally, this should all be handled by the programer and given as some config class to our system, which will then read and use it to its needs.
-
-When possible, a data-loading script/code will be added to `download_datasets.py`.
-
-## Known problems
-
-1. gpu bcast not working yet. (some deadlock)
-
-  The problem is that p0 does 'send' bcast to p1 while p1 does 'send' bcast to p0, on the same group. Therefore need more groups.
-
-2. pipedream scheduler stopped working (edit: probably solved by reset, I didn't bother to check)
-
-3. MPI: 
-  - we need to pop/destroy async handlers, otherwise memory explodes.
-  (change c code in torch mpigroup to drop the tensor and its pointers once ISends are completed, so we won't have to handle mem cleaning).
+1. MPI: 
+  - we need to pop/destroy async handlers, otherwise memory explodes. We handle this in python.
+  (may change cpp code in torch mpigroup to drop the tensor and its pointers once ISends are completed, so we won't have to handle mem cleaning).
   - must explicitly do `cuda.synchronize(...)` before CUDA-AWARE MPI sends.
 
-4. Multiprocessing: multiple (2x or 3x) cuda contexts per GPU.
+2. Multiprocessing mode: (`--mode mp`) requires multiple cuda contexts per GPU. It is sometimes not robust since it was not used a lot. It works moslty for simple vision models. I did not invest it aditional time since better communication libraries are being developed.
 
-5. Tied weights: MPI: large memory consumption for sends, Multiprocessing/cudaIPC:(using the same tensor): race condition. wieght prediction: we change and send the weight itself (this has advantage and disadvantage).
+3. Tied weights: MPI: large memory consumption for very distant sends. Multiprocessing/cudaIPC:(using the same tensor): may be a race condition. wieght prediction: we change and send the weight itself (this has advantage and disadvantage).
 
+4. `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders. (the solution worked for resnets, will not work for more complex models). IMO this should be solved by partitioning.
 
+5. In Pipedream they pass the target all across the pipeline (waste of energy, inefficient). solution: using two data-loaders with correct synchronization.
 
-5. `in_place` operations (like ReLU) at partition border have a potential of destroying our saved activations (also throws some autograd "variable changed inplace" error) => solution: automatically replace inplaces ops on partition borders. (the solution worked for resnets, will not work for more complex models). IMO this should be solved by partitioning.
-
-6. With `torch.distributed.launch` we may need to manually do `kill -9 <PIDs>` in case of errors to kill workers.
-
-## Some Solved problems:
-
-- In Pipedream they pass the target all across the pipeline (waste of energy, inefficient). solution: using two data-loaders with correct synchronization.
-
-- (I decided to just avoid it, its minor and I spent to much time on it). for delay=0 with msnag without weight stashing, so far I did `nag_with_predictor` even for non last partitions. This is problematic, as we would like to **return to the moved weights** in the backward pass. Also not sure it this correct. So what we can do is, create a dict were we save staleness from fwd to backward (we already do this, but for GA purpose) and if the staleness is 0 (and not last partition, which is the case in `run_batch_backward`) then, with the weight predictor: do `setup(0)->forward()->recomputation()->backward()->revert()->step`. (The condition for this is weight predictor + nag with predictor, without weight stashing)
 
 ## TODOs
 
 - Memory efficient Gap Aware for entire pipeline  (+`step_every`)
   (When delay is 1, we can do gap aware even on deeper partitions without stashing)
 
-- Currently, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization (not in steady state), and may be yucky to implement.
+- weight prediction: currenrlty, we do some extra "reverts" (e.g in case of several backwards one after another and weight stashing) Check this. its very small optimization (not in steady state), and may be yucky to implement.
 
-- saving models
-
-- statistics or evaluation by number of steps and not just epochs.
-
-- test with cuda-aware MPI on more than 2 P2P suported GPUs
-
-- Support multi node after everything works.
+- evaluation/statistics by number of steps and not just epochs. (currenrlty- steps are automaticlly translated to epochs)
 
 - fix batch normalization in `torch.no_grad()` to something better than monkey patch
 
-- extra irecvs in deeper layer to overlap (more) communication with computation and have a faster warmup.
-  - this requires more buffers but its neglibale in deeper layers.
 
-- Crazy idea: GA to change gradient activation before sending.
-
-## References
+## See For MPI:
 
 - [running with mpi](https://www.open-mpi.org/faq/?category=running) especially see [mpi-env-vars](https://www.open-mpi.org/faq/?category=running#mpi-environmental-variables).
 
@@ -251,9 +148,9 @@ When possible, a data-loading script/code will be added to `download_datasets.py
 
 - Before you debug, you may want to check run the error is cuda specific and not cpu
 
-## Misc Systems stuff
+## Misc
 
-- Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipeline).
+- Communication Matrix Embedding with cuda P2P samples (15% BW improvment for pipeline). Can use this [script](/misc/p2p_bw_mat.sh).
 
 - To see how pytorch is compiled, use
 ```
