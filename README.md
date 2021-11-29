@@ -1,84 +1,91 @@
 
 # FTPipe
 
-This repository contains code used for FTPipe USENIX ATC21 paper "Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism", and future works.
+This repository contains code used for FTPipe USENIX ATC21 [paper](https://www.usenix.org/system/files/atc21-eliad.pdf) "Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism", and future works.
 
-See citation information at the bottom of this readme. An open arxiv version may be comming soon.
-
-Code for Pipeline Staleness Mitigation is also included.
+See [citation](#citation) information at the bottom of this readme.
 
 
 ## Overview
 This repository was used to explore various unexplored territories of pipeline-model-parallelism.
-It is capable of automatically partitionining, training and fine-tuning giant neural networks, with both synchronous and asynchronous pipelines.
+It is capable of automatically partitionining, training and fine-tuning giant neural networks, with both synchronous and asynchronous pipelines. \
+Code for Pipeline Staleness Mitigation study is included as well.
 
 
-## Usage
+Models supported and tested are Huggingface transformers  (T5, GPT2, BERT, RoBerta...), many Torchvision models (probably all), and Vision Transformers. (conducted an out-of-the-box ViT PoC with the first pytorch implementation, by timm, right when it apeared.)\
+The setup for T5-11B is currently kept on a seperate branch.
 
-Note: The full readme is still WIP. However there is a partial recipe below for adding new task/model and some [examples](https://github.com/saareliad/FTPipe/tree/master/prepare_new_t5) of recent scripts we used to concudct some experiments. Feel free to contact.
+## Basic Usage
+
+Clone the repository:
+```
+git clone https://github.com/saareliad/FTPipe.git
+```
+All code is currently designed to run from repository root.
+
+After completing the [environment setup](#setup), FTPipe's usage is mainly the two following steps:
+1. Partitioning models
+2. Running models.
+
+```bash
+python -m autopipe.partition ... # partition models
+```
+
+```bash
+python -m pipe.main ... # train models (+eval)
+```
+
+Additional documentations:
+* Training arguments should be passed via json [configuration files](https://github.com/saareliad/FTPipe/blob/master/pipe/configs) (*)
+* New Models, training/fine-tuning tasks, and datasets should be [registered](docs\NewModels.md) to the framework.
+* Additional arguments are passed as cmd args. Do use the `--help` option to exlore. (NOTE: It is also possible to override some configuration arguments using the command line, use with caution. Partitioning uses mostly cmd args.)
+* As P2P communication is done with MPI, running models often looks like this
+
+```bash
+mpirun -np 8 python -m pipe.main --config $PATH_TO_JSON_CONFIG
+```
+* Refer to [examples](https://github.com/saareliad/FTPipe/tree/master/t5_used_scripts_example) of recent scripts we used to partition and conduct T5 experiments. 
+* Do feel free to contact (issue/mail/linkedin/...).
+
+(*Note: a more comprehensive explanation is planned, meanwhile, configuration can be understood via examples or code).
+
+## Setup
+
+* Follow the [instructions](pipe/env_utils/create_env_new_server_new.sh) to setup the required conda env. This includes building pytorch from source with cuda-aware openmpi.
+* NOTE: Model partitioning can be done using a [much simpler conda env](https://github.com/saareliad/FTPipe/blob/main/pipe/env_utils/env_without_mpi.yml) (without mpi or building from source)
+```
+conda env create -f pipe/env_utils/env_without_mpi.yml
+```
 
 
-0. clone the repository.
-1. To run partitioning, prepare a `Task`, which is simply a model and example inputs for it. Place it [here](autopipe/tasks).
-
-2. Choose partitioning and analysis settings, for example:
-    ```bash
-    python -m autopipe.partition vision --crop 32 --no_recomputation -b 256 -p 4 --save_memory_mode --partitioning_method pipedream --model wrn_28x10_ c100_dr03_gn
-    ```
-    This will create, compile, and autogenerate the partitioned model and automatically place it [here](models/partitioned).
-    
-    _Note: some hyper-parameters in mpipe partitioning, env and so on are still hardcoded and not available as cmd options._
-
-3. Register the partitioned model to the pipeline runtime. 
-
-    In our experiments, this is done by implementing a `CommonModelHandler`, which handles this logic 
-    ([see examples](pipe/models/registery)). Note that some models may require additional settings.
-
-4. Register a new dataset or use an existing one.  
-
-    In our experiments, this is done by implementing a `CommonDatasetHandler`.
-    The logic for doing so is [here](pipe/data).
-    
-    Note that additional logic is added to prevent unnecessary data movements automatically.
-
-5. Define training and staleness mitigation settings. Then, run experiments with desired settings.
-
-    In our experiments, this is done by passing a json configuration ([examples](pipe/configs)).
-   An example run:
-    ```bash
-   python -m pipe.main --config pipe/configs/cv/cifar100/wrn28x10/no_recomputation/stale_nr.json --bs_train_from_cmd --bs_train 16 --step_every_from_cmd --step_every 16 --seed 42 --mode mp
-   ```    
-    Finally, a json file with results will be created and placed as defined in the config.
+The simiple recpie below was used to set it up on our servers
+```bash
+BUILD_DIR=<SOMEPLACE_FOR_DOWNLOADED_SOFTWARE> # openmpi, pytorch
+cd pipe/env_utils
+cp create_env_new_server.sh $BUILD_DIR
+cd $BUILD_DIR
+vim create_env_new_server.sh  # change paths: home_local, FTPIPE_ROOT
+bash create_env_new_server.sh # it is safer to run it step by step.
+```
+where `$BUILD_DIR` is set to a a repository to place the clones of openmpi and pytorch.
 
 
+### Aditional docs
+Work in progress to add all docs in thier own [docs directory](docs/).
 
-### Aditional instructions
 Some additional usage instructions are documented across the repository.
 For example: 
- - At the [pipe](pipe/) module there are instructions and scripts for setting up env, downloading data, availalble staleness mitigation and runtimes.
- - See the [autopipe](autopipe/) module for avaialbe partitioning methods. See the [tasks](autopipe/tasks) directory for examples of partitioning tasks. 
- - A detailed example of steps taken to export a T5 model from huggingface can be found [here](models/new_t5_example).
+ - At the [pipe](pipe/) module, there are instructions and scripts for running downloading data, 
+ - Refer to the [pipes-list](docs\PipeList.md) for availalble staleness mitigation and pipelines which can be used at runtime.
+ - See the [autopipe](autopipe/) module for avaialbe partitioning methods. See the [tasks](autopipe/tasks) directory for examples of partitioning tasks (e.g., differnt models architechtures or downstream fine-tuning tasks). 
+ - A detailed example of steps/changes taken to export a T5 model from huggingface can be found [here](models/new_t5_example).
 
-### Accelerating mixed pipe with MPS
-As $UID, run the following commands
-```
-ulimit -n 16384
+## Note
+_Note: some hyper-parameters in mpipe partitioning (e.g., GPU memory capacity), env and so on are still hardcoded to our and not available as cmd options. Currently, one will need to change them change them manually to experiment (As we did...)_
 
-# export CUDA_VISIBLE_DEVICES=0 # Select GPU 0.
-export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps # Select a location that’s
-accessible to the given $UID
-export CUDA_MPS_LOG_DIRECTORY=/tmp/nvidia-log # Select a location that’s
-accessible to the given $UID
-nvidia-cuda-mps-control -d # Start deamon in background
-```
-
-To shutdown:
-```bash
-echo quit | nvidia-cuda-mps-control
-```
 ## Citation
 ```
-@inproceedings {273947,
+@inproceedings {ftpipe,
 author = {Saar Eliad and Ido Hakimi and Alon De Jagger and Mark Silberstein and Assaf Schuster},
 title = {Fine-tuning giant neural networks on commodity hardware with automatic pipeline model parallelism},
 booktitle = {2021 {USENIX} Annual Technical Conference ({USENIX} {ATC} 21)},

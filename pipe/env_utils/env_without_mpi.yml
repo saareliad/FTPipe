@@ -5,8 +5,8 @@ channels:
   - conda-forge
 dependencies:
   - python=3.8
-  - pytorch=1.6.0
-  - torchvision=0.7.0
+  - pytorch=1.8.1
+  - torchvision=0.9.1
   - scikit-learn # here we start
   - jupyter
   - jupyterlab
@@ -32,4 +32,4 @@ dependencies:
     - sortedcollections
     - graphviz
     - adjustText
-    - seaborn
+    - git+https://github.com/networkx/networkx-metis.git  # For partitioning

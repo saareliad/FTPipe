@@ -1,3 +1,5 @@
+# NOTE: code here is mostly deprecated and unused, updated mpipe is in the v2 file.
+# TODO: refactor and stop using it
 import warnings
 from collections import deque, defaultdict
 from enum import Enum

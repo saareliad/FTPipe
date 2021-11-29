@@ -27,7 +27,7 @@ mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/mult
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/multirc/stale_layer_graph.json --seed 42 --mode eval
 
 # wic
-bash prepare_new_t5/to_partition_spipe_t5_3b_wic.sh
+bash t5_used_scripts_example/to_partition_spipe_t5_3b_wic.sh
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42 --mode preproc
 mpirun -np 16 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/mpipe/wic/stale_layer_graph.json --seed 42 --mode eval
@@ -51,7 +51,7 @@ mpirun -np 8 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/wic/pip
 python -m pipe.main --config pipe.main --config pipe/configs/t5/new_t5_exp/seq/wic/pipedream_stale.json --seed 42 --mode eval
 
 # boolq
-bash prepare_new_t5/to_partition_spipe_t5_3b_boolq_multirc.sh
+bash t5_used_scripts_example/to_partition_spipe_t5_3b_boolq_multirc.sh
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/boolq/pipedream_stale.json --seed 42 --mode preproc
 mpirun -np 8 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/boolq/pipedream_stale.json --seed 42
 python -m pipe.main --config pipe.main --config pipe/configs/t5/new_t5_exp/seq/boolq/pipedream_stale.json --seed 42 --mode eval
@@ -64,7 +64,7 @@ python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/multirc/pipedream_st
 mpirun -np 8 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/multirc/pipedream_stale.json --seed 42
 python -m pipe.main --config pipe.main --config pipe/configs/t5/new_t5_exp/seq/multirc/pipedream_stale.json --seed 42 --mode eval
 
-bash prepare_new_t5/to_partition_spipe_t5_3b_rte.sh
+bash t5_used_scripts_example/to_partition_spipe_t5_3b_rte.sh
 mv /home_local/saareliad/data/cache_* /home_local/saareliad/data/moved_cache/
 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/rte/pipedream_stale.json --seed 42 --mode preproc
 mpirun -np 8 python -m pipe.main --config pipe/configs/t5/new_t5_exp/seq/rte/pipedream_stale.json --seed 42

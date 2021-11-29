@@ -1,4 +1,14 @@
-# TODO: install CUDNN!!!!
+# Follow these instruction from FTPipe root dir.
+
+# TODO: install cuda-10.2, if not already installed
+#wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
+#sudo mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
+#sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+#sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/ /"
+#sudo apt-get update
+#sudo apt-get -y install cuda-10-2
+
+# TODO: install CUDNN,  if not already installed
 # Go to https://developer.nvidia.com/compute/machine-learning/cudnn and download cudnn
 # e.g
 # https://developer.nvidia.com/compute/machine-learning/cudnn/secure/8.0.5/10.2_20201106/cudnn-10.2-linux-x64-v8.0.5.39.tgz
@@ -7,6 +17,9 @@
 # sudo cp --preserve=links cuda/lib64/libcudnn* /usr/local/cuda/lib64
 # sudo chmod a+r /usr/local/cuda/include/cudnn*.h /usr/local/cuda/lib64/libcudnn*
 # sudo ldconfig
+
+# https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html#ubuntu-lts
+# sudo apt-get install cuda-drivers-440 -f
 
 # local dir
 DIR_NAME=$USER
