@@ -37,7 +37,7 @@ python -m pipe.main ... # train models (+eval)
 
 Additional documentations:
 * Training arguments should be passed via json [configuration files](https://github.com/saareliad/FTPipe/blob/master/pipe/configs) (*)
-* New Models, training/fine-tuning tasks, and datasets should be [registered](docs\NewModels.md) to the framework.
+* New Models, training/fine-tuning tasks, and datasets should be [registered](docs/NewModels.md) to the framework.
 * Additional arguments are passed as cmd args. Do use the `--help` option to exlore. (NOTE: It is also possible to override some configuration arguments using the command line, use with caution. Partitioning uses mostly cmd args.)
 * As P2P communication is done with MPI, running models often looks like this
 
@@ -52,7 +52,7 @@ mpirun -np 8 python -m pipe.main --config $PATH_TO_JSON_CONFIG
 ## Setup
 
 * Follow the [instructions](pipe/env_utils/create_env_new_server_new.sh) to setup the required conda env. This includes building pytorch from source with cuda-aware openmpi.
-* NOTE: Model partitioning can be done using a [much simpler conda env](https://github.com/saareliad/FTPipe/blob/main/pipe/env_utils/env_without_mpi.yml) (without mpi or building from source)
+* NOTE: Model partitioning can be done using a [much simpler conda env](https://github.com/saareliad/FTPipe/blob/master/pipe/env_utils/env_without_mpi.yml) (without mpi or building from source)
 ```
 conda env create -f pipe/env_utils/env_without_mpi.yml
 ```
@@ -76,7 +76,7 @@ Work in progress to add all docs in thier own [docs directory](docs/).
 Some additional usage instructions are documented across the repository.
 For example: 
  - At the [pipe](pipe/) module, there are instructions and scripts for running downloading data, 
- - Refer to the [pipes-list](docs\PipeList.md) for availalble staleness mitigation and pipelines which can be used at runtime.
+ - Refer to the [pipes-list](docs/PipeList.md) for availalble staleness mitigation and pipelines which can be used at runtime.
  - See the [autopipe](autopipe/) module for avaialbe partitioning methods. See the [tasks](autopipe/tasks) directory for examples of partitioning tasks (e.g., differnt models architechtures or downstream fine-tuning tasks). 
  - A detailed example of steps/changes taken to export a T5 model from huggingface can be found [here](models/new_t5_example).
 
