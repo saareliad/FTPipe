@@ -254,24 +254,6 @@ if __name__ == '__main__':
         return module_path
 
 
-    def old_t5(cmd_args):
-        # OK
-        cmd_args.model_name_or_path = "t5-small"
-        cmd_args.max_seq_length = 512
-        cmd_args.answer_max_seq_length = 4
-        cmd_args.stateless_tied = True
-        cmd_args.lmhead = True
-        cmd_args.precompute_masks = True
-        cmd_args.t5_task = "squad1"
-        cmd_args.partitioning_batch_size = 1
-        cmd_args.n_partitions = 4
-        cmd_args.basic_blocks = "T5Block"
-        cmd_args.analysis_batch_size = 1
-        module_path = "models.partitioned.t5_small_tied_lmhead_4p_bw12_async_squad1"
-        #     partitioner = OLDT5Partitioner(cmd_args)
-        return module_path
-
-
     def old_base_new_part(cmd_args):
         # OK
         cmd_args.model_name_or_path = "t5-base"
@@ -286,27 +268,9 @@ if __name__ == '__main__':
         cmd_args.basic_blocks = "T5Block"
         cmd_args.analysis_batch_size = 1
         module_path = "models.partitioned.new_t5_tmp_layer_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_acyclic"
-        #    partitioner = OLDT5Partitioner(cmd_args)
 
         return module_path
 
-
-    def old_t5_pipedream(cmd_args):
-        cmd_args.model_name_or_path = "t5-base"
-        cmd_args.max_seq_length = 512
-        cmd_args.answer_max_seq_length = 4
-        cmd_args.stateless_tied = True
-        cmd_args.lmhead = True
-        cmd_args.precompute_masks = False
-        cmd_args.t5_task = "squad1"
-        cmd_args.partitioning_batch_size = 1
-        cmd_args.n_partitions = 8
-        cmd_args.basic_blocks = "T5Block"
-        cmd_args.analysis_batch_size = 1
-        module_path = "models.partitioned.new_t5_tmp_layer_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream"
-        # this is old, its just a name
-        #    partitioner = OLDT5Partitioner(cmd_args)
-        return module_path
 
 
     def SANITY_CHECK_new_t5_tmp_layer_graph_t5_small_tied_lmheads_512_4_4p_bw12_squad1_pipedream(cmd_args):
@@ -322,8 +286,6 @@ if __name__ == '__main__':
         cmd_args.basic_blocks = "T5Block"
         cmd_args.analysis_batch_size = 1
         module_path = "models.partitioned.SANITY_CHECK_new_t5_tmp_layer_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream"
-        # this is old, its just a name
-        #    partitioner = OLDT5Partitioner(cmd_args)
         return module_path
 
 
@@ -340,8 +302,7 @@ if __name__ == '__main__':
         cmd_args.basic_blocks = "T5Block"
         cmd_args.analysis_batch_size = 1
         module_path = "models.partitioned.tmp_op_graph_t5_base_tied_lmheads_512_4_4p_bw12_squad1_mpipe"
-        # this is old, its just a name
-        #    partitioner = OLDT5Partitioner(cmd_args)
+ 
         return module_path
 
 
@@ -396,14 +357,11 @@ if __name__ == '__main__':
     # module_path = SANITY_CHECK_new_t5_tmp_op_graph_t5_base_tied_lmheads_512_4_8p_bw12_squad1_pipedream(cmd_args)
     module_path = DUMMY_nolayers_t5_attent5_base_tied_lmheads_512_4_2p_bw12_squad1_mpipe(cmd_args)
 
-    # t5_base_512_4_acyclic(   cmd_args)  # old_base_new_part(cmd_args) #old_t5(cmd_args) # t5_base_512_4_acyclic(cmd_args) # t5_base_512_4(cmd_args)
-
     # module_path = t5_3b_64_4(cmd_args)
 
     print(vars(cmd_args))
 
     #partitioner = T5Partitioner(cmd_args)
-    # partitioner = OLDT5Partitioner(cmd_args)
     partitioner = DumT5Partitioner(cmd_args)
 
     torch.manual_seed(0)
